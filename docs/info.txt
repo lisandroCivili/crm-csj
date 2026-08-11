@@ -1,0 +1,22 @@
+balta 2 admin:
+1- carga de leads de meta xls, diferente del club y balta
+1.2- seleccionar leads y asignar
+1.3 - estado del lead: pendiente, vendida o no, devolucion
+3- carga del padron de clientes, con actulizacion de nro de cuota
+3.1- solo admin ve clientes
+4- carga de precios a traves de excel
+5- pestaña vendedores
+5.1- nombre, codigo, leads asignados, perfil completo, carga de porcentaje de comision por cuota, condiciones
+5.2- comision: cant ventas, cobradas, porcentaje y comision correspondiente (hasta c4)
+gastos reprentacion, copa challenger, total
+6- dashboard: c1 a 5 filtrable, vendidas, cobradas, porcentaje y promedio de cuota
+7- herramientas: relacionado a la feria, vehiculo patente km, fecha service, solicitudes
+8- separar salta y tucuman
+vendedor:
+1- nombre direccion, localidad, prov y tel del lead
+1.1- carga de estado del lead y devolucion
+2- carga de ventas
+2.1 - nombre direccion, localidad, prov, tel, codigo de producto (3 nros) y producto (plan), debito si/no, foto dni y contrato opcional
+2.2- edicion de venta+ historial
+3- dashboard: leads (estado), ventas, cobradas cuota que le corresponda comision, ganancia, fecha cierre mes corriente
+
