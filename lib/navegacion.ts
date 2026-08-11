@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Activity,
   BadgeDollarSign,
   ClipboardList,
   FileSpreadsheet,
@@ -20,6 +21,7 @@ export type ItemNav = {
 const ADMIN: ItemNav[] = [
   { href: "/admin/dashboard", etiqueta: "Dashboard", icono: LayoutDashboard },
   { href: "/admin/leads", etiqueta: "Leads", icono: ClipboardList },
+  { href: "/admin/actividad", etiqueta: "Actividad", icono: Activity },
   { href: "/admin/padron", etiqueta: "Padrón", icono: FileSpreadsheet },
   { href: "/admin/clientes", etiqueta: "Clientes", icono: Users },
   { href: "/admin/vendedores", etiqueta: "Vendedores", icono: UserSquare },
