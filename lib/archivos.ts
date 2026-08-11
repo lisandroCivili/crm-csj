@@ -50,3 +50,76 @@ export async function borrarTemporal(token: string): Promise<void> {
     unlink(rutaDe(token, "json")),
   ]);
 }
+
+// ---------------------------------------------------------------------------
+// Adjuntos de ventas (foto de DNI y contrato)
+//
+// Son datos sensibles: nunca se sirven por URL publica. Se guardan fuera de
+// /public y salen por /api/uploads/[id], que valida sesion y permiso.
+// ---------------------------------------------------------------------------
+
+const ADJUNTOS = path.join(RAIZ, "adjuntos");
+
+export const TIPOS_ADJUNTO_PERMITIDOS = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "application/pdf",
+] as const;
+
+export const TAMANIO_MAXIMO_ADJUNTO = 10 * 1024 * 1024;
+
+const EXTENSION_POR_TIPO: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "application/pdf": "pdf",
+};
+
+/**
+ * Guarda un adjunto y devuelve su ruta relativa al directorio de uploads.
+ * Se guarda relativa y no absoluta para que mover el volumen de lugar no
+ * invalide lo que ya esta en la base.
+ */
+export async function guardarAdjunto(
+  contenido: Buffer,
+  mimeType: string
+): Promise<string> {
+  const extension = EXTENSION_POR_TIPO[mimeType];
+  if (!extension) throw new Error("Tipo de archivo no permitido.");
+
+  const ahora = new Date();
+  const carpeta = path.join(
+    String(ahora.getUTCFullYear()),
+    String(ahora.getUTCMonth() + 1).padStart(2, "0")
+  );
+
+  await asegurarDirectorio(path.join(ADJUNTOS, carpeta));
+
+  const relativa = path.join("adjuntos", carpeta, `${randomUUID()}.${extension}`);
+  await writeFile(path.join(RAIZ, relativa), contenido);
+
+  return relativa.split(path.sep).join("/");
+}
+
+export async function leerAdjunto(rutaRelativa: string): Promise<Buffer> {
+  const destino = path.resolve(RAIZ, rutaRelativa);
+  const raizAbsoluta = path.resolve(RAIZ);
+
+  // Aunque la ruta sale de la base y no del usuario, se verifica que no se
+  // escape del directorio de uploads: es la ultima linea antes de servir un
+  // archivo arbitrario del disco.
+  if (destino !== raizAbsoluta && !destino.startsWith(raizAbsoluta + path.sep)) {
+    throw new Error("Ruta de archivo inválida.");
+  }
+
+  return readFile(destino);
+}
+
+export async function borrarAdjunto(rutaRelativa: string): Promise<void> {
+  try {
+    await unlink(path.resolve(RAIZ, rutaRelativa));
+  } catch {
+    // Si el archivo ya no esta, el objetivo igual se cumplio.
+  }
+}

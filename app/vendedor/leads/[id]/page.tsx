@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Phone } from "lucide-react";
+import { ArrowLeft, Phone, ShoppingCart } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { BadgeEstado } from "@/components/leads/badge-estado";
 import { CambiarEstadoLead } from "@/components/leads/cambiar-estado";
@@ -52,14 +52,22 @@ export default async function DetalleLeadPage({ params }: PageProps<"/vendedor/l
       <PageHeader
         titulo={lead.nombre}
         acciones={
-          lead.telefono ? (
+          <>
+            {lead.telefono ? (
+              <Button variant="outline" asChild>
+                <a href={`tel:${lead.telefono}`}>
+                  <Phone className="size-4" />
+                  Llamar
+                </a>
+              </Button>
+            ) : null}
             <Button asChild>
-              <a href={`tel:${lead.telefono}`}>
-                <Phone className="size-4" />
-                Llamar
-              </a>
+              <Link href={`/vendedor/ventas/nueva?lead=${lead.id}`}>
+                <ShoppingCart className="size-4" />
+                Cargar venta
+              </Link>
             </Button>
-          ) : undefined
+          </>
         }
       />
 
