@@ -15,23 +15,34 @@ export function NavLinks({ role }: { role: Role }) {
   const items = NAVEGACION[role];
 
   return (
-    <nav className="grid gap-1 px-3">
+    <nav className="grid gap-0.5 px-3">
       {items.map(({ href, etiqueta, icono: Icono }) => {
         const activo = pathname === href || pathname.startsWith(href + "/");
         return (
           <Link
             key={href}
             href={href}
+            aria-current={activo ? "page" : undefined}
             className={cn(
-              // La barra roja a la izquierda marca donde esta parado sin
-              // depender solo del color de fondo.
-              "flex items-center gap-3 rounded-md border-l-2 px-3 py-2 text-sm transition-colors",
+              "group relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors",
               activo
-                ? "border-primary bg-accent font-medium text-accent-foreground"
-                : "border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground"
+                ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+                : "text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground"
             )}
           >
-            <Icono className="size-4 shrink-0" />
+            {/* La barra roja marca la posicion sin depender solo del fondo. */}
+            <span
+              className={cn(
+                "absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full bg-sidebar-primary transition-opacity",
+                activo ? "opacity-100" : "opacity-0"
+              )}
+            />
+            <Icono
+              className={cn(
+                "size-[1.05rem] shrink-0 transition-colors",
+                activo ? "text-sidebar-primary" : "text-sidebar-foreground/60 group-hover:text-sidebar-foreground"
+              )}
+            />
             {etiqueta}
           </Link>
         );
