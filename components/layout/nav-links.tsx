@@ -23,10 +23,12 @@ export function NavLinks({ role }: { role: Role }) {
             key={href}
             href={href}
             className={cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+              // La barra roja a la izquierda marca donde esta parado sin
+              // depender solo del color de fondo.
+              "flex items-center gap-3 rounded-md border-l-2 px-3 py-2 text-sm transition-colors",
               activo
-                ? "bg-accent font-medium text-accent-foreground"
-                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                ? "border-primary bg-accent font-medium text-accent-foreground"
+                : "border-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground"
             )}
           >
             <Icono className="size-4 shrink-0" />

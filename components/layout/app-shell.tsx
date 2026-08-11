@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { MapPin } from "lucide-react";
+import { Marca } from "./marca";
 import { NavLinks } from "./nav-links";
 import { UserMenu } from "./user-menu";
 import { getZonaActiva, type Usuario } from "@/lib/sesion";
@@ -21,12 +22,9 @@ export async function AppShell({
 
   return (
     <div className="flex min-h-full flex-1">
-      <aside className="hidden w-60 shrink-0 flex-col border-r bg-muted/30 py-4 md:flex">
-        <div className="px-6 pb-4">
-          <p className="text-sm font-semibold leading-tight">Club San Jorge</p>
-          <p className="text-xs text-muted-foreground">
-            {usuario.role === "ADMIN" ? "Administración" : "Vendedor"}
-          </p>
+      <aside className="hidden w-60 shrink-0 flex-col border-r bg-sidebar py-4 md:flex">
+        <div className="px-4 pb-5">
+          <Marca bajada={usuario.role === "ADMIN" ? "Administración" : "Vendedor"} />
         </div>
         <NavLinks role={usuario.role} />
       </aside>

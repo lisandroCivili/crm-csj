@@ -48,73 +48,113 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* -------------------------------------------------------------------------
+   Paleta de Club San Jorge
+
+   El color de marca es #BB002F, que en su propio sitio esta definido como
+   .accent-color / .bg-accent. En oklch es oklch(0.501 0.201 20) y da 6.66:1
+   con texto blanco, o sea AA sin concesiones.
+   Complementarios que usa el club: #EA463E (rojo claro), #626262 (gris) y
+   #007A4B (verde, para lo positivo).
+
+   Los grises no son neutros puros: llevan el mismo tono 20 con muy poco croma,
+   asi acompanian al carmesi en vez de pelearse con el.
+
+   Se usa el rojo en botones, foco y elemento activo del menu, pero NO como
+   fondo del panel lateral: es una herramienta de trabajo de todo el dia y una
+   barra roja entera cansa la vista y le baja contraste a la navegacion.
+   ------------------------------------------------------------------------- */
+
 :root {
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: oklch(0.16 0.006 20);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.16 0.006 20);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --popover-foreground: oklch(0.16 0.006 20);
+
+  /* El carmesi exacto de la marca. */
+  --primary: oklch(0.501 0.201 20);
+  --primary-foreground: oklch(1 0 0);
+
+  --secondary: oklch(0.968 0.006 20);
+  --secondary-foreground: oklch(0.26 0.02 20);
+
+  --muted: oklch(0.968 0.006 20);
+  /* 6.04:1 sobre blanco: el texto secundario se lee de verdad. */
+  --muted-foreground: oklch(0.5 0.015 20);
+
+  /* Tinte suave del rojo para hover y fila activa. */
+  --accent: oklch(0.962 0.017 20);
+  --accent-foreground: oklch(0.42 0.16 20);
+
+  /* Corrido hacia el naranja para no confundirse con el rojo de marca. */
+  --destructive: oklch(0.58 0.22 29);
+
+  --border: oklch(0.918 0.006 20);
+  --input: oklch(0.918 0.006 20);
+  --ring: oklch(0.501 0.201 20);
+
+  --chart-1: oklch(0.501 0.201 20);
+  --chart-2: oklch(0.51 0.119 158);
+  --chart-3: oklch(0.63 0.13 60);
+  --chart-4: oklch(0.55 0.09 235);
+  --chart-5: oklch(0.52 0.09 330);
+
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  --sidebar: oklch(0.985 0.004 20);
+  --sidebar-foreground: oklch(0.16 0.006 20);
+  --sidebar-primary: oklch(0.501 0.201 20);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.962 0.017 20);
+  --sidebar-accent-foreground: oklch(0.42 0.16 20);
+  --sidebar-border: oklch(0.918 0.006 20);
+  --sidebar-ring: oklch(0.501 0.201 20);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: oklch(0.16 0.006 20);
+  --foreground: oklch(0.97 0.004 20);
+  --card: oklch(0.21 0.008 20);
+  --card-foreground: oklch(0.97 0.004 20);
+  --popover: oklch(0.21 0.008 20);
+  --popover-foreground: oklch(0.97 0.004 20);
+
+  /* Un poco mas claro que en modo claro para despegarse del fondo, pero
+     todavia oscuro: 5.42:1 con texto blanco. */
+  --primary: oklch(0.55 0.201 20);
+  --primary-foreground: oklch(1 0 0);
+
+  --secondary: oklch(0.27 0.01 20);
+  --secondary-foreground: oklch(0.97 0.004 20);
+
+  --muted: oklch(0.27 0.01 20);
+  --muted-foreground: oklch(0.72 0.014 20);
+
+  --accent: oklch(0.3 0.03 20);
+  --accent-foreground: oklch(0.9 0.06 20);
+
+  --destructive: oklch(0.7 0.18 29);
+
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.62 0.18 20);
+
+  --chart-1: oklch(0.66 0.18 20);
+  --chart-2: oklch(0.66 0.13 158);
+  --chart-3: oklch(0.74 0.13 60);
+  --chart-4: oklch(0.66 0.1 235);
+  --chart-5: oklch(0.66 0.1 330);
+
+  --sidebar: oklch(0.19 0.008 20);
+  --sidebar-foreground: oklch(0.97 0.004 20);
+  --sidebar-primary: oklch(0.62 0.18 20);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.3 0.03 20);
+  --sidebar-accent-foreground: oklch(0.9 0.06 20);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: oklch(0.62 0.18 20);
 }
 
 @layer base {
