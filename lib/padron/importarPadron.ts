@@ -1,0 +1,426 @@
+import type { FilaPadron } from "@/lib/excel/parsePadron";
+import { db } from "@/lib/db";
+
+/**
+ * IMPORTACION DEL PADRON
+ *
+ * El padron que envia el club trae 3 meses por titulo (cuotas n, n+1 y n+2), no
+ * una foto del mes actual. Segun cada cuanto lo emitan, dos padrones sucesivos
+ * pueden solaparse: si sale uno por mes, dos de las tres cuotas ya estaban
+ * cargadas.
+ *
+ * Por eso esto NO es un append: es un upsert idempotente sobre la clave
+ * (tituloId, numeroCuota). Reimportar el mismo archivo no duplica ni altera
+ * nada, y la numeracion de cuotas continua sola desde donde iba sin que el
+ * sistema tenga que adivinar.
+ */
+
+export type ResumenImportacion = {
+  filasProcesadas: number;
+  clientesNuevos: number;
+  clientesActualizados: number;
+  titulosNuevos: number;
+  titulosActualizados: number;
+  cuotasNuevas: number;
+  cuotasActualizadas: number;
+  cuotasSinCambios: number;
+  /** Cuotas que pasaron de impagas a pagadas: base del calculo de comisiones. */
+  cuotasRecienPagadas: number;
+  /** Nombres de NomVen que todavia no estan vinculados a un vendedor. */
+  nomVenSinMapear: string[];
+};
+
+type OpcionesImportacion = {
+  filas: FilaPadron[];
+  zonaId: number;
+  /** Cuando es true no escribe nada: solo calcula el resumen para el preview. */
+  soloSimular: boolean;
+  /** Datos del lote. No hacen falta al simular. */
+  lote?: {
+    archivoNombre: string;
+    importadoPorUserId: string;
+    periodoDesde: Date | null;
+    periodoHasta: Date | null;
+  };
+};
+
+function enTandas<T>(items: T[], tamanio: number): T[][] {
+  const tandas: T[][] = [];
+  for (let i = 0; i < items.length; i += tamanio) {
+    tandas.push(items.slice(i, i + tamanio));
+  }
+  return tandas;
+}
+
+function mismoImporte(guardado: unknown, delArchivo: number): boolean {
+  return Number(guardado) === Math.round(delArchivo * 100) / 100;
+}
+
+function mismaFecha(guardada: Date | null, delArchivo: Date | null): boolean {
+  if (guardada === null && delArchivo === null) return true;
+  if (guardada === null || delArchivo === null) return false;
+  return guardada.getTime() === delArchivo.getTime();
+}
+
+/**
+ * Se queda con una fila por clave, la de emision mas reciente: las 3 filas de un
+ * titulo repiten los datos del cliente, y si alguno cambio queremos el ultimo.
+ */
+function ultimaPorClave<T extends { emision: Date }>(
+  filas: T[],
+  clave: (fila: T) => string
+): Map<string, T> {
+  const mapa = new Map<string, T>();
+  for (const fila of filas) {
+    const k = clave(fila);
+    const previa = mapa.get(k);
+    if (!previa || fila.emision > previa.emision) mapa.set(k, fila);
+  }
+  return mapa;
+}
+
+export async function importarPadron({
+  filas,
+  zonaId,
+  soloSimular,
+  lote,
+}: OpcionesImportacion): Promise<ResumenImportacion> {
+  const resumen: ResumenImportacion = {
+    filasProcesadas: filas.length,
+    clientesNuevos: 0,
+    clientesActualizados: 0,
+    titulosNuevos: 0,
+    titulosActualizados: 0,
+    cuotasNuevas: 0,
+    cuotasActualizadas: 0,
+    cuotasSinCambios: 0,
+    cuotasRecienPagadas: 0,
+    nomVenSinMapear: [],
+  };
+
+  if (filas.length === 0) return resumen;
+
+  // --- 1. NomVen -> vendedor ------------------------------------------------
+  // Nunca se agrupa por el texto crudo del padron: se resuelve por alias.
+  const nomVenDelArchivo = [...new Set(filas.map((f) => f.nomVen))];
+  const alias = await db.vendedorAlias.findMany({
+    where: { nomVenPadron: { in: nomVenDelArchivo }, vendedor: { zonaId } },
+    select: { nomVenPadron: true, vendedorId: true },
+  });
+  const vendedorPorNomVen = new Map(alias.map((a) => [a.nomVenPadron, a.vendedorId]));
+
+  resumen.nomVenSinMapear = nomVenDelArchivo
+    .filter((nombre) => !vendedorPorNomVen.has(nombre))
+    .sort();
+
+  // Sin todos los vendedores resueltos no se importa: imputar cuotas al
+  // vendedor equivocado corrompe el calculo de comisiones.
+  if (resumen.nomVenSinMapear.length > 0 && !soloSimular) {
+    throw new Error(
+      `Faltan vincular ${resumen.nomVenSinMapear.length} nombres de vendedor antes de importar.`
+    );
+  }
+
+  // --- 2. Clientes ----------------------------------------------------------
+  const clientesDelArchivo = ultimaPorClave(filas, (f) => f.dni);
+  const dnis = [...clientesDelArchivo.keys()];
+
+  const clientesExistentes = await db.cliente.findMany({
+    where: { zonaId, dni: { in: dnis } },
+  });
+  const clientePorDni = new Map(clientesExistentes.map((c) => [c.dni, c]));
+
+  const clientesACrear: {
+    dni: string;
+    nombre: string;
+    domicilio: string | null;
+    telefono: string | null;
+    codPos: string | null;
+    localidad: string | null;
+    email: string | null;
+    zonaId: number;
+  }[] = [];
+  const clientesAActualizar: { id: string; datos: Record<string, unknown> }[] = [];
+
+  for (const [dni, fila] of clientesDelArchivo) {
+    const datos = {
+      nombre: fila.nombre,
+      domicilio: fila.domicilio,
+      telefono: fila.telefono,
+      codPos: fila.codPos,
+      localidad: fila.localidad,
+      email: fila.email,
+    };
+    const existente = clientePorDni.get(dni);
+
+    if (!existente) {
+      clientesACrear.push({ dni, zonaId, ...datos });
+      resumen.clientesNuevos++;
+      continue;
+    }
+
+    const cambio = (Object.keys(datos) as (keyof typeof datos)[]).some(
+      (campo) => existente[campo] !== datos[campo]
+    );
+    if (cambio) {
+      clientesAActualizar.push({ id: existente.id, datos });
+      resumen.clientesActualizados++;
+    }
+  }
+
+  // --- 3. Titulos -----------------------------------------------------------
+  const titulosDelArchivo = ultimaPorClave(filas, (f) => f.numTit);
+  const numTits = [...titulosDelArchivo.keys()];
+
+  const titulosExistentes = await db.titulo.findMany({
+    where: { numTit: { in: numTits } },
+  });
+  const tituloPorNumTit = new Map(titulosExistentes.map((t) => [t.numTit, t]));
+
+  for (const [numTit, fila] of titulosDelArchivo) {
+    const existente = tituloPorNumTit.get(numTit);
+    if (!existente) {
+      resumen.titulosNuevos++;
+      continue;
+    }
+    const cambio =
+      existente.numSor !== fila.numSor ||
+      existente.debitoAutomatico !== fila.debitoAutomatico ||
+      existente.codDistribucion !== fila.codDistribucion ||
+      existente.nomDistribucion !== fila.nomDistribucion ||
+      existente.cuotasPagas !== fila.cuotasPagas ||
+      !mismoImporte(existente.rescate ?? 0, fila.rescate ?? 0) ||
+      existente.vendedorId !== (vendedorPorNomVen.get(fila.nomVen) ?? null);
+    if (cambio) resumen.titulosActualizados++;
+  }
+
+  // --- 4. Cuotas ------------------------------------------------------------
+  // Solo se pueden comparar las de titulos que ya existen; las de titulos nuevos
+  // son nuevas por definicion.
+  const idsTitulosExistentes = new Map(
+    titulosExistentes.map((t) => [t.numTit, t.id] as const)
+  );
+
+  const paresAConsultar = filas
+    .filter((f) => idsTitulosExistentes.has(f.numTit))
+    .map((f) => ({
+      tituloId: idsTitulosExistentes.get(f.numTit)!,
+      numeroCuota: f.numeroCuota,
+    }));
+
+  // Se consulta por pares exactos y en tandas: pedir todas las cuotas de cada
+  // titulo traeria cientos de filas historicas que no hacen falta.
+  const cuotasExistentes = new Map<
+    string,
+    { id: string; importe: unknown; fechaPago: Date | null; detalle: string | null; boni: string | null; anti: string | null; periodoEmision: Date; detectadaPagaAt: Date | null }
+  >();
+
+  for (const tanda of enTandas(paresAConsultar, 400)) {
+    if (tanda.length === 0) continue;
+    const encontradas = await db.tituloCuota.findMany({
+      where: { OR: tanda.map((p) => ({ tituloId: p.tituloId, numeroCuota: p.numeroCuota })) },
+      select: {
+        id: true,
+        tituloId: true,
+        numeroCuota: true,
+        importe: true,
+        fechaPago: true,
+        detalle: true,
+        boni: true,
+        anti: true,
+        periodoEmision: true,
+        detectadaPagaAt: true,
+      },
+    });
+    for (const cuota of encontradas) {
+      cuotasExistentes.set(`${cuota.tituloId}:${cuota.numeroCuota}`, cuota);
+    }
+  }
+
+  type PlanCuota =
+    | { tipo: "nueva"; fila: FilaPadron; recienPagada: boolean }
+    | { tipo: "actualizar"; id: string; fila: FilaPadron; recienPagada: boolean }
+    | { tipo: "sinCambios" };
+
+  const planCuotas: PlanCuota[] = filas.map((fila) => {
+    const tituloId = idsTitulosExistentes.get(fila.numTit);
+    const existente = tituloId
+      ? cuotasExistentes.get(`${tituloId}:${fila.numeroCuota}`)
+      : undefined;
+
+    if (!existente) {
+      return { tipo: "nueva", fila, recienPagada: fila.fechaPago !== null };
+    }
+
+    const recienPagada = existente.fechaPago === null && fila.fechaPago !== null;
+    const cambio =
+      !mismoImporte(existente.importe, fila.importe) ||
+      !mismaFecha(existente.fechaPago, fila.fechaPago) ||
+      !mismaFecha(existente.periodoEmision, fila.emision) ||
+      existente.detalle !== fila.detalle ||
+      existente.boni !== fila.boni ||
+      existente.anti !== fila.anti;
+
+    if (!cambio) return { tipo: "sinCambios" };
+    return { tipo: "actualizar", id: existente.id, fila, recienPagada };
+  });
+
+  for (const plan of planCuotas) {
+    if (plan.tipo === "nueva") {
+      resumen.cuotasNuevas++;
+      if (plan.recienPagada) resumen.cuotasRecienPagadas++;
+    } else if (plan.tipo === "actualizar") {
+      resumen.cuotasActualizadas++;
+      if (plan.recienPagada) resumen.cuotasRecienPagadas++;
+    } else {
+      resumen.cuotasSinCambios++;
+    }
+  }
+
+  if (soloSimular) return resumen;
+  if (!lote) throw new Error("Faltan los datos del lote de importación.");
+
+  // --- 5. Escritura ---------------------------------------------------------
+  const ahora = new Date();
+
+  await db.$transaction(
+    async (tx) => {
+      const padronImport = await tx.padronImport.create({
+        data: {
+          archivoNombre: lote.archivoNombre,
+          zonaId,
+          fechaEmisionArchivo: lote.periodoHasta,
+          periodoDesde: lote.periodoDesde,
+          periodoHasta: lote.periodoHasta,
+          importadoPorUserId: lote.importadoPorUserId,
+          filasLeidas: filas.length,
+          clientesNuevos: resumen.clientesNuevos,
+          titulosNuevos: resumen.titulosNuevos,
+          cuotasNuevas: resumen.cuotasNuevas,
+          cuotasActualizadas: resumen.cuotasActualizadas,
+          cuotasReciePagadas: resumen.cuotasRecienPagadas,
+        },
+        select: { id: true },
+      });
+
+      // Clientes
+      if (clientesACrear.length > 0) {
+        await tx.cliente.createMany({ data: clientesACrear });
+      }
+      for (const tanda of enTandas(clientesAActualizar, 100)) {
+        await Promise.all(
+          tanda.map((c) => tx.cliente.update({ where: { id: c.id }, data: c.datos }))
+        );
+      }
+
+      // Se relee para tener el id de los recien creados.
+      const clientes = await tx.cliente.findMany({
+        where: { zonaId, dni: { in: dnis } },
+        select: { id: true, dni: true },
+      });
+      const idClientePorDni = new Map(clientes.map((c) => [c.dni, c.id]));
+
+      // Titulos
+      const titulosACrear: {
+        numTit: string;
+        clienteId: string;
+        vendedorId: string | null;
+        numSor: string | null;
+        debitoAutomatico: boolean;
+        codDistribucion: string | null;
+        nomDistribucion: string | null;
+        rescate: number | null;
+        cuotasPagas: number | null;
+        zonaId: number;
+        vistoEnPadronAt: Date;
+        ultimoPadronImportId: string;
+      }[] = [];
+
+      for (const [numTit, fila] of titulosDelArchivo) {
+        const clienteId = idClientePorDni.get(fila.dni);
+        if (!clienteId) continue;
+
+        const datos = {
+          vendedorId: vendedorPorNomVen.get(fila.nomVen) ?? null,
+          numSor: fila.numSor,
+          debitoAutomatico: fila.debitoAutomatico,
+          codDistribucion: fila.codDistribucion,
+          nomDistribucion: fila.nomDistribucion,
+          rescate: fila.rescate,
+          cuotasPagas: fila.cuotasPagas,
+          vistoEnPadronAt: ahora,
+          ultimoPadronImportId: padronImport.id,
+        };
+
+        const existente = tituloPorNumTit.get(numTit);
+        if (existente) {
+          await tx.titulo.update({ where: { id: existente.id }, data: datos });
+        } else {
+          titulosACrear.push({ numTit, clienteId, zonaId, ...datos });
+        }
+      }
+
+      if (titulosACrear.length > 0) {
+        await tx.titulo.createMany({ data: titulosACrear });
+      }
+
+      const titulos = await tx.titulo.findMany({
+        where: { numTit: { in: numTits } },
+        select: { id: true, numTit: true },
+      });
+      const idTituloPorNumTit = new Map(titulos.map((t) => [t.numTit, t.id]));
+
+      // Cuotas: el upsert idempotente por (tituloId, numeroCuota).
+      const cuotasACrear = planCuotas
+        .filter((p) => p.tipo === "nueva")
+        .map((p) => {
+          const { fila, recienPagada } = p as Extract<PlanCuota, { tipo: "nueva" }>;
+          return {
+            tituloId: idTituloPorNumTit.get(fila.numTit)!,
+            numeroCuota: fila.numeroCuota,
+            periodoEmision: fila.emision,
+            importe: fila.importe,
+            fechaPago: fila.fechaPago,
+            detalle: fila.detalle,
+            boni: fila.boni,
+            anti: fila.anti,
+            detectadaPagaAt: recienPagada ? ahora : null,
+            padronImportId: padronImport.id,
+          };
+        })
+        .filter((c) => Boolean(c.tituloId));
+
+      for (const tanda of enTandas(cuotasACrear, 1000)) {
+        await tx.tituloCuota.createMany({ data: tanda, skipDuplicates: true });
+      }
+
+      const cuotasAActualizar = planCuotas.filter(
+        (p): p is Extract<PlanCuota, { tipo: "actualizar" }> => p.tipo === "actualizar"
+      );
+
+      for (const tanda of enTandas(cuotasAActualizar, 100)) {
+        await Promise.all(
+          tanda.map(({ id, fila, recienPagada }) =>
+            tx.tituloCuota.update({
+              where: { id },
+              data: {
+                periodoEmision: fila.emision,
+                importe: fila.importe,
+                fechaPago: fila.fechaPago,
+                detalle: fila.detalle,
+                boni: fila.boni,
+                anti: fila.anti,
+                padronImportId: padronImport.id,
+                // Solo se sella la primera vez que se la ve pagada.
+                ...(recienPagada ? { detectadaPagaAt: ahora } : {}),
+              },
+            })
+          )
+        );
+      }
+    },
+    { timeout: 180_000, maxWait: 20_000 }
+  );
+
+  return resumen;
+}
