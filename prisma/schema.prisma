@@ -1,0 +1,575 @@
+// CRM Club San Jorge — Balta
+// Ver CLAUDE.md para el vocabulario del dominio y las reglas de negocio.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  VENDEDOR
+}
+
+enum ZonaNombre {
+  SALTA
+  TUCUMAN
+}
+
+/// Los leads que el club le deriva al agente vs. los que Balta genera por su
+/// cuenta (campañas propias de Meta Ads).
+enum LeadOrigen {
+  CLUB
+  PROPIO
+}
+
+enum LeadEstado {
+  PENDIENTE
+  VENDIDO
+  NO_VENDIDO
+  DEVOLUCION
+}
+
+enum LeadActividadTipo {
+  ASIGNACION
+  CAMBIO_ESTADO
+}
+
+enum VentaEstado {
+  ACTIVA
+  ANULADA
+}
+
+enum AdjuntoTipo {
+  DNI
+  CONTRATO
+}
+
+enum ComisionEstado {
+  BORRADOR
+  CERRADO
+}
+
+// ---------------------------------------------------------------------------
+// Base: zonas y usuarios
+// ---------------------------------------------------------------------------
+
+/// Salta o Tucuman. El admin elige una despues de loguearse y esa eleccion
+/// filtra absolutamente todo lo que ve y carga.
+model Zona {
+  id     Int        @id @default(autoincrement())
+  nombre ZonaNombre @unique
+
+  vendedores    Vendedor[]
+  clientes      Cliente[]
+  titulos       Titulo[]
+  leads         Lead[]
+  leadImports   LeadImport[]
+  padronImports PadronImport[]
+  ventas        Venta[]
+  comisiones    ComisionPeriodo[]
+
+  @@map("zonas")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  nombre       String
+  role         Role
+  activo       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  vendedor Vendedor?
+
+  padronImports     PadronImport[]
+  leadImports       LeadImport[]
+  leadActividades   LeadActividad[]
+  adjuntosSubidos   VentaAdjunto[]
+  historialesVentas VentaHistorial[]
+
+  @@map("usuarios")
+}
+
+/// Un vendedor puede existir SIN cuenta de usuario: hay vendedores que figuran
+/// en el padron del club pero no usan el sistema. La cuenta es opcional.
+model Vendedor {
+  id             String  @id @default(cuid())
+  nombreCompleto String
+  dni            String  @unique
+  codigo         String
+  direccion      String?
+  email          String?
+  telefono       String?
+
+  zonaId Int
+  zona   Zona @relation(fields: [zonaId], references: [id])
+
+  /// Hasta que numero de cuota cobra comision este vendedor (1 a 5).
+  /// Lo define Balta por vendedor.
+  topeCuotasComision Int     @default(4)
+  condiciones        String?
+
+  activo    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  userId String? @unique
+  user   User?   @relation(fields: [userId], references: [id])
+
+  alias      VendedorAlias[]
+  titulos    Titulo[]
+  leads      Lead[]
+  ventas     Venta[]
+  comisiones ComisionPeriodo[]
+
+  @@unique([zonaId, codigo])
+  @@index([zonaId])
+  @@map("vendedores")
+}
+
+/// `NomVen` en el padron es texto libre y sucio: el mismo vendedor aparece
+/// escrito de varias formas (TOLEDO PEDRO / TOLEDO PEDRO A. / TOLEDO PEDRO
+/// ANTONIO son la misma persona). Esta tabla mapea cada variante al vendedor
+/// real. `nomVenPadron` se guarda normalizado (mayusculas, sin espacios extra).
+model VendedorAlias {
+  id           String   @id @default(cuid())
+  nomVenPadron String   @unique
+  vendedorId   String
+  vendedor     Vendedor @relation(fields: [vendedorId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+
+  @@index([vendedorId])
+  @@map("vendedores_alias")
+}
+
+// ---------------------------------------------------------------------------
+// Padron (nucleo del sistema)
+// ---------------------------------------------------------------------------
+
+/// Un lote de importacion de padron. Nunca se pisan: queda el historico
+/// completo para poder auditar de donde salio cada dato.
+model PadronImport {
+  id                  String    @id @default(cuid())
+  archivoNombre       String
+  zonaId              Int
+  zona                Zona      @relation(fields: [zonaId], references: [id])
+  fechaEmisionArchivo DateTime?
+  periodoDesde        DateTime?
+  periodoHasta        DateTime?
+
+  filasLeidas         Int @default(0)
+  clientesNuevos      Int @default(0)
+  titulosNuevos       Int @default(0)
+  cuotasNuevas        Int @default(0)
+  cuotasActualizadas  Int @default(0)
+  /// Cuotas que pasaron de impagas a pagadas en esta importacion: es la
+  /// materia prima del calculo de comisiones.
+  cuotasReciePagadas  Int @default(0)
+
+  importadoPorUserId String
+  importadoPor       User   @relation(fields: [importadoPorUserId], references: [id])
+  createdAt          DateTime @default(now())
+
+  titulos Titulo[]
+  cuotas  TituloCuota[]
+
+  @@index([zonaId])
+  @@map("padron_imports")
+}
+
+/// El padron del club es la fuente de estos datos. Un cliente puede tener
+/// varios titulos (en el padron analizado, 278 de 2007 clientes tenian mas
+/// de un plan).
+model Cliente {
+  id        String   @id @default(cuid())
+  dni       String
+  nombre    String
+  domicilio String?
+  telefono  String?
+  codPos    String?
+  localidad String?
+  email     String?
+
+  zonaId Int
+  zona   Zona @relation(fields: [zonaId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  titulos Titulo[]
+
+  @@unique([zonaId, dni])
+  @@index([zonaId])
+  @@index([nombre])
+  @@map("clientes")
+}
+
+/// `NumTit` identifica de forma unica al contrato/suscripcion. En el padron
+/// analizado ningun titulo cambiaba de DNI ni de vendedor.
+model Titulo {
+  id     String @id @default(cuid())
+  numTit String @unique
+
+  clienteId String
+  cliente   Cliente @relation(fields: [clienteId], references: [id])
+
+  vendedorId String?
+  vendedor   Vendedor? @relation(fields: [vendedorId], references: [id])
+
+  /// Numero de sorteo (0-999).
+  numSor           String?
+  debitoAutomatico Boolean  @default(false)
+  codDistribucion  String?
+  nomDistribucion  String?
+  rescate          Decimal? @db.Decimal(14, 2)
+  cuotasPagas      Int?
+
+  zonaId Int
+  zona   Zona @relation(fields: [zonaId], references: [id])
+
+  activo Boolean @default(true)
+  /// Ultima vez que el titulo aparecio en un padron. Si deja de aparecer en
+  /// importaciones nuevas, es candidato a baja.
+  vistoEnPadronAt DateTime?
+
+  ultimoPadronImportId String?
+  ultimoPadronImport   PadronImport? @relation(fields: [ultimoPadronImportId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  cuotas TituloCuota[]
+  ventas Venta[]
+
+  @@index([clienteId])
+  @@index([vendedorId])
+  @@index([zonaId])
+  @@map("titulos")
+}
+
+/// Una fila del padron = una cuota de un titulo en un mes (`periodoEmision`).
+///
+/// REGLA CENTRAL DEL SISTEMA: la clave unica es (tituloId, numeroCuota). El
+/// padron trae 3 meses por titulo y padrones sucesivos pueden solaparse, asi
+/// que la importacion SIEMPRE es un upsert sobre esta clave, nunca un append.
+/// Reimportar el mismo archivo no debe duplicar ni alterar nada.
+model TituloCuota {
+  id          String @id @default(cuid())
+  tituloId    String
+  titulo      Titulo @relation(fields: [tituloId], references: [id], onDelete: Cascade)
+  numeroCuota Int
+
+  periodoEmision DateTime
+  importe        Decimal  @db.Decimal(14, 2)
+
+  /// Vacio = cuota impaga (columna FchPago del padron).
+  fechaPago DateTime?
+  detalle   String?
+  boni      String?
+  anti      String?
+
+  /// Momento en que el sistema vio por primera vez esta cuota como pagada.
+  /// Dispara el devengamiento de comision del periodo correspondiente.
+  detectadaPagaAt DateTime?
+
+  padronImportId String?
+  padronImport   PadronImport? @relation(fields: [padronImportId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  comisionDetalles ComisionDetalle[]
+
+  @@unique([tituloId, numeroCuota])
+  @@index([periodoEmision])
+  @@index([fechaPago])
+  @@index([detectadaPagaAt])
+  @@map("titulo_cuotas")
+}
+
+// ---------------------------------------------------------------------------
+// Leads
+// ---------------------------------------------------------------------------
+
+model LeadImport {
+  id            String     @id @default(cuid())
+  archivoNombre String
+  origen        LeadOrigen
+  zonaId        Int
+  zona          Zona       @relation(fields: [zonaId], references: [id])
+  cantidad      Int        @default(0)
+
+  importadoPorUserId String
+  importadoPor       User   @relation(fields: [importadoPorUserId], references: [id])
+  createdAt          DateTime @default(now())
+
+  leads Lead[]
+
+  @@index([zonaId])
+  @@map("lead_imports")
+}
+
+model Lead {
+  id        String  @id @default(cuid())
+  nombre    String
+  telefono  String?
+  direccion String?
+  localidad String?
+  provincia String?
+
+  origen LeadOrigen
+  estado LeadEstado @default(PENDIENTE)
+  /// Motivo cuando el vendedor devuelve el lead.
+  motivoDevolucion String?
+
+  vendedorAsignadoId String?
+  vendedorAsignado   Vendedor? @relation(fields: [vendedorAsignadoId], references: [id])
+  fechaAsignacion    DateTime?
+
+  zonaId Int
+  zona   Zona @relation(fields: [zonaId], references: [id])
+
+  leadImportId String?
+  leadImport   LeadImport? @relation(fields: [leadImportId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  actividades LeadActividad[]
+  ventas      Venta[]
+
+  @@index([zonaId, estado])
+  @@index([vendedorAsignadoId])
+  @@map("leads")
+}
+
+/// Log de asignaciones y cambios de estado. Los admins tienen que poder ver
+/// todo lo que hacen los vendedores sobre sus leads.
+model LeadActividad {
+  id     String            @id @default(cuid())
+  leadId String
+  lead   Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tipo   LeadActividadTipo
+
+  estadoAnterior LeadEstado?
+  estadoNuevo    LeadEstado?
+  detalle        String?
+
+  actorUserId String?
+  actor       User?   @relation(fields: [actorUserId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@index([leadId])
+  @@index([createdAt])
+  @@map("lead_actividades")
+}
+
+// ---------------------------------------------------------------------------
+// Planes y ventas
+// ---------------------------------------------------------------------------
+
+model Plan {
+  id             String  @id @default(cuid())
+  /// Codigo de producto de 3 digitos.
+  codigoProducto String  @unique
+  nombre         String
+  duracionMeses  Int?
+  activo         Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  precios PlanPrecio[]
+  ventas  Venta[]
+
+  @@map("planes")
+}
+
+/// Historico de precios: al recargar la lista no se pisa el precio con el que
+/// se vendio en el pasado.
+model PlanPrecio {
+  id           String   @id @default(cuid())
+  planId       String
+  plan         Plan     @relation(fields: [planId], references: [id], onDelete: Cascade)
+  precio       Decimal  @db.Decimal(14, 2)
+  vigenteDesde DateTime
+  createdAt    DateTime @default(now())
+
+  @@unique([planId, vigenteDesde])
+  @@index([planId])
+  @@map("plan_precios")
+}
+
+/// Venta cargada por el vendedor. Es su pipeline: existe antes de que el club
+/// asigne el numero de titulo. `tituloId` se completa cuando el titulo aparece
+/// en un padron y se vincula.
+model Venta {
+  id String @id @default(cuid())
+
+  leadId String?
+  lead   Lead?   @relation(fields: [leadId], references: [id])
+
+  vendedorId String
+  vendedor   Vendedor @relation(fields: [vendedorId], references: [id])
+
+  zonaId Int
+  zona   Zona @relation(fields: [zonaId], references: [id])
+
+  nombreCliente String
+  dni           String
+  direccion     String?
+  localidad     String?
+  provincia     String?
+  telefono      String?
+
+  planId           String?
+  plan             Plan?   @relation(fields: [planId], references: [id])
+  codigoProducto   String?
+  debitoAutomatico Boolean @default(false)
+
+  estado     VentaEstado @default(ACTIVA)
+  fechaVenta DateTime    @default(now())
+
+  tituloId String?
+  titulo   Titulo? @relation(fields: [tituloId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  adjuntos         VentaAdjunto[]
+  historial        VentaHistorial[]
+  comisionDetalles ComisionDetalle[]
+
+  @@index([vendedorId])
+  @@index([zonaId])
+  @@index([dni])
+  @@map("ventas")
+}
+
+/// La foto de DNI es obligatoria (se valida en la aplicacion) y el contrato es
+/// opcional. Los archivos viven en el volumen de Railway y se sirven por
+/// /api/uploads/[id], que valida sesion y permiso.
+model VentaAdjunto {
+  id       String      @id @default(cuid())
+  ventaId  String
+  venta    Venta       @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  tipo     AdjuntoTipo
+  path     String
+  mimeType String
+  size     Int
+
+  subidoPorUserId String
+  subidoPor       User   @relation(fields: [subidoPorUserId], references: [id])
+  createdAt       DateTime @default(now())
+
+  @@index([ventaId])
+  @@map("venta_adjuntos")
+}
+
+/// Un registro por edicion, con el diff completo { campo: { antes, despues } }.
+model VentaHistorial {
+  id      String @id @default(cuid())
+  ventaId String
+  venta   Venta  @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  cambios Json
+
+  modificadoPorUserId String
+  modificadoPor       User   @relation(fields: [modificadoPorUserId], references: [id])
+  createdAt           DateTime @default(now())
+
+  @@index([ventaId])
+  @@map("venta_historial")
+}
+
+// ---------------------------------------------------------------------------
+// Comisiones
+//
+// PENDIENTE de definicion del cliente (ver CLAUDE.md): si la comision se
+// liquida desde el padron o desde las ventas del CRM, y sobre que monto se
+// aplica el porcentaje. El modelo guarda la materia prima de ambas variantes.
+// ---------------------------------------------------------------------------
+
+/// Tabla de escalas editable desde la UI: cruza el volumen de ventas acumulado
+/// del vendedor contra el numero de cuota. NUNCA hardcodear porcentajes.
+model EscalaComision {
+  id          String   @id @default(cuid())
+  ventasMin   Int
+  /// null = sin tope superior.
+  ventasMax   Int?
+  numeroCuota Int
+  porcentaje  Decimal  @db.Decimal(6, 3)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([ventasMin, numeroCuota])
+  @@map("escalas_comision")
+}
+
+model ComisionPeriodo {
+  id String @id @default(cuid())
+
+  vendedorId String
+  vendedor   Vendedor @relation(fields: [vendedorId], references: [id])
+
+  /// Formato YYYY-MM.
+  periodo String
+
+  zonaId Int
+  zona   Zona @relation(fields: [zonaId], references: [id])
+
+  /// Tramo de escala que aplico al calcular.
+  ventasAcumuladas Int @default(0)
+
+  totalComisionCuotas Decimal @default(0) @db.Decimal(14, 2)
+  /// Importe que Balta agrega a mano a la comision del periodo.
+  gastosRepresentacion Decimal @default(0) @db.Decimal(14, 2)
+  totalComision        Decimal @default(0) @db.Decimal(14, 2)
+
+  estado      ComisionEstado @default(BORRADOR)
+  fechaCierre DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  detalles ComisionDetalle[]
+
+  @@unique([vendedorId, periodo])
+  @@index([zonaId])
+  @@map("comision_periodos")
+}
+
+model ComisionDetalle {
+  id                String          @id @default(cuid())
+  comisionPeriodoId String
+  comisionPeriodo   ComisionPeriodo @relation(fields: [comisionPeriodoId], references: [id], onDelete: Cascade)
+
+  tituloCuotaId String?
+  tituloCuota   TituloCuota? @relation(fields: [tituloCuotaId], references: [id])
+
+  ventaId String?
+  venta   Venta?  @relation(fields: [ventaId], references: [id])
+
+  numeroCuota Int
+  baseCalculo Decimal @db.Decimal(14, 2)
+  /// Porcentaje congelado al momento del calculo: si Balta cambia la escala
+  /// despues, los periodos ya cerrados no se recalculan solos.
+  porcentajeAplicado Decimal @db.Decimal(6, 3)
+  monto              Decimal @db.Decimal(14, 2)
+
+  createdAt DateTime @default(now())
+
+  @@index([comisionPeriodoId])
+  @@map("comision_detalles")
+}

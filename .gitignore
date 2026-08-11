@@ -43,9 +43,13 @@ yarn-error.log*
 # adjuntos subidos (foto de DNI, contratos) -> volumen de Railway
 /uploads
 
-# prisma
-/app/generated
-/prisma/generated
+# prisma: cliente generado
+/lib/generated
+
+# skills de terceros instaladas por la CLI de prisma (se regeneran desde
+# skills-lock.json). .claude/skills/prisma-* son symlinks hacia .agents/
+/.agents
+/.claude/skills/prisma-*
 
 # typescript
 *.tsbuildinfo
