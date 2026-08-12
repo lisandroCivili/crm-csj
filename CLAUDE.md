@@ -40,24 +40,34 @@ Vocabulario del dominio (aparece tal cual en el padrón y en el código):
   normaliza con la tabla `VendedorAlias`; nunca agrupar vendedores por el string del padrón.
 - **Un `Vendedor` puede existir sin cuenta de usuario**: hay vendedores que figuran en el padrón
   pero no usan el sistema. La cuenta (`User`) es opcional.
-- **Comisiones**: cada vendedor tiene un tope configurable de cuotas por las que cobra (c1 a c5,
-  lo define Balta por vendedor), y el % de cada cuota varía según el volumen de ventas acumulado
-  (tabla `EscalaComision`, editable desde la UI — **nunca hardcodear porcentajes**). Balta puede
-  sumar además un importe manual de "gastos de representación".
 - **La zona filtra todo.** El admin elige Salta o Tucumán después de loguearse y esa elección
   define qué ve y qué carga. Los vendedores tienen zona fija. Toda query debe estar scopeada.
 
-## Decisiones pendientes del cliente
+## Cómo se liquida la comisión
 
-Estas tres respuestas están pendientes y **solo bloquean la Fase 7 (comisiones)**:
+Confirmado por Balta el 2026-08-12. El motor vive en
+`lib/comisiones/calcularComisionPeriodo.ts`, que es una **función pura** con tests: es el único
+lugar donde un bug se traduce en plata mal pagada.
 
-1. Si la comisión se liquida desde el **padrón** (dato oficial del club) o desde las **ventas
-   cargadas** en el CRM.
-2. Sobre qué monto se aplica el % (importe de la cuota pagada, valor nominal del plan, u otro).
-3. Cómo se vincula una venta cargada por el vendedor con su `NumTit` cuando aparece en el padrón.
-
-El modelo de datos ya guarda toda la materia prima necesaria, así que cualquiera de las
-respuestas se implementa como configuración del motor, no como rediseño.
+- **Sale del padrón, no de las ventas del CRM.** `Venta` no interviene en el cálculo: existe
+  para que el vendedor registre su pipeline. La materia prima es `TituloCuota`.
+- **Una cuota se devenga en el mes en que `detectadaPagaAt` cae**, o sea cuando el sistema la vio
+  cobrada por primera vez al importar un padrón — no en el mes de `fechaPago`. El padrón llega
+  desfasado: se vende en agosto, el sorteo es en septiembre y el padrón de ese ciclo llega
+  alrededor del 10 de septiembre.
+- **El porcentaje se aplica sobre el importe cobrado**, no sobre el valor nominal del plan, y las
+  cuotas se agrupan **por número de cuota**: cada número tiene su propio %, y la cuota 1 suele ser
+  la más alta.
+- **El tramo de `EscalaComision` se mide por mes, no por acumulado**: lo define la cantidad de
+  ventas nuevas (cuotas 1 cobradas) de ese mes. Puede ser 0, y en ese caso el vendedor igual cobra
+  sus cuotas 2, 3… al tramo más bajo (por eso siempre tiene que existir un tramo con
+  `ventasMin = 0`).
+- Cada vendedor cobra hasta cierto número de cuota (`topeCuotasComision`, c1 a c5); lo que pasa de
+  ahí se descarta. Balta puede sumar un importe manual de "gastos de representación".
+- Los porcentajes salen siempre de `EscalaComision`, editable en `/admin/comisiones/escalas`.
+  **Nunca hardcodearlos.**
+- **Cerrar el período congela los porcentajes** en `ComisionDetalle`. Un período cerrado no se
+  recalcula aunque después cambie la escala o entre otro padrón; se puede reabrir a mano.
 
 ## Stack
 
@@ -71,6 +81,7 @@ Postgres y volumen persistente para adjuntos).
 npm run dev              # levanta la base local Y la web (localhost:3000)
 npm run build            # build de produccion
 npm run lint             # eslint
+npm test                 # vitest (motor de comisiones y helpers de lib/)
 npm run db:migrate       # aplicar cambios de schema
 npm run db:studio        # inspeccionar la base
 npm run db:seed          # cargar zonas y usuarios admin

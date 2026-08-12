@@ -1,6 +1,8 @@
 import Link from "next/link";
 import {
+  BadgeDollarSign,
   ClipboardList,
+  Coins,
   FileSpreadsheet,
   ScrollText,
   TrendingUp,
@@ -8,18 +10,34 @@ import {
   Users,
 } from "lucide-react";
 import { CobranzaPorMes, type MesCobranza } from "@/components/dashboard/cobranza-por-mes";
+import { FiltroCuota } from "@/components/dashboard/filtro-cuota";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatCard } from "@/components/layout/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { CUOTAS_COMISIONABLES } from "@/lib/comisiones/constantes";
+import { obtenerLiquidacion } from "@/lib/comisiones/liquidacion";
+import { etiquetaPeriodo, periodoActual } from "@/lib/comisiones/periodo";
 import { db } from "@/lib/db";
+import { pesos } from "@/lib/formato";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
 const FECHA = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" });
 
-export default async function AdminDashboardPage() {
+export default async function AdminDashboardPage({
+  searchParams,
+}: PageProps<"/admin/dashboard">) {
   const usuario = await requireAdmin();
   const zonaId = await requireZonaActivaId();
+
+  const parametros = await searchParams;
+  const pedida = Number(parametros.cuota);
+  const cuota = (CUOTAS_COMISIONABLES as readonly number[]).includes(pedida) ? pedida : null;
+  // El filtro por numero de cuota afecta a la cobranza y al promedio, no a los
+  // leads ni a las ventas cargadas: esas no tienen numero de cuota.
+  const filtroCuota = cuota === null ? {} : { numeroCuota: cuota };
+
+  const periodo = periodoActual();
 
   const inicioDeMes = new Date();
   inicioDeMes.setUTCDate(1);
@@ -36,6 +54,7 @@ export default async function AdminDashboardPage() {
     cuotasPorMes,
     cuotasPagasPorMes,
     topVendedores,
+    liquidacion,
   ] = await Promise.all([
     db.lead.count({ where: { zonaId, estado: "PENDIENTE" } }),
     db.lead.count({ where: { zonaId, vendedorAsignadoId: null } }),
@@ -50,14 +69,14 @@ export default async function AdminDashboardPage() {
     }),
     db.tituloCuota.groupBy({
       by: ["periodoEmision"],
-      where: { titulo: { zonaId } },
+      where: { titulo: { zonaId }, ...filtroCuota },
       _count: { _all: true },
       orderBy: { periodoEmision: "desc" },
       take: 8,
     }),
     db.tituloCuota.groupBy({
       by: ["periodoEmision"],
-      where: { titulo: { zonaId }, fechaPago: { not: null } },
+      where: { titulo: { zonaId }, fechaPago: { not: null }, ...filtroCuota },
       _count: { _all: true },
     }),
     db.venta.groupBy({
@@ -67,6 +86,7 @@ export default async function AdminDashboardPage() {
       orderBy: { _count: { vendedorId: "desc" } },
       take: 5,
     }),
+    obtenerLiquidacion({ zonaId, periodo }),
   ]);
 
   const pagasPorPeriodo = new Map(
@@ -80,6 +100,22 @@ export default async function AdminDashboardPage() {
       pagas: pagasPorPeriodo.get(fila.periodoEmision.getTime()) ?? 0,
     }))
     .reverse();
+
+  // Cuánto se cobra en promedio por cuota, sobre los mismos meses que muestra
+  // el gráfico: sirve para ver de qué tamaño es la base de la comisión.
+  const desdeElGrafico = meses[0]?.periodo;
+  const promedio = desdeElGrafico
+    ? await db.tituloCuota.aggregate({
+        where: {
+          titulo: { zonaId },
+          fechaPago: { not: null },
+          periodoEmision: { gte: desdeElGrafico },
+          ...filtroCuota,
+        },
+        _avg: { importe: true },
+      })
+    : null;
+  const promedioCuota = promedio?._avg.importe ? Number(promedio._avg.importe) : 0;
 
   const nombresVendedores = new Map(
     (
@@ -101,7 +137,11 @@ export default async function AdminDashboardPage() {
         descripcion="Cómo viene la zona activa."
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-5">
+        <FiltroCuota base="/admin/dashboard" activa={cuota} />
+      </div>
+
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
           etiqueta="Leads sin asignar"
           valor={leadsSinAsignar}
@@ -111,11 +151,21 @@ export default async function AdminDashboardPage() {
           href="/admin/leads?asignacion=sin"
         />
         <StatCard
-          etiqueta="Cobranza acumulada"
+          etiqueta={cuota ? `Cobranza de la cuota ${cuota}` : "Cobranza acumulada"}
           valor={`${porcentajeCobrado}%`}
           detalle={`${totalPagas.toLocaleString("es-AR")} de ${totalCuotas.toLocaleString("es-AR")} cuotas emitidas`}
           icono={TrendingUp}
           tono="exito"
+        />
+        <StatCard
+          etiqueta="Promedio de cuota"
+          valor={pesos(promedioCuota)}
+          detalle={
+            cuota
+              ? `lo que se cobra por cada cuota ${cuota}`
+              : "sobre las cuotas cobradas del gráfico"
+          }
+          icono={Coins}
         />
         <StatCard
           etiqueta="Ventas del mes"
@@ -124,6 +174,15 @@ export default async function AdminDashboardPage() {
           icono={ScrollText}
           tono="marca"
           href="/admin/ventas"
+        />
+        <StatCard
+          etiqueta="Comisiones del mes"
+          valor={pesos(liquidacion.totales.total)}
+          detalle={`${etiquetaPeriodo(periodo)} · ${
+            liquidacion.estado === "CERRADO" ? "cerrado" : "en borrador"
+          }`}
+          icono={BadgeDollarSign}
+          href="/admin/comisiones"
         />
         <StatCard
           etiqueta="Clientes en padrón"
@@ -137,7 +196,9 @@ export default async function AdminDashboardPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-base">Cobranza mes a mes</CardTitle>
+            <CardTitle className="text-base">
+              Cobranza mes a mes{cuota ? ` · cuota ${cuota}` : ""}
+            </CardTitle>
             <CardDescription>
               Qué porcentaje de las cuotas emitidas figura pago en el padrón.
             </CardDescription>

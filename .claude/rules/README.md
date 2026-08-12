@@ -8,5 +8,8 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
 - **Scope de zona**: toda query que lea datos de negocio se filtra por la zona activa.
 - **Importación de padrón**: siempre upsert idempotente por `(tituloId, numeroCuota)`, nunca append.
 - **Vendedores**: agrupar por `VendedorAlias`, nunca por el texto crudo de `NomVen`.
-- **Comisiones**: los porcentajes salen de `EscalaComision`, nunca hardcodeados.
+- **Comisiones**: los porcentajes salen de `EscalaComision`, nunca hardcodeados. El cálculo se
+  hace desde el padrón (`TituloCuota`), nunca desde `Venta`, y se devenga por `detectadaPagaAt`,
+  no por `fechaPago`. Un período cerrado no se recalcula: los porcentajes quedan congelados en
+  `ComisionDetalle`.
 - **Datos sensibles**: padrones reales y fotos de DNI no se versionan ni se sirven por URL pública.

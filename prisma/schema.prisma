@@ -496,13 +496,14 @@ model VentaHistorial {
 // ---------------------------------------------------------------------------
 // Comisiones
 //
-// PENDIENTE de definicion del cliente (ver CLAUDE.md): si la comision se
-// liquida desde el padron o desde las ventas del CRM, y sobre que monto se
-// aplica el porcentaje. El modelo guarda la materia prima de ambas variantes.
+// La comision se liquida desde el PADRON, no desde las ventas cargadas en el
+// CRM (confirmado por Balta el 2026-08-12). El porcentaje se aplica sobre el
+// importe de las cuotas que el padron mostro cobradas en el mes, agrupadas por
+// numero de cuota. Ver lib/comisiones/calcularComisionPeriodo.ts.
 // ---------------------------------------------------------------------------
 
-/// Tabla de escalas editable desde la UI: cruza el volumen de ventas acumulado
-/// del vendedor contra el numero de cuota. NUNCA hardcodear porcentajes.
+/// Tabla de escalas editable desde la UI: cruza el volumen de ventas nuevas del
+/// mes contra el numero de cuota. NUNCA hardcodear porcentajes.
 model EscalaComision {
   id          String   @id @default(cuid())
   ventasMin   Int
@@ -529,8 +530,9 @@ model ComisionPeriodo {
   zonaId Int
   zona   Zona @relation(fields: [zonaId], references: [id])
 
-  /// Tramo de escala que aplico al calcular.
-  ventasAcumuladas Int @default(0)
+  /// Ventas nuevas (cuotas 1 cobradas) del mes. Es el volumen que definio el
+  /// tramo de escala: se mide por periodo, no por acumulado historico.
+  ventasDelPeriodo Int @default(0)
 
   totalComisionCuotas Decimal @default(0) @db.Decimal(14, 2)
   /// Importe que Balta agrega a mano a la comision del periodo.
@@ -550,19 +552,26 @@ model ComisionPeriodo {
   @@map("comision_periodos")
 }
 
+/// Un renglon de la liquidacion: todas las cuotas del mismo numero que el
+/// vendedor cobro en el periodo, con la base sumada y el porcentaje congelado.
 model ComisionDetalle {
   id                String          @id @default(cuid())
   comisionPeriodoId String
   comisionPeriodo   ComisionPeriodo @relation(fields: [comisionPeriodoId], references: [id], onDelete: Cascade)
 
+  /// Sin uso: el renglon agrupa varias cuotas, no una sola. Se conserva por si
+  /// alguna vez hace falta liquidar cuota por cuota.
   tituloCuotaId String?
   tituloCuota   TituloCuota? @relation(fields: [tituloCuotaId], references: [id])
 
+  /// Sin uso: la comision sale del padron, `Venta` no interviene en el calculo.
   ventaId String?
   venta   Venta?  @relation(fields: [ventaId], references: [id])
 
   numeroCuota Int
-  baseCalculo Decimal @db.Decimal(14, 2)
+  /// Cuantas cuotas de ese numero entraron en el renglon.
+  cantidadCuotas Int @default(0)
+  baseCalculo    Decimal @db.Decimal(14, 2)
   /// Porcentaje congelado al momento del calculo: si Balta cambia la escala
   /// despues, los periodos ya cerrados no se recalculan solos.
   porcentajeAplicado Decimal @db.Decimal(6, 3)

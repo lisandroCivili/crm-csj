@@ -1,11 +1,15 @@
 import Link from "next/link";
-import { CalendarClock, ClipboardList, Plus, ScrollText, Trophy } from "lucide-react";
+import { BadgeDollarSign, CalendarClock, ClipboardList, Plus, ScrollText } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatCard } from "@/components/layout/stat-card";
 import { BadgeEstado } from "@/components/leads/badge-estado";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
+import { obtenerLiquidacionVendedor } from "@/lib/comisiones/liquidacion";
+import { etiquetaPeriodo, periodoActual, periodoAnterior } from "@/lib/comisiones/periodo";
 import { db } from "@/lib/db";
+import { pesos, porcentaje } from "@/lib/formato";
 import { requireVendedor } from "@/lib/sesion";
 
 const FECHA = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
@@ -25,6 +29,9 @@ export default async function VendedorDashboardPage() {
     0,
     Math.ceil((cierreDeMes.getTime() - ahora.getTime()) / 86_400_000)
   );
+
+  const periodo = periodoActual();
+  const periodoPrevio = periodoAnterior(periodo);
 
   const [vendedor, leadsPendientes, ventasDelMes, ventasTotales, ultimosLeads, ultimasVentas] =
     await Promise.all([
@@ -54,6 +61,25 @@ export default async function VendedorDashboardPage() {
         select: { id: true, nombreCliente: true, fechaVenta: true, codigoProducto: true },
       }),
     ]);
+
+  // La comision del vendedor sale del padron, no de las ventas que carga acá:
+  // se cuenta cuando el club confirma que la cuota se cobro.
+  const [comision, comisionPrevia] = usuario.zonaIdFija
+    ? await Promise.all([
+        obtenerLiquidacionVendedor({
+          vendedorId: usuario.vendedorId,
+          zonaId: usuario.zonaIdFija,
+          periodo,
+        }),
+        obtenerLiquidacionVendedor({
+          vendedorId: usuario.vendedorId,
+          zonaId: usuario.zonaIdFija,
+          periodo: periodoPrevio,
+        }),
+      ])
+    : [null, null];
+
+  const cerrada = comision?.estado === "CERRADO";
 
   return (
     <>
@@ -88,19 +114,91 @@ export default async function VendedorDashboardPage() {
           href="/vendedor/ventas"
         />
         <StatCard
+          etiqueta={cerrada ? "Ganancia del mes" : "Ganancia estimada"}
+          valor={pesos(comision?.totalComision ?? 0)}
+          detalle={
+            cerrada
+              ? "liquidada y cerrada"
+              : `provisorio · cobrás hasta c${vendedor.topeCuotasComision}`
+          }
+          icono={BadgeDollarSign}
+          tono="marca"
+        />
+        <StatCard
           etiqueta="Cierre del mes"
           valor={DIA_LARGO.format(cierreDeMes)}
           detalle={diasParaCierre === 0 ? "cierra hoy" : `faltan ${diasParaCierre} días`}
           icono={CalendarClock}
-          tono="marca"
-        />
-        <StatCard
-          etiqueta="Cobrás comisión hasta"
-          valor={`c${vendedor.topeCuotasComision}`}
-          detalle="según tus condiciones"
-          icono={Trophy}
         />
       </div>
+
+      <Card className="mb-4">
+        <CardHeader>
+          <CardTitle className="text-base">
+            Tu comisión de <span className="first-letter:uppercase">{etiquetaPeriodo(periodo)}</span>
+          </CardTitle>
+          <CardDescription>
+            Se calcula sobre las cuotas que el padrón mostró cobradas este mes, agrupadas por
+            número de cuota. Hasta que se cierre el mes, el número puede moverse.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!comision || comision.renglones.length === 0 ? (
+            <p className="py-2 text-sm text-muted-foreground">
+              Todavía no hay cuotas tuyas cobradas este mes. El padrón del ciclo llega unos
+              diez días después del sorteo.
+            </p>
+          ) : (
+            <ul className="divide-y">
+              {comision.renglones.map((renglon) => (
+                <li
+                  key={renglon.numeroCuota}
+                  className="flex items-center justify-between gap-3 py-2.5 text-sm"
+                >
+                  <span>
+                    <span className="font-medium">Cuota {renglon.numeroCuota}</span>
+                    <span className="text-muted-foreground">
+                      {" · "}
+                      {renglon.cantidadCuotas}{" "}
+                      {renglon.cantidadCuotas === 1 ? "cobrada" : "cobradas"} ·{" "}
+                      {porcentaje(renglon.porcentajeAplicado)} de{" "}
+                      {pesos(renglon.baseCalculo)}
+                    </span>
+                  </span>
+                  <span className="shrink-0 tabular-nums">{pesos(renglon.monto)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {comision && comision.gastosRepresentacion > 0 ? (
+            <div className="flex items-center justify-between gap-3 border-t py-2.5 text-sm">
+              <span className="text-muted-foreground">Gastos de representación</span>
+              <span className="tabular-nums">
+                {pesos(comision.gastosRepresentacion)}
+              </span>
+            </div>
+          ) : null}
+
+          <Separator className="my-3" />
+
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-sm text-muted-foreground">
+              {cerrada ? "Total liquidado" : "Total estimado"}
+            </span>
+            <span className="text-xl font-semibold tabular-nums">
+              {pesos(comision?.totalComision ?? 0)}
+            </span>
+          </div>
+
+          {comisionPrevia && comisionPrevia.totalComision > 0 ? (
+            <p className="mt-3 text-xs text-muted-foreground">
+              El mes pasado ({etiquetaPeriodo(periodoPrevio)}) cerraste con{" "}
+              {pesos(comisionPrevia.totalComision)}.
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

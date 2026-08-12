@@ -35,6 +35,7 @@ Después entrar a http://localhost:3000 con el usuario que imprime el seed.
 | `npm run dev` | Base local + web en localhost:3000 |
 | `npm run build` | Build de producción |
 | `npm run lint` | ESLint |
+| `npm test` | Tests de `lib/` con Vitest (motor de comisiones) |
 | `npm run db:migrate` | Aplica cambios del schema |
 | `npm run db:studio` | Explorador de la base |
 | `npm run db:seed` | Carga zonas y admins |
@@ -52,6 +53,18 @@ npx tsx scripts/verificar-padron.ts "docs/Padron-xxx.xls" --limpiar
 Verifica que los totales coincidan con el archivo, que reimportarlo no cambie
 nada, y que un padrón del período siguiente continúe la numeración de cuotas sin
 duplicar ni saltear.
+
+## Comisiones
+
+El cálculo vive en `lib/comisiones/calcularComisionPeriodo.ts` y es una función
+pura: recibe las cuotas cobradas, la escala y el tope del vendedor, y devuelve
+el detalle. Es donde un bug cuesta plata, así que se testea aparte con
+`npm test`, sin base ni servidor.
+
+Las reglas del negocio (de dónde sale cada dato, cómo se elige el tramo, qué
+significa cerrar un período) están en
+[CLAUDE.md](CLAUDE.md#cómo-se-liquida-la-comisión). Los porcentajes no están en
+el código: los carga Balta en `/admin/comisiones/escalas`.
 
 ## Datos sensibles
 

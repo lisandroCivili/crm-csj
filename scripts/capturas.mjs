@@ -26,6 +26,8 @@ const PANTALLAS = [
   ["vendedores", "/admin/vendedores"],
   ["ventas", "/admin/ventas"],
   ["planes", "/admin/planes"],
+  ["comisiones", "/admin/comisiones"],
+  ["comisiones-escalas", "/admin/comisiones/escalas"],
   ["actividad", "/admin/actividad"],
 ];
 
