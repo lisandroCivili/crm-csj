@@ -68,13 +68,31 @@ Postgres y volumen persistente para adjuntos).
 ## Comandos
 
 ```bash
-npm run dev              # desarrollo en localhost:3000
+npm run dev              # levanta la base local Y la web (localhost:3000)
 npm run build            # build de produccion
 npm run lint             # eslint
-npx prisma migrate dev   # aplicar cambios de schema
-npx prisma studio        # inspeccionar la base
+npm run db:migrate       # aplicar cambios de schema
+npm run db:studio        # inspeccionar la base
 npm run db:seed          # cargar zonas y usuarios admin
+npm run capturas         # capturas de pantalla de todas las vistas
 ```
+
+### Desarrollo local necesita dos procesos
+
+En desarrollo la base es el Postgres que trae Prisma (`prisma dev`), que **no
+es un servicio del sistema**: es un proceso que vive mientras esté abierto. Por
+eso `npm run dev` levanta los dos con `concurrently`.
+
+Si se corre solo `next dev`, la web arranca igual y parece que anda, pero todas
+las páginas tiran `ECONNREFUSED` de Prisma al consultar. El síntoma es
+engañoso: el problema no es la web, es que falta la base.
+
+El servidor se levanta con `--name crm-csj`, lo que le fija el puerto (51218) y
+conserva los datos entre reinicios, así el `DATABASE_URL` del `.env` no queda
+viejo. Si alguna vez cambia, hay que actualizar `.env`.
+
+La primera vez el arranque de la base tarda porque descarga el binario
+("Fetching latest updates…"). Después es inmediato.
 
 ## Datos sensibles
 
