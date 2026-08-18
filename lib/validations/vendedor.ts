@@ -1,16 +1,5 @@
 import { z } from "zod";
-
-/**
- * Campo de texto que puede venir vacio del formulario. Guardamos `null` en vez
- * de cadena vacia para que "sin dato" sea un solo valor en la base.
- */
-const textoOpcional = (max = 200) =>
-  z
-    .string()
-    .trim()
-    .max(max, `No puede superar los ${max} caracteres.`)
-    .optional()
-    .transform((valor) => (valor ? valor : null));
+import { emailOpcional, passwordNueva, textoOpcional } from "./comunes";
 
 export const vendedorSchema = z.object({
   nombreCompleto: z
@@ -32,10 +21,7 @@ export const vendedorSchema = z.object({
 
   direccion: textoOpcional(),
 
-  email: z
-    .union([z.literal(""), z.string().trim().email("El email no es válido.")])
-    .optional()
-    .transform((valor) => (valor ? valor.toLowerCase() : null)),
+  email: emailOpcional,
 
   telefono: textoOpcional(40),
 
@@ -53,5 +39,6 @@ export type DatosVendedor = z.infer<typeof vendedorSchema>;
 
 export const usuarioVendedorSchema = z.object({
   email: z.string().trim().email("El email no es válido."),
-  password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres."),
+  // Misma regla que el cambio de contrasena desde el perfil.
+  password: passwordNueva,
 });

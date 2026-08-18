@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Plus, UserSquare } from "lucide-react";
+import { DatoFila, ListaTarjetas, TarjetaFila } from "@/components/layout/lista-tarjetas";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -68,7 +69,35 @@ export default async function VendedoresPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <>
+        <ListaTarjetas>
+          {vendedores.map((vendedor) => (
+            <TarjetaFila
+              key={vendedor.id}
+              href={`/admin/vendedores/${vendedor.id}`}
+              atenuada={!vendedor.activo}
+              encabezado={
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="min-w-0 truncate font-medium">{vendedor.nombreCompleto}</p>
+                  {!vendedor.activo ? <Badge variant="outline">inactivo</Badge> : null}
+                  {!vendedor.userId ? (
+                    <span className="text-xs text-muted-foreground">sin cuenta</span>
+                  ) : null}
+                </div>
+              }
+              lateral={`c${vendedor.topeCuotasComision}`}
+            >
+              <DatoFila etiqueta="Código" valor={vendedor.codigo} />
+              <DatoFila etiqueta="DNI" valor={vendedor.dni} />
+              <DatoFila
+                etiqueta="Leads · ventas · títulos"
+                valor={`${vendedor._count.leads} · ${vendedor._count.ventas} · ${vendedor._count.titulos}`}
+              />
+            </TarjetaFila>
+          ))}
+        </ListaTarjetas>
+
+        <Card className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -126,6 +155,7 @@ export default async function VendedoresPage() {
             </TableBody>
           </Table>
         </Card>
+        </>
       )}
     </>
   );

@@ -5,10 +5,10 @@ import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { AlertCircle } from "lucide-react";
 import { crearVendedor, editarVendedor, type EstadoFormulario } from "@/app/admin/vendedores/actions";
+import { Campo } from "@/components/layout/campo";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
 type ValoresVendedor = {
@@ -22,38 +22,6 @@ type ValoresVendedor = {
   topeCuotasComision?: number;
   condiciones?: string | null;
 };
-
-function Campo({
-  nombre,
-  etiqueta,
-  errores,
-  requerido,
-  children,
-  ayuda,
-}: {
-  nombre: string;
-  etiqueta: string;
-  errores?: string[];
-  requerido?: boolean;
-  children: React.ReactNode;
-  ayuda?: string;
-}) {
-  return (
-    <div className="space-y-2">
-      <Label htmlFor={nombre}>
-        {etiqueta}
-        {requerido ? <span className="text-destructive"> *</span> : null}
-      </Label>
-      {children}
-      {ayuda && !errores?.length ? (
-        <p className="text-xs text-muted-foreground">{ayuda}</p>
-      ) : null}
-      {errores?.length ? (
-        <p className="text-xs text-destructive">{errores[0]}</p>
-      ) : null}
-    </div>
-  );
-}
 
 function BotonGuardar({ edicion }: { edicion: boolean }) {
   const { pending } = useFormStatus();

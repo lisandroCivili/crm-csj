@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ClipboardList } from "lucide-react";
+import { DatoFila, ListaTarjetas, TarjetaFila } from "@/components/layout/lista-tarjetas";
 import { PageHeader } from "@/components/layout/page-header";
 import { BadgeEstado } from "@/components/leads/badge-estado";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { db } from "@/lib/db";
-import { requireVendedor } from "@/lib/sesion";
+import { requirePermiso } from "@/lib/sesion";
 import { ESTADOS_LEAD, ETIQUETA_ESTADO } from "@/lib/validations/lead";
 import type { LeadEstado } from "@/lib/generated/prisma/client";
 
@@ -22,7 +23,7 @@ function esEstado(valor: unknown): valor is LeadEstado {
 }
 
 export default async function MisLeadsPage({ searchParams }: PageProps<"/vendedor/leads">) {
-  const usuario = await requireVendedor();
+  const usuario = await requirePermiso("verLeads");
   const parametros = await searchParams;
   const estado = esEstado(parametros.estado) ? parametros.estado : undefined;
 
@@ -92,7 +93,30 @@ export default async function MisLeadsPage({ searchParams }: PageProps<"/vendedo
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <>
+          {/* En el celular el vendedor llama: el telefono va como boton grande
+              y el resto se acomoda debajo. */}
+          <ListaTarjetas>
+            {leads.map((lead) => (
+              <TarjetaFila
+                key={lead.id}
+                href={`/vendedor/leads/${lead.id}`}
+                encabezado={
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="min-w-0 truncate font-medium">{lead.nombre}</p>
+                    <BadgeEstado estado={lead.estado} />
+                  </div>
+                }
+              >
+                <DatoFila
+                  etiqueta="Localidad"
+                  valor={[lead.localidad, lead.provincia].filter(Boolean).join(", ") || "—"}
+                />
+              </TarjetaFila>
+            ))}
+          </ListaTarjetas>
+
+        <Card className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -132,6 +156,7 @@ export default async function MisLeadsPage({ searchParams }: PageProps<"/vendedo
             </TableBody>
           </Table>
         </Card>
+        </>
       )}
     </>
   );

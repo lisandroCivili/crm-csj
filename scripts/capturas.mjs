@@ -4,14 +4,19 @@
  *
  *   npm run dev            (en otra terminal)
  *   node scripts/capturas.mjs [carpeta-destino]
+ *   CAPTURA_MOVIL=1 node scripts/capturas.mjs .capturas-movil
+ *
+ * El modo movil usa el viewport de un iPhone 14 y abre el menu hamburguesa,
+ * que es la unica forma de navegar por debajo de 768px.
  *
  * Las imagenes van a .capturas/, que esta fuera del repositorio.
  */
 import { mkdir } from "node:fs/promises";
-import { chromium } from "playwright";
+import { chromium, devices } from "playwright";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
-const DESTINO = process.argv[2] ?? ".capturas";
+const MOVIL = process.env.CAPTURA_MOVIL === "1";
+const DESTINO = process.argv[2] ?? (MOVIL ? ".capturas-movil" : ".capturas");
 
 const ADMIN = {
   email: process.env.CAPTURA_EMAIL ?? "balta@crm-csj.local",
@@ -35,8 +40,9 @@ await mkdir(DESTINO, { recursive: true });
 
 const navegador = await chromium.launch();
 const contexto = await navegador.newContext({
-  viewport: { width: 1440, height: 950 },
-  deviceScaleFactor: 2,
+  ...(MOVIL
+    ? devices["iPhone 14"]
+    : { viewport: { width: 1440, height: 950 }, deviceScaleFactor: 2 }),
   locale: "es-AR",
 });
 const pagina = await contexto.newPage();
@@ -85,6 +91,14 @@ for (const [indice, [nombre, ruta]] of PANTALLAS.entries()) {
   const numero = String(indice + 2).padStart(2, "0");
   await pagina.screenshot({ path: `${DESTINO}/${numero}-${nombre}.png` });
   console.log(`${numero}-${nombre}`);
+}
+
+// En movil la navegacion vive detras del boton: sin esta captura no se ve.
+if (MOVIL) {
+  await pagina.getByRole("button", { name: "Abrir menú" }).click();
+  await pagina.waitForTimeout(400);
+  await pagina.screenshot({ path: `${DESTINO}/99-menu.png` });
+  console.log("99-menu");
 }
 
 await navegador.close();

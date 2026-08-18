@@ -40,6 +40,7 @@ Después entrar a http://localhost:3000 con el usuario que imprime el seed.
 | `npm run db:studio` | Explorador de la base |
 | `npm run db:seed` | Carga zonas y admins |
 | `npm run capturas` | Capturas de todas las pantallas en `.capturas/` |
+| `CAPTURA_MOVIL=1 npm run capturas` | Lo mismo con viewport de celular, en `.capturas-movil/` |
 
 ## Verificación del padrón
 

@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { CerrarPeriodo, ReabrirPeriodo } from "@/components/comisiones/acciones-periodo";
 import { InputGastos } from "@/components/comisiones/input-gastos";
+import { DatoFila, ListaTarjetas, TarjetaFila } from "@/components/layout/lista-tarjetas";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatCard } from "@/components/layout/stat-card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -227,7 +228,57 @@ export default async function ComisionesPage({ searchParams }: PageProps<"/admin
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <>
+          <ListaTarjetas>
+            {conMovimiento.map((linea) => {
+              const base = linea.renglones.reduce((suma, renglon) => suma + renglon.baseCalculo, 0);
+              return (
+                <TarjetaFila
+                  key={linea.vendedorId}
+                  encabezado={
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="min-w-0 truncate font-medium">{linea.nombreCompleto}</p>
+                      {!linea.activo ? <Badge variant="outline">inactivo</Badge> : null}
+                    </div>
+                  }
+                  lateral={
+                    <span className="text-base font-semibold text-foreground tabular-nums">
+                      {pesos(linea.totalComision)}
+                    </span>
+                  }
+                >
+                  <DatoFila
+                    etiqueta="Ventas nuevas"
+                    valor={`${linea.ventasNuevas}${
+                      linea.tramo
+                        ? ` · tramo ${linea.tramo.ventasMin}${
+                            linea.tramo.ventasMax === null ? "+" : ` a ${linea.tramo.ventasMax}`
+                          }`
+                        : ""
+                    }`}
+                  />
+                  <DatoFila etiqueta="Base cobrada" valor={pesos(base)} />
+                  <DatoFila etiqueta="Comisión" valor={pesos(linea.totalComisionCuotas)} />
+                  <div className="flex items-center justify-between gap-3 pt-1">
+                    <span className="text-xs text-muted-foreground">Gastos repr.</span>
+                    <InputGastos
+                      vendedorId={linea.vendedorId}
+                      periodo={periodo}
+                      valor={linea.gastosRepresentacion}
+                      deshabilitado={cerrado}
+                    />
+                  </div>
+                  <Button variant="outline" size="lg" asChild className="mt-2 w-full">
+                    <Link href={`/admin/comisiones/vendedor/${linea.vendedorId}?periodo=${periodo}`}>
+                      Ver el detalle
+                    </Link>
+                  </Button>
+                </TarjetaFila>
+              );
+            })}
+          </ListaTarjetas>
+
+        <Card className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -306,6 +357,7 @@ export default async function ComisionesPage({ searchParams }: PageProps<"/admin
             </TableBody>
           </Table>
         </Card>
+        </>
       )}
 
       {sinMovimiento.length > 0 ? (

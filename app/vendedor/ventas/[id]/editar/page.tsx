@@ -2,12 +2,12 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { VentaForm } from "@/components/ventas/venta-form";
 import { db } from "@/lib/db";
-import { requireVendedor } from "@/lib/sesion";
+import { requirePermiso } from "@/lib/sesion";
 
 export default async function EditarVentaPage({
   params,
 }: PageProps<"/vendedor/ventas/[id]/editar">) {
-  const usuario = await requireVendedor();
+  const usuario = await requirePermiso("cargarVentas");
   const { id } = await params;
 
   const [venta, planes] = await Promise.all([

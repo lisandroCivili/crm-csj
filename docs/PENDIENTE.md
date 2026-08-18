@@ -4,8 +4,9 @@ Documento de traspaso para arrancar una sesión nueva sin tener que releer todo.
 El contexto del negocio está en [`../CLAUDE.md`](../CLAUDE.md); acá va solo lo
 que queda por hacer.
 
-**Estado:** rama `dev`. La Fase 7 (motor de comisiones) está terminada y
-verificada contra la base local. No queda ninguna fase bloqueada.
+**Estado:** rama `dev`. La Fase 7 (motor de comisiones), el perfil de usuario,
+los permisos del vendedor y la navegación en celular están terminados y
+verificados contra la base local. No queda ninguna fase bloqueada.
 
 ---
 
@@ -54,7 +55,36 @@ decía otra cosa.
 
 ---
 
-## 2. Consultas menores al cliente
+## 2. Perfil, permisos y celular: hecho
+
+| Pieza | Dónde |
+|---|---|
+| Sesión que lee estado y permisos de la base en cada request | `lib/sesion.ts` (`getUsuarioActual`, `requirePermiso`) |
+| Salida forzada sin bucle de redirecciones | `app/api/salir/route.ts` |
+| Menú de navegación en celular | `components/layout/menu-movil.tsx` + `components/ui/sheet.tsx` |
+| Listados como tarjetas por debajo de 768px | `components/layout/lista-tarjetas.tsx` |
+| Perfil propio (contraseña, email de ingreso, contacto) | `/perfil` |
+| Permisos y cuenta del vendedor | `/admin/vendedores/[id]` |
+
+Migración `20260812194947_permisos_vendedor`: tres booleanos en `Vendedor`
+(`puedeVerLeads`, `puedeCargarVentas`, `puedeVerComision`, todos en `true`) y
+`User.telefono` para los admins, que no tienen ficha de vendedor donde guardarlo.
+
+Cosas que conviene saber:
+
+- **La base de desarrollo corta a las ~9 conexiones en paralelo.** Por eso
+  `lib/db.ts` limita el pool a 4 en desarrollo: una página como el dashboard
+  dispara más consultas que eso en un solo `Promise.all` y se caían con
+  `P1017 ConnectionClosed`. En producción manda el `connection_limit` de la URL.
+- El linter de React 19 prohíbe `setState` dentro de un efecto, así que el menú
+  y los diálogos se resolvieron sin estado propio (`SheetClose`, y el formulario
+  del diálogo que se remonta en cada apertura).
+- `npm run capturas` con `CAPTURA_MOVIL=1` saca las capturas en viewport de
+  celular y abre el menú, que es la única forma de navegar ahí.
+
+---
+
+## 3. Consultas menores al cliente
 
 Ninguna bloquea nada.
 
@@ -71,7 +101,7 @@ Ninguna bloquea nada.
 
 ---
 
-## 3. Fuera del MVP, para más adelante
+## 4. Fuera del MVP, para más adelante
 
 Ninguno de estos está empezado y ninguno bloquea nada.
 
@@ -83,16 +113,17 @@ Ninguno de estos está empezado y ninguno bloquea nada.
 - **Despliegue en Railway**: la app, el Postgres y un volumen persistente
   montado en `UPLOADS_DIR` para los adjuntos. El código ya está preparado; falta
   crear el proyecto y configurar las variables de entorno (ver `.env.example`).
-- **Repaso final de permisos**: verificar que ningún vendedor llegue a datos de
-  otro ni de otra zona escribiendo la URL a mano. Los casos críticos ya están
-  cubiertos y probados (adjuntos, leads, ventas, comisiones), pero conviene una
-  pasada completa antes de producción.
+- **Repaso final de permisos**: en buena parte resuelto. El estado de la cuenta y
+  los permisos se leen de la base en cada request, cada sección del vendedor está
+  blindada por permiso además de por rol, y los adjuntos dejaron de servirse con
+  el token viejo. Falta una pasada completa sobre el resto de las URLs de admin
+  antes de producción.
 - **Exportar la liquidación** a Excel o PDF para pasársela al club o al
   vendedor. Hoy se ve en pantalla; nadie lo pidió todavía.
 
 ---
 
-## 4. Cómo levantar el proyecto
+## 5. Cómo levantar el proyecto
 
 ```bash
 npm run dev     # levanta la base local Y la web juntas

@@ -43,6 +43,35 @@ Vocabulario del dominio (aparece tal cual en el padrón y en el código):
 - **La zona filtra todo.** El admin elige Salta o Tucumán después de loguearse y esa elección
   define qué ve y qué carga. Los vendedores tienen zona fija. Toda query debe estar scopeada.
 
+## Sesión y permisos
+
+- **El JWT es un documento de identidad, no de autorización.** Lo único que se le cree es de
+  quién es la sesión; el rol, el nombre, el email, el estado de la cuenta y los permisos se leen
+  de la base en cada request (`getUsuarioActual()` en `lib/sesion.ts`, memoizado con `cache()`).
+  La razón: los claims del JWT se escriben una sola vez al iniciar sesión, así que si Balta le
+  saca un permiso a un vendedor o lo da de baja, el token de esa persona no se entera y seguiría
+  entrando por semanas. **Nunca cachear `getUsuarioActual` entre requests.**
+- El middleware (`proxy.ts`) sí decide con los claims del token, porque corre en edge y no puede
+  consultar Prisma. Alcanza para rutear entre `/admin` y `/vendedor`; el corte fino lo hace el
+  servidor.
+- **Sacar a alguien nunca se hace con `redirect("/login")`**: el middleware ve la cookie todavía
+  válida y lo devuelve, en un ida y vuelta infinito. Para eso está `/api/salir`, que cierra la
+  sesión de verdad y avisa el motivo en el login.
+- Un vendedor tiene tres permisos (`puedeVerLeads`, `puedeCargarVentas`, `puedeVerComision`),
+  todos en `true` por defecto. Se **sacan**, no se dan. Filtran el menú (`itemsVisibles`) y
+  además blindan cada página y acción con `requirePermiso`: esconder el ítem no es seguridad.
+  Sin permiso se vuelve al dashboard en silencio, igual que cuando un vendedor entra a `/admin`.
+- `User.activo` (puede entrar al sistema) es distinto de `Vendedor.activo` (sigue en el equipo).
+  El admin maneja los dos por separado desde la ficha del vendedor.
+
+## Mobile
+
+El sistema se usa mucho desde el celular. La barra lateral está oculta por debajo de 768px y la
+reemplaza el menú del header (`components/layout/menu-movil.tsx`). Los listados muestran tarjetas
+(`components/layout/lista-tarjetas.tsx`) en lugar de la tabla: es markup duplicado a propósito,
+porque en el escritorio Balta compara nueve columnas de un vistazo y en el teléfono el vendedor
+necesita tres datos y un botón grande. Se verifica con `CAPTURA_MOVIL=1 npm run capturas`.
+
 ## Cómo se liquida la comisión
 
 Confirmado por Balta el 2026-08-12. El motor vive en

@@ -1,12 +1,12 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { VentaForm } from "@/components/ventas/venta-form";
 import { db } from "@/lib/db";
-import { requireVendedor } from "@/lib/sesion";
+import { requirePermiso } from "@/lib/sesion";
 
 export default async function NuevaVentaPage({
   searchParams,
 }: PageProps<"/vendedor/ventas/nueva">) {
-  const usuario = await requireVendedor();
+  const usuario = await requirePermiso("cargarVentas");
   const parametros = await searchParams;
   const leadId = typeof parametros.lead === "string" ? parametros.lead : undefined;
 

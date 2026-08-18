@@ -1,10 +1,21 @@
+import { Info } from "lucide-react";
 import { LoginForm } from "@/components/auth/login-form";
 import { Marca } from "@/components/layout/marca";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
+/** Por que lo sacamos del sistema. Lo manda /api/salir. */
+const MOTIVOS: Record<string, string> = {
+  "cuenta-inactiva":
+    "Tu cuenta está desactivada. Hablá con la administración para que te la habiliten.",
+  "sesion-vencida": "Tu sesión venció. Entrá de nuevo.",
+  "password-cambiada": "Listo, cambiaste la contraseña. Entrá con la nueva.",
+};
+
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
-  const { volverA } = await searchParams;
+  const { volverA, motivo } = await searchParams;
   const destino = typeof volverA === "string" && volverA.startsWith("/") ? volverA : "/";
+  const aviso = typeof motivo === "string" ? MOTIVOS[motivo] : undefined;
 
   return (
     <main className="relative flex flex-1 items-center justify-center p-6">
@@ -17,6 +28,13 @@ export default async function LoginPage({ searchParams }: PageProps<"/login">) {
 
       <div className="relative w-full max-w-sm">
         <Marca bajada="Capitalización y Ahorro" className="mb-6 justify-center" />
+
+        {aviso ? (
+          <Alert className="mb-4">
+            <Info />
+            <AlertDescription>{aviso}</AlertDescription>
+          </Alert>
+        ) : null}
 
         <Card>
           <CardHeader>

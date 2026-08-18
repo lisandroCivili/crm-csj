@@ -19,10 +19,21 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
+/**
+ * El Postgres que levanta `prisma dev` corta la conexion pasadas ~9 en paralelo,
+ * y una pagina como el dashboard dispara mas que eso en un solo `Promise.all`.
+ * Con el pool en 4 las consultas se encolan y ninguna se cae; el costo es unos
+ * milisegundos de espera que solo se pagan en desarrollo.
+ *
+ * En produccion manda el `connection_limit` de la URL, que es lo que espera el
+ * Postgres administrado.
+ */
+const MAX_CONEXIONES = process.env.NODE_ENV === "development" ? 4 : undefined;
+
 export const db =
   globalForPrisma.prisma ??
   new PrismaClient({
-    adapter: new PrismaPg({ connectionString }),
+    adapter: new PrismaPg({ connectionString, max: MAX_CONEXIONES }),
     log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
   });
 

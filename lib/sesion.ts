@@ -5,22 +5,132 @@ import { cache } from "react";
 import { auth } from "./auth";
 import { db } from "./db";
 import { RUTA_INICIO, ZONA_COOKIE } from "./constantes";
+import type { Role } from "./generated/prisma/client";
 
-// `auth` tiene varias sobrecargas (middleware, route handler y llamada
-// directa), asi que derivar el tipo con ReturnType devuelve la equivocada.
 export type Sesion = Session;
-export type Usuario = Session["user"];
 
 /**
- * Sesion del request actual. Va memoizada con `cache` para que varios
- * componentes del mismo render no repitan la verificacion.
+ * Que secciones ve el usuario. Para el admin son todas; para el vendedor las
+ * define Balta desde su ficha.
+ */
+export type Permisos = {
+  verLeads: boolean;
+  cargarVentas: boolean;
+  verComision: boolean;
+};
+
+const PERMISOS_ADMIN: Permisos = { verLeads: true, cargarVentas: true, verComision: true };
+
+export type Usuario = {
+  id: string;
+  email: string;
+  nombre: string;
+  role: Role;
+  vendedorId: string | null;
+  zonaIdFija: number | null;
+  permisos: Permisos;
+};
+
+/**
+ * SESION
+ *
+ * El JWT es un documento de identidad, no de autorizacion: lo unico que se le
+ * cree es de quien es la sesion (`token.sub`). El rol, el nombre, el email, el
+ * estado de la cuenta y los permisos salen de la base en cada request.
+ *
+ * La razon es que la sesion es JWT puro y sus claims se escriben una sola vez,
+ * al iniciar sesion. Si Balta le saca un permiso a un vendedor, o lo da de baja,
+ * el token de esa persona no se entera y seguiria entrando por semanas.
+ * `unstable_update` no resuelve esto: solo refresca la sesion de quien la
+ * invoca, nunca la de un tercero.
+ *
+ * El costo es un findUnique por clave primaria, memoizado con `cache()` para
+ * que el layout y la pagina del mismo render no lo repitan. Nunca cachear esto
+ * entre requests (`unstable_cache`, `"use cache"`): reintroduce el problema.
+ *
+ * El middleware (proxy.ts) sigue decidiendo con los claims del token porque
+ * corre en edge y no puede consultar Prisma. Eso alcanza para rutear; el corte
+ * fino lo hace el servidor, aca.
  */
 export const getSesion = cache(async () => auth());
+
+export const getUsuarioActual = cache(async (): Promise<Usuario | null> => {
+  const sesion = await getSesion();
+  const id = sesion?.user?.id;
+  if (!id) return null;
+
+  const user = await db.user.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      email: true,
+      nombre: true,
+      role: true,
+      activo: true,
+      vendedor: {
+        select: {
+          id: true,
+          zonaId: true,
+          activo: true,
+          puedeVerLeads: true,
+          puedeCargarVentas: true,
+          puedeVerComision: true,
+        },
+      },
+    },
+  });
+
+  if (!user || !user.activo) return null;
+
+  // Misma regla que el login: un vendedor dado de baja no entra aunque su
+  // usuario siga activo.
+  if (user.role === "VENDEDOR" && !user.vendedor?.activo) return null;
+
+  return {
+    id: user.id,
+    email: user.email,
+    nombre: user.nombre,
+    role: user.role,
+    vendedorId: user.vendedor?.id ?? null,
+    zonaIdFija: user.vendedor?.zonaId ?? null,
+    permisos:
+      user.role === "ADMIN"
+        ? PERMISOS_ADMIN
+        : {
+            verLeads: user.vendedor?.puedeVerLeads ?? false,
+            cargarVentas: user.vendedor?.puedeCargarVentas ?? false,
+            verComision: user.vendedor?.puedeVerComision ?? false,
+          },
+  };
+});
+
+/**
+ * Salida forzada. No se puede redirigir a /login con la cookie viva: el
+ * middleware ve la sesion y devuelve al usuario a su ruta de inicio, que vuelve
+ * a expulsarlo. Ese ida y vuelta es un bucle infinito.
+ *
+ * /api/salir cierra la sesion de verdad antes de mandar al login. Vive bajo
+ * /api porque el matcher del middleware excluye ese prefijo y porque un route
+ * handler si puede borrar cookies (un Server Component no).
+ */
+function salir(motivo: "cuenta-inactiva" | "sesion-vencida"): never {
+  redirect(`/api/salir?motivo=${motivo}`);
+}
 
 export async function requireUsuario(): Promise<Usuario> {
   const sesion = await getSesion();
   if (!sesion?.user) redirect("/login");
-  return sesion.user;
+
+  const usuario = await getUsuarioActual();
+  // Habia sesion pero la cuenta ya no sirve: la borraron o la desactivaron
+  // mientras la persona navegaba.
+  if (!usuario) salir("cuenta-inactiva");
+
+  // El token dice un rol y la base dice otro. Si lo dejaramos pasar, el
+  // middleware y el servidor se lo pasarian de uno al otro para siempre.
+  if (usuario.role !== sesion.user.role) salir("sesion-vencida");
+
+  return usuario;
 }
 
 export async function requireAdmin(): Promise<Usuario> {
@@ -37,6 +147,19 @@ export async function requireVendedor(): Promise<Usuario & { vendedorId: string 
   return usuario as Usuario & { vendedorId: string };
 }
 
+/**
+ * Igual que `requireVendedor` pero ademas exige un permiso. Si no lo tiene,
+ * vuelve al dashboard sin explicaciones: la seccion no es un secreto, y es el
+ * mismo rebote silencioso que ya hace el sistema con los roles.
+ */
+export async function requirePermiso(
+  permiso: keyof Permisos
+): Promise<Usuario & { vendedorId: string }> {
+  const usuario = await requireVendedor();
+  if (!usuario.permisos[permiso]) redirect(RUTA_INICIO.VENDEDOR);
+  return usuario;
+}
+
 // ---------------------------------------------------------------------------
 // Zona activa
 //
@@ -44,8 +167,14 @@ export async function requireVendedor(): Promise<Usuario & { vendedorId: string 
 // zona fija de su perfil; para el admin, la que eligio despues de loguearse.
 // ---------------------------------------------------------------------------
 
+/**
+ * No redirige: devuelve null si no hay sesion util o si el admin todavia no
+ * eligio zona. Asi la puede usar tambien un route handler, donde un redirect
+ * seria una respuesta HTTP y no lo que se espera de una descarga.
+ */
 export async function getZonaActivaId(): Promise<number | null> {
-  const usuario = await requireUsuario();
+  const usuario = await getUsuarioActual();
+  if (!usuario) return null;
 
   // La zona del vendedor no es negociable: ignoramos la cookie a proposito.
   if (usuario.role === "VENDEDOR") return usuario.zonaIdFija;
@@ -57,6 +186,7 @@ export async function getZonaActivaId(): Promise<number | null> {
 
 /** Igual que `getZonaActivaId` pero manda al selector si todavia no eligio. */
 export async function requireZonaActivaId(): Promise<number> {
+  await requireUsuario();
   const id = await getZonaActivaId();
   if (id === null) redirect("/seleccionar-zona");
   return id;

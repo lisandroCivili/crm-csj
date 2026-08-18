@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FileText, IdCard, ScrollText, Search } from "lucide-react";
+import { DatoFila, ListaTarjetas, TarjetaFila } from "@/components/layout/lista-tarjetas";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -95,7 +96,45 @@ export default async function VentasAdminPage({ searchParams }: PageProps<"/admi
             {total.toLocaleString("es-AR")} venta{total === 1 ? "" : "s"}
           </p>
 
-          <Card>
+          <ListaTarjetas>
+            {ventas.map((venta) => {
+              const dni = venta.adjuntos.find((a) => a.tipo === "DNI");
+              return (
+                <TarjetaFila
+                  key={venta.id}
+                  titulo={venta.nombreCliente}
+                  lateral={FECHA.format(venta.fechaVenta)}
+                >
+                  <DatoFila etiqueta="DNI" valor={venta.dni} />
+                  <DatoFila etiqueta="Vendedor" valor={venta.vendedor.nombreCompleto} />
+                  <DatoFila
+                    etiqueta="Plan"
+                    valor={venta.plan ? `${venta.codigoProducto} · ${venta.plan.nombre}` : venta.codigoProducto}
+                  />
+                  <DatoFila etiqueta="Título" valor={venta.titulo?.numTit ?? "sin vincular"} />
+                  <DatoFila
+                    etiqueta="Documentación"
+                    valor={
+                      dni ? (
+                        <a
+                          href={`/api/uploads/${dni.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="underline underline-offset-2"
+                        >
+                          Ver DNI
+                        </a>
+                      ) : (
+                        "sin DNI"
+                      )
+                    }
+                  />
+                </TarjetaFila>
+              );
+            })}
+          </ListaTarjetas>
+
+          <Card className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>

@@ -13,7 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { db } from "@/lib/db";
-import { requireVendedor } from "@/lib/sesion";
+import { requirePermiso } from "@/lib/sesion";
 
 const FECHA = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
 
@@ -29,7 +29,7 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode })
 }
 
 export default async function DetalleVentaPage({ params }: PageProps<"/vendedor/ventas/[id]">) {
-  const usuario = await requireVendedor();
+  const usuario = await requirePermiso("cargarVentas");
   const { id } = await params;
 
   const venta = await db.venta.findFirst({

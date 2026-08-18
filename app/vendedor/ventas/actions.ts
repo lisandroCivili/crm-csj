@@ -10,7 +10,7 @@ import {
   guardarAdjunto,
 } from "@/lib/archivos";
 import { db } from "@/lib/db";
-import { requireVendedor } from "@/lib/sesion";
+import { requirePermiso } from "@/lib/sesion";
 import { CAMPOS_HISTORIAL, ventaSchema } from "@/lib/validations/venta";
 import type { AdjuntoTipo } from "@/lib/generated/prisma/client";
 
@@ -48,7 +48,7 @@ export async function crearVenta(
   _previo: EstadoVenta,
   formData: FormData
 ): Promise<EstadoVenta> {
-  const usuario = await requireVendedor();
+  const usuario = await requirePermiso("cargarVentas");
 
   const parsed = ventaSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -175,7 +175,7 @@ export async function editarVenta(
   _previo: EstadoVenta,
   formData: FormData
 ): Promise<EstadoVenta> {
-  const usuario = await requireVendedor();
+  const usuario = await requirePermiso("cargarVentas");
   const id = String(formData.get("id") ?? "");
 
   const parsed = ventaSchema.safeParse(Object.fromEntries(formData));

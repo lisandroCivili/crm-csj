@@ -86,7 +86,12 @@ model User {
   passwordHash String
   nombre       String
   role         Role
+  /// Si esta en false no puede iniciar sesion. Es distinto de `Vendedor.activo`:
+  /// esto le saca el acceso al sistema, aquello lo saca del equipo de venta.
   activo       Boolean  @default(true)
+  /// Solo para admins: el telefono de un vendedor vive en su ficha (`Vendedor`),
+  /// que es la que mira Balta.
+  telefono     String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -119,6 +124,21 @@ model Vendedor {
   /// Lo define Balta por vendedor.
   topeCuotasComision Int     @default(4)
   condiciones        String?
+
+  // --- Permisos ------------------------------------------------------------
+  // Que secciones ve el vendedor cuando entra. El permiso se SACA, no se da:
+  // por defecto ve todo, asi los vendedores que ya existen no cambian de
+  // comportamiento con la migracion. Los define el admin desde la ficha del
+  // vendedor; el vendedor no puede tocarlos.
+  //
+  // No viajan en la sesion: se leen de la base en cada request (ver
+  // lib/sesion.ts), porque el JWT del vendedor no se entera de que el admin le
+  // cambio un permiso.
+  puedeVerLeads     Boolean @default(true)
+  puedeCargarVentas Boolean @default(true)
+  /// Solo visibilidad: no afecta el calculo ni la liquidacion. El vendedor
+  /// cobra igual, simplemente no ve el numero.
+  puedeVerComision  Boolean @default(true)
 
   activo    Boolean  @default(true)
   createdAt DateTime @default(now())

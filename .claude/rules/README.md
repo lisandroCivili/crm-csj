@@ -13,3 +13,8 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
   no por `fechaPago`. Un período cerrado no se recalcula: los porcentajes quedan congelados en
   `ComisionDetalle`.
 - **Datos sensibles**: padrones reales y fotos de DNI no se versionan ni se sirven por URL pública.
+- **Sesión**: el rol, el estado de la cuenta y los permisos se leen de la base en cada request
+  (`getUsuarioActual`), nunca de los claims del JWT. Sacar a alguien del sistema se hace por
+  `/api/salir`, no con `redirect("/login")`.
+- **Permisos del vendedor**: filtran el menú y además blindan cada página y acción. Esconder el
+  ítem del menú no es seguridad.

@@ -4,7 +4,8 @@ import { Pencil } from "lucide-react";
 import { cambiarEstadoVendedor } from "../actions";
 import { PageHeader } from "@/components/layout/page-header";
 import { CrearUsuarioForm } from "@/components/vendedores/crear-usuario-form";
-import { Badge } from "@/components/ui/badge";
+import { CuentaVendedor } from "@/components/vendedores/cuenta-vendedor";
+import { PermisosVendedor } from "@/components/vendedores/permisos-vendedor";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -36,7 +37,7 @@ export default async function PerfilVendedorPage({
   const vendedor = await db.vendedor.findFirst({
     where: { id, zonaId },
     include: {
-      user: { select: { email: true, activo: true } },
+      user: { select: { id: true, email: true, activo: true } },
       alias: { orderBy: { nomVenPadron: "asc" } },
       _count: { select: { leads: true, ventas: true, titulos: true } },
     },
@@ -152,18 +153,37 @@ export default async function PerfilVendedorPage({
           </CardHeader>
           <CardContent>
             {vendedor.user ? (
-              <div className="flex items-center gap-3 text-sm">
-                <Badge variant="secondary">{vendedor.user.email}</Badge>
-                <span className="text-muted-foreground">
-                  {vendedor.user.activo ? "activa" : "desactivada"}
-                </span>
-              </div>
+              <CuentaVendedor
+                vendedorId={vendedor.id}
+                email={vendedor.user.email}
+                activa={vendedor.user.activo}
+              />
             ) : (
               <CrearUsuarioForm
                 vendedorId={vendedor.id}
                 emailSugerido={vendedor.email}
               />
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Permisos</CardTitle>
+            <CardDescription>
+              Qué secciones ve cuando entra. Los cambios se aplican al instante.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <PermisosVendedor
+              vendedorId={vendedor.id}
+              sinCuenta={!vendedor.user}
+              valores={{
+                puedeVerLeads: vendedor.puedeVerLeads,
+                puedeCargarVentas: vendedor.puedeCargarVentas,
+                puedeVerComision: vendedor.puedeVerComision,
+              }}
+            />
           </CardContent>
         </Card>
 

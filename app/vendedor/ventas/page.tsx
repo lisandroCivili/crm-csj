@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Plus, ScrollText } from "lucide-react";
+import { DatoFila, ListaTarjetas, TarjetaFila } from "@/components/layout/lista-tarjetas";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,12 +14,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { db } from "@/lib/db";
-import { requireVendedor } from "@/lib/sesion";
+import { requirePermiso } from "@/lib/sesion";
 
 const FECHA = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
 
 export default async function MisVentasPage() {
-  const usuario = await requireVendedor();
+  const usuario = await requirePermiso("cargarVentas");
 
   const ventas = await db.venta.findMany({
     where: { vendedorId: usuario.vendedorId },
@@ -64,7 +65,39 @@ export default async function MisVentasPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
+        <>
+          <ListaTarjetas>
+            {ventas.map((venta) => (
+              <TarjetaFila
+                key={venta.id}
+                href={`/vendedor/ventas/${venta.id}`}
+                atenuada={venta.estado === "ANULADA"}
+                encabezado={
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="min-w-0 truncate font-medium">{venta.nombreCliente}</p>
+                    {venta.estado === "ANULADA" ? (
+                      <Badge variant="outline">anulada</Badge>
+                    ) : null}
+                  </div>
+                }
+                lateral={FECHA.format(venta.fechaVenta)}
+              >
+                <DatoFila etiqueta="DNI" valor={venta.dni} />
+                <DatoFila
+                  etiqueta="Plan"
+                  valor={
+                    venta.plan ? `${venta.codigoProducto} · ${venta.plan.nombre}` : venta.codigoProducto
+                  }
+                />
+                <DatoFila
+                  etiqueta="Título"
+                  valor={venta.titulo?.numTit ?? "sin vincular"}
+                />
+              </TarjetaFila>
+            ))}
+          </ListaTarjetas>
+
+        <Card className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -114,6 +147,7 @@ export default async function MisVentasPage() {
             </TableBody>
           </Table>
         </Card>
+        </>
       )}
     </>
   );

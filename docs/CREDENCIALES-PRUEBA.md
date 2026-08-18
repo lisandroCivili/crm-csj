@@ -30,6 +30,24 @@ SEED_ADMIN_PASSWORD="otra-cosa" npm run db:seed
 Correr el seed de nuevo **no** revierte una contraseña ya cambiada desde la
 aplicación: solo actualiza el nombre y el rol.
 
+## Cambiar la contraseña y el email
+
+Cada uno lo hace desde **Mi perfil** (está en el menú de arriba a la derecha, y
+en celular también dentro del menú lateral): ahí se cambia la contraseña —pide
+la actual—, el email con el que se entra y los datos de contacto.
+
+Al cambiar la contraseña se cierra la sesión y hay que entrar con la nueva. Es a
+propósito: la sesión vieja no se puede invalidar de otra forma.
+
+**Si un vendedor pierde su contraseña**, cualquier admin se la cambia desde la
+ficha del vendedor (*Vendedores → el vendedor → Cuenta de ingreso → Cambiar
+contraseña*). El sistema no manda mails: el admin escribe la contraseña nueva y
+se la pasa por su cuenta. Desde ahí también se le cambia el email de ingreso y
+se le suspende o reactiva el acceso.
+
+Entre admins no hay pantalla de administración: si Balta o Pedro pierden la
+suya, se resuelve con el seed o desde la base.
+
 ## Vendedor
 
 El seed no crea vendedores: dependen de la zona y del padrón, así que se cargan
@@ -44,6 +62,10 @@ a mano. Para tener uno con acceso al sistema:
 
 La cuenta es opcional a propósito: hay vendedores que figuran en el padrón y no
 usan el CRM.
+
+En su ficha, la tarjeta **Permisos** define qué secciones ve: sus leads, sus
+ventas y su comisión. Vienen las tres encendidas y se apagan de a una; el cambio
+le llega al vendedor en su próximo clic, sin que tenga que volver a entrar.
 
 Para que a un vendedor le aparezcan comisiones tiene que estar **vinculado a sus
 títulos**, lo que pasa al importar un padrón donde su `NomVen` esté mapeado a él

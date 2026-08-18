@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, LogOut, MapPin } from "lucide-react";
+import { ChevronDown, LogOut, MapPin, UserRound } from "lucide-react";
 import Link from "next/link";
 import { cerrarSesion } from "@/lib/acciones-sesion";
 import { Button } from "@/components/ui/button";
@@ -49,6 +49,13 @@ export function UserMenu({
         </DropdownMenuLabel>
 
         <DropdownMenuSeparator />
+
+        <DropdownMenuItem asChild>
+          <Link href="/perfil">
+            <UserRound className="size-4" />
+            Mi perfil
+          </Link>
+        </DropdownMenuItem>
 
         {puedeCambiarZona ? (
           <DropdownMenuItem asChild>

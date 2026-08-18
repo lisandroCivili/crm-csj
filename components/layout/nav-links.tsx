@@ -3,16 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { NAVEGACION } from "@/lib/navegacion";
+import { itemsVisibles } from "@/lib/navegacion";
+import type { Permisos } from "@/lib/sesion";
 import type { Role } from "@/lib/generated/prisma/client";
 
 /**
- * Recibe el rol y no la lista ya resuelta: los items llevan componentes de
- * icono, y una funcion no se puede serializar desde un Server Component.
+ * Recibe el rol y los permisos, no la lista ya resuelta: los items llevan
+ * componentes de icono, y una funcion no se puede serializar desde un Server
+ * Component. Los permisos si viajan: son tres booleanos.
  */
-export function NavLinks({ role }: { role: Role }) {
+export function NavLinks({ role, permisos }: { role: Role; permisos: Permisos }) {
   const pathname = usePathname();
-  const items = NAVEGACION[role];
+  const items = itemsVisibles(role, permisos);
 
   return (
     <nav className="grid gap-0.5 px-3">

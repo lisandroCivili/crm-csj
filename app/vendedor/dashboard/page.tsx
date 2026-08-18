@@ -39,7 +39,9 @@ export default async function VendedorDashboardPage() {
         where: { id: usuario.vendedorId },
         select: { topeCuotasComision: true },
       }),
-      db.lead.count({ where: { vendedorAsignadoId: usuario.vendedorId, estado: "PENDIENTE" } }),
+      usuario.permisos.verLeads
+        ? db.lead.count({ where: { vendedorAsignadoId: usuario.vendedorId, estado: "PENDIENTE" } })
+        : 0,
       db.venta.count({
         where: {
           vendedorId: usuario.vendedorId,
@@ -48,12 +50,14 @@ export default async function VendedorDashboardPage() {
         },
       }),
       db.venta.count({ where: { vendedorId: usuario.vendedorId, estado: "ACTIVA" } }),
-      db.lead.findMany({
-        where: { vendedorAsignadoId: usuario.vendedorId, estado: "PENDIENTE" },
-        orderBy: { fechaAsignacion: "desc" },
-        take: 5,
-        select: { id: true, nombre: true, telefono: true, localidad: true, estado: true },
-      }),
+      usuario.permisos.verLeads
+        ? db.lead.findMany({
+            where: { vendedorAsignadoId: usuario.vendedorId, estado: "PENDIENTE" },
+            orderBy: { fechaAsignacion: "desc" },
+            take: 5,
+            select: { id: true, nombre: true, telefono: true, localidad: true, estado: true },
+          })
+        : [],
       db.venta.findMany({
         where: { vendedorId: usuario.vendedorId },
         orderBy: { fechaVenta: "desc" },
@@ -64,7 +68,10 @@ export default async function VendedorDashboardPage() {
 
   // La comision del vendedor sale del padron, no de las ventas que carga acá:
   // se cuenta cuando el club confirma que la cuota se cobro.
-  const [comision, comisionPrevia] = usuario.zonaIdFija
+  //
+  // Si Balta le apago la visibilidad de la comision, ni siquiera se consulta:
+  // no tiene sentido calcular dos periodos para no mostrarlos.
+  const [comision, comisionPrevia] = usuario.permisos.verComision && usuario.zonaIdFija
     ? await Promise.all([
         obtenerLiquidacionVendedor({
           vendedorId: usuario.vendedorId,
@@ -87,43 +94,51 @@ export default async function VendedorDashboardPage() {
         titulo={`Hola, ${usuario.nombre.split(" ")[0]}`}
         descripcion="Cómo venís este mes."
         acciones={
-          <Button asChild>
-            <Link href="/vendedor/ventas/nueva">
-              <Plus className="size-4" />
-              Nueva venta
-            </Link>
-          </Button>
+          usuario.permisos.cargarVentas ? (
+            <Button asChild>
+              <Link href="/vendedor/ventas/nueva">
+                <Plus className="size-4" />
+                Nueva venta
+              </Link>
+            </Button>
+          ) : null
         }
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          etiqueta="Leads por trabajar"
-          valor={leadsPendientes}
-          detalle="pendientes de contactar"
-          icono={ClipboardList}
-          tono={leadsPendientes > 0 ? "atencion" : "neutro"}
-          href="/vendedor/leads?estado=PENDIENTE"
-        />
-        <StatCard
-          etiqueta="Ventas del mes"
-          valor={ventasDelMes}
-          detalle={`${ventasTotales} en total`}
-          icono={ScrollText}
-          tono="exito"
-          href="/vendedor/ventas"
-        />
-        <StatCard
-          etiqueta={cerrada ? "Ganancia del mes" : "Ganancia estimada"}
-          valor={pesos(comision?.totalComision ?? 0)}
-          detalle={
-            cerrada
-              ? "liquidada y cerrada"
-              : `provisorio · cobrás hasta c${vendedor.topeCuotasComision}`
-          }
-          icono={BadgeDollarSign}
-          tono="marca"
-        />
+        {usuario.permisos.verLeads ? (
+          <StatCard
+            etiqueta="Leads por trabajar"
+            valor={leadsPendientes}
+            detalle="pendientes de contactar"
+            icono={ClipboardList}
+            tono={leadsPendientes > 0 ? "atencion" : "neutro"}
+            href="/vendedor/leads?estado=PENDIENTE"
+          />
+        ) : null}
+        {usuario.permisos.cargarVentas ? (
+          <StatCard
+            etiqueta="Ventas del mes"
+            valor={ventasDelMes}
+            detalle={`${ventasTotales} en total`}
+            icono={ScrollText}
+            tono="exito"
+            href="/vendedor/ventas"
+          />
+        ) : null}
+        {usuario.permisos.verComision ? (
+          <StatCard
+            etiqueta={cerrada ? "Ganancia del mes" : "Ganancia estimada"}
+            valor={pesos(comision?.totalComision ?? 0)}
+            detalle={
+              cerrada
+                ? "liquidada y cerrada"
+                : `provisorio · cobrás hasta c${vendedor.topeCuotasComision}`
+            }
+            icono={BadgeDollarSign}
+            tono="marca"
+          />
+        ) : null}
         <StatCard
           etiqueta="Cierre del mes"
           valor={DIA_LARGO.format(cierreDeMes)}
@@ -132,6 +147,9 @@ export default async function VendedorDashboardPage() {
         />
       </div>
 
+      {/* Sin permiso no se esconde con CSS: no se renderiza. Si no, los montos
+          igual viajarian en el HTML. */}
+      {usuario.permisos.verComision ? (
       <Card className="mb-4">
         <CardHeader>
           <CardTitle className="text-base">
@@ -199,8 +217,10 @@ export default async function VendedorDashboardPage() {
           ) : null}
         </CardContent>
       </Card>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
+        {usuario.permisos.verLeads ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Leads para llamar</CardTitle>
@@ -233,7 +253,9 @@ export default async function VendedorDashboardPage() {
             )}
           </CardContent>
         </Card>
+        ) : null}
 
+        {usuario.permisos.cargarVentas ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Últimas ventas</CardTitle>
@@ -266,6 +288,7 @@ export default async function VendedorDashboardPage() {
             )}
           </CardContent>
         </Card>
+        ) : null}
       </div>
     </>
   );

@@ -62,7 +62,65 @@ export function TablaLeads({
         <input key={id} type="hidden" name="leadId" value={id} />
       ))}
 
-      <Card>
+      {/* En celular la tabla no entra: misma seleccion, otra forma de mostrarla.
+          El checkbox va grande y a la izquierda, como en cualquier bandeja. */}
+      <div className="md:hidden">
+        <label className="mb-2 flex items-center gap-2 px-1 text-sm text-muted-foreground">
+          <Checkbox
+            checked={todosMarcados}
+            onCheckedChange={(marcado) =>
+              setSeleccionados(marcado ? new Set(leads.map((l) => l.id)) : new Set())
+            }
+            aria-label="Seleccionar todos"
+          />
+          Seleccionar todos
+        </label>
+
+        <ul className="grid gap-2">
+          {leads.map((lead) => (
+            <li
+              key={lead.id}
+              className={`flex gap-3 rounded-xl bg-card p-3 ring-1 ${
+                seleccionados.has(lead.id) ? "ring-primary" : "ring-border"
+              }`}
+            >
+              <Checkbox
+                checked={seleccionados.has(lead.id)}
+                onCheckedChange={(marcado) => alternar(lead.id, marcado === true)}
+                aria-label={`Seleccionar ${lead.nombre}`}
+                className="mt-1 size-5"
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="min-w-0 truncate font-medium">{lead.nombre}</p>
+                  <BadgeEstado estado={lead.estado} />
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {lead.telefono ? (
+                    <a href={`tel:${lead.telefono}`} className="underline underline-offset-2">
+                      {lead.telefono}
+                    </a>
+                  ) : (
+                    "sin teléfono"
+                  )}
+                  {[lead.localidad, lead.provincia].filter(Boolean).length > 0
+                    ? ` · ${[lead.localidad, lead.provincia].filter(Boolean).join(", ")}`
+                    : ""}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {ETIQUETA_ORIGEN[lead.origen]} ·{" "}
+                  {lead.vendedorAsignado?.nombreCompleto ?? "sin asignar"}
+                </p>
+                {lead.motivoDevolucion ? (
+                  <p className="mt-1 text-xs text-muted-foreground">{lead.motivoDevolucion}</p>
+                ) : null}
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <Card className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -133,7 +191,9 @@ function BarraAsignacion({
   const { pending } = useFormStatus();
 
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border bg-muted/40 p-3">
+    // En celular la barra queda fija abajo: con doscientos leads, si se fuera
+    // con el scroll habria que volver arriba para asignar.
+    <div className="sticky bottom-2 z-10 mb-3 flex flex-wrap items-center gap-3 rounded-lg border bg-muted/40 p-3 shadow-lg backdrop-blur-sm md:static md:shadow-none md:backdrop-blur-none">
       <span className="text-sm font-medium">
         {cantidad} lead{cantidad === 1 ? "" : "s"} seleccionado{cantidad === 1 ? "" : "s"}
       </span>

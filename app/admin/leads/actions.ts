@@ -5,7 +5,7 @@ import { z } from "zod";
 import { borrarTemporal, guardarTemporal, leerTemporal } from "@/lib/archivos";
 import { db } from "@/lib/db";
 import { parseLeads, claveTelefono, type CampoLead, type ErrorFilaLead } from "@/lib/excel/parseLeads";
-import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
+import { requireAdmin, requireUsuario, requireZonaActivaId } from "@/lib/sesion";
 import { cambioEstadoSchema } from "@/lib/validations/lead";
 
 const EXTENSIONES = [".xls", ".xlsx", ".csv"];
@@ -251,9 +251,13 @@ export async function cambiarEstadoLead(
   _previo: EstadoCambio,
   formData: FormData
 ): Promise<EstadoCambio> {
-  const { auth } = await import("@/lib/auth");
-  const sesion = await auth();
-  if (!sesion?.user) return { error: "Sesión vencida." };
+  // Pasa por el helper como todo el resto: lee el estado de la cuenta y los
+  // permisos de la base, no del token.
+  const usuario = await requireUsuario();
+
+  if (usuario.role === "VENDEDOR" && !usuario.permisos.verLeads) {
+    return { error: "No tenés acceso a los leads." };
+  }
 
   const parsed = cambioEstadoSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
@@ -261,7 +265,6 @@ export async function cambiarEstadoLead(
   }
 
   const { leadId, estado, motivoDevolucion } = parsed.data;
-  const usuario = sesion.user;
 
   // Un vendedor solo toca sus propios leads; el admin, los de su zona activa.
   const alcance =

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Search, Users } from "lucide-react";
+import { DatoFila, ListaTarjetas, TarjetaFila } from "@/components/layout/lista-tarjetas";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -107,7 +108,22 @@ export default async function ClientesPage({ searchParams }: PageProps<"/admin/c
             {busqueda ? " encontrados" : ""}
           </p>
 
-          <Card>
+          <ListaTarjetas>
+            {clientes.map((cliente) => (
+              <TarjetaFila
+                key={cliente.id}
+                href={`/admin/clientes/${cliente.id}`}
+                titulo={cliente.nombre}
+                lateral={`${cliente._count.titulos} ${cliente._count.titulos === 1 ? "título" : "títulos"}`}
+              >
+                <DatoFila etiqueta="DNI" valor={cliente.dni} />
+                <DatoFila etiqueta="Localidad" valor={cliente.localidad} />
+                <DatoFila etiqueta="Teléfono" valor={cliente.telefono} />
+              </TarjetaFila>
+            ))}
+          </ListaTarjetas>
+
+          <Card className="hidden md:block">
             <Table>
               <TableHeader>
                 <TableRow>

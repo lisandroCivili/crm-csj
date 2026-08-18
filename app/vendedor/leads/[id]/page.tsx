@@ -13,7 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { db } from "@/lib/db";
-import { requireVendedor } from "@/lib/sesion";
+import { requirePermiso } from "@/lib/sesion";
 import { ETIQUETA_ESTADO } from "@/lib/validations/lead";
 
 const FECHA = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" });
@@ -30,7 +30,7 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode })
 }
 
 export default async function DetalleLeadPage({ params }: PageProps<"/vendedor/leads/[id]">) {
-  const usuario = await requireVendedor();
+  const usuario = await requirePermiso("verLeads");
   const { id } = await params;
 
   const lead = await db.lead.findFirst({

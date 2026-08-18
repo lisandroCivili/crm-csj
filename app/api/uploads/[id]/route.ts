@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { leerAdjunto } from "@/lib/archivos";
-import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { getZonaActivaId } from "@/lib/sesion";
+import { getUsuarioActual, getZonaActivaId } from "@/lib/sesion";
 
 /**
  * Entrega los adjuntos de una venta (foto de DNI, contrato).
@@ -10,13 +9,16 @@ import { getZonaActivaId } from "@/lib/sesion";
  * Son datos personales, asi que no viven en /public: cada descarga pasa por
  * aca, que verifica sesion y permiso. Un vendedor solo accede a los adjuntos de
  * sus propias ventas; el admin, a los de la zona que tiene activa.
+ *
+ * El estado de la cuenta se lee de la base y no del token: si no, alguien dado
+ * de baja seguiria bajando fotos de DNI con su sesion vieja.
  */
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const sesion = await auth();
-  if (!sesion?.user) {
+  const usuario = await getUsuarioActual();
+  if (!usuario) {
     return new NextResponse("No autorizado", { status: 401 });
   }
 
@@ -34,7 +36,6 @@ export async function GET(
 
   if (!adjunto) return new NextResponse("No encontrado", { status: 404 });
 
-  const usuario = sesion.user;
   const permitido =
     usuario.role === "ADMIN"
       ? adjunto.venta.zonaId === (await getZonaActivaId())
