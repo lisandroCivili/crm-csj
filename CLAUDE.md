@@ -5,6 +5,11 @@ Club San Jorge S.A. de Capitalización y Ahorro.
 
 > En este proyecto, "Balta" siempre se refiere al cliente para quien se desarrolla el sistema.
 
+> **Hay trabajo en curso.** El plan de cambios activo, con sus fases, su avance y cómo se
+> trabaja en él, está en [`docs/PLAN.md`](docs/PLAN.md). Leerlo antes de empezar: define que
+> se avanza de a una fase, que al terminar cada una hay que entregar los pasos exactos para
+> probarla en el navegador, y que la fase se marca como hecha recién cuando Lisandro la valida.
+
 ## El negocio
 
 Club San Jorge vende **planes de ahorro con sorteo** (Auto, Moto, Dinero; de 330, 90 o 120 meses).

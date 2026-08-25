@@ -4,6 +4,10 @@ Documento de traspaso para arrancar una sesión nueva sin tener que releer todo.
 El contexto del negocio está en [`../CLAUDE.md`](../CLAUDE.md); acá va solo lo
 que queda por hacer.
 
+> **El trabajo en curso NO está acá.** Los cambios que Balta pidió el 24/08/2026
+> y su avance viven en [`PLAN.md`](PLAN.md). Este archivo describe el estado del
+> sistema hasta la Fase 7 del desarrollo original.
+
 **Estado:** rama `dev`. La Fase 7 (motor de comisiones), el perfil de usuario,
 los permisos del vendedor y la navegación en celular están terminados y
 verificados contra la base local. No queda ninguna fase bloqueada.
