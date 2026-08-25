@@ -5,6 +5,7 @@ import { cambiarEstadoVendedor } from "../actions";
 import { PageHeader } from "@/components/layout/page-header";
 import { CrearUsuarioForm } from "@/components/vendedores/crear-usuario-form";
 import { CuentaVendedor } from "@/components/vendedores/cuenta-vendedor";
+import { FichaAgente } from "@/components/vendedores/ficha-agente";
 import { PermisosVendedor } from "@/components/vendedores/permisos-vendedor";
 import { Button } from "@/components/ui/button";
 import {
@@ -37,13 +38,24 @@ export default async function PerfilVendedorPage({
   const vendedor = await db.vendedor.findFirst({
     where: { id, zonaId },
     include: {
-      user: { select: { id: true, email: true, activo: true } },
+      user: { select: { id: true, email: true, activo: true, role: true, nombre: true } },
       alias: { orderBy: { nomVenPadron: "asc" } },
       _count: { select: { leads: true, ventas: true, titulos: true } },
     },
   });
 
   if (!vendedor) notFound();
+
+  // Balta y Pedro venden ademas de administrar: su ficha se engancha a la cuenta
+  // de admin que ya tienen en vez de abrirles una de vendedor.
+  const esFichaDeAgente = vendedor.user?.role === "ADMIN";
+  const adminsSinFicha = vendedor.user
+    ? []
+    : await db.user.findMany({
+        where: { role: "ADMIN", activo: true, vendedores: { none: { zonaId } } },
+        orderBy: { nombre: "asc" },
+        select: { id: true, nombre: true, email: true },
+      });
 
   const [leadsPorEstado, ultimasVentas] = await Promise.all([
     db.lead.groupBy({
@@ -151,41 +163,60 @@ export default async function PerfilVendedorPage({
               Es opcional: un vendedor puede figurar en el padrón sin usar el sistema.
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            {vendedor.user ? (
+          <CardContent className="space-y-6">
+            {esFichaDeAgente ? (
+              // La cuenta es de administracion: no se le tocan contrasena, email
+              // ni acceso desde aca. Lo unico que se maneja es el enlace.
+              <FichaAgente vendedorId={vendedor.id} admins={[]} enlazadoA={vendedor.user!.nombre} />
+            ) : vendedor.user ? (
               <CuentaVendedor
                 vendedorId={vendedor.id}
                 email={vendedor.user.email}
                 activa={vendedor.user.activo}
               />
             ) : (
-              <CrearUsuarioForm
-                vendedorId={vendedor.id}
-                emailSugerido={vendedor.email}
-              />
+              <>
+                <CrearUsuarioForm
+                  vendedorId={vendedor.id}
+                  emailSugerido={vendedor.email}
+                />
+                {adminsSinFicha.length > 0 ? (
+                  <>
+                    <Separator />
+                    <FichaAgente vendedorId={vendedor.id} admins={adminsSinFicha} />
+                  </>
+                ) : null}
+              </>
             )}
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Permisos</CardTitle>
-            <CardDescription>
-              Qué secciones ve cuando entra. Los cambios se aplican al instante.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <PermisosVendedor
-              vendedorId={vendedor.id}
-              sinCuenta={!vendedor.user}
-              valores={{
-                puedeVerLeads: vendedor.puedeVerLeads,
-                puedeCargarVentas: vendedor.puedeCargarVentas,
-                puedeVerComision: vendedor.puedeVerComision,
-              }}
-            />
-          </CardContent>
-        </Card>
+        {/*
+          Los permisos son del vendedor. Un admin ve todo por su rol, asi que
+          para una ficha de agente estos switches no harian nada: mostrarlos
+          seria prometer un control que no existe.
+        */}
+        {esFichaDeAgente ? null : (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Permisos</CardTitle>
+              <CardDescription>
+                Qué secciones ve cuando entra. Los cambios se aplican al instante.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PermisosVendedor
+                vendedorId={vendedor.id}
+                sinCuenta={!vendedor.user}
+                valores={{
+                  puedeVerLeads: vendedor.puedeVerLeads,
+                  puedeCargarVentas: vendedor.puedeCargarVentas,
+                  puedeVerComision: vendedor.puedeVerComision,
+                }}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         <Card>
           <CardHeader>

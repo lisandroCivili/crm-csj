@@ -4,7 +4,12 @@ import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { AlertCircle } from "lucide-react";
-import { crearVenta, editarVenta, type EstadoVenta } from "@/app/vendedor/ventas/actions";
+import {
+  crearVenta,
+  crearVentaComoAdmin,
+  editarVenta,
+  type EstadoVenta,
+} from "@/app/vendedor/ventas/actions";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +21,12 @@ type PlanOpcion = {
   codigoProducto: string;
   nombre: string;
   precio: number | null;
+};
+
+type VendedorOpcion = {
+  id: string;
+  nombreCompleto: string;
+  codigo: string;
 };
 
 type ValoresVenta = {
@@ -80,15 +91,24 @@ export function VentaForm({
   valores,
   leadId,
   tieneDni,
+  vendedores,
+  vendedorPorDefecto,
 }: {
   planes: PlanOpcion[];
   valores?: ValoresVenta;
   leadId?: string;
   tieneDni?: boolean;
+  /**
+   * Solo en el alta desde /admin. Su presencia es la que cambia el modo del
+   * formulario: el vendedor carga siempre a su nombre y no elige nada.
+   */
+  vendedores?: VendedorOpcion[];
+  vendedorPorDefecto?: string | null;
 }) {
   const edicion = Boolean(valores?.id);
+  const comoAdmin = vendedores !== undefined;
   const [estado, accion] = useActionState<EstadoVenta, FormData>(
-    edicion ? editarVenta : crearVenta,
+    edicion ? editarVenta : comoAdmin ? crearVentaComoAdmin : crearVenta,
     {}
   );
   const errores = estado.errores ?? {};
@@ -103,6 +123,41 @@ export function VentaForm({
           <AlertCircle />
           <AlertDescription>{estado.error}</AlertDescription>
         </Alert>
+      ) : null}
+
+      {comoAdmin ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Vendedor</CardTitle>
+            <CardDescription>
+              A nombre de quién queda la venta. La comisión se le va a liquidar a esta
+              persona.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Campo
+              nombre="vendedorId"
+              etiqueta="Vendedor"
+              requerido
+              errores={errores.vendedorId}
+            >
+              <select
+                id="vendedorId"
+                name="vendedorId"
+                defaultValue={vendedorPorDefecto ?? ""}
+                required
+                className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              >
+                <option value="">— elegir vendedor —</option>
+                {vendedores.map((vendedor) => (
+                  <option key={vendedor.id} value={vendedor.id}>
+                    {vendedor.nombreCompleto} · {vendedor.codigo}
+                  </option>
+                ))}
+              </select>
+            </Campo>
+          </CardContent>
+        </Card>
       ) : null}
 
       <Card>

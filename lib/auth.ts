@@ -24,7 +24,12 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         const user = await db.user.findUnique({
           where: { email: parsed.data.email.toLowerCase() },
-          include: { vendedor: { select: { id: true, zonaId: true, activo: true } } },
+          include: {
+            vendedores: {
+              select: { id: true, zonaId: true, activo: true },
+              orderBy: { createdAt: "asc" },
+            },
+          },
         });
 
         if (!user || !user.activo) return null;
@@ -32,16 +37,21 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const passwordOk = await bcrypt.compare(parsed.data.password, user.passwordHash);
         if (!passwordOk) return null;
 
+        // La ficha es por zona: el vendedor comun tiene una sola, y los admins
+        // que ademas venden tienen una por zona, que aca no se puede elegir
+        // todavia porque la zona activa se define despues de entrar.
+        const ficha = user.role === "VENDEDOR" ? (user.vendedores[0] ?? null) : null;
+
         // Un vendedor dado de baja no entra aunque su usuario siga activo.
-        if (user.role === "VENDEDOR" && !user.vendedor?.activo) return null;
+        if (user.role === "VENDEDOR" && !ficha?.activo) return null;
 
         return {
           id: user.id,
           email: user.email,
           nombre: user.nombre,
           role: user.role,
-          vendedorId: user.vendedor?.id ?? null,
-          zonaIdFija: user.vendedor?.zonaId ?? null,
+          vendedorId: ficha?.id ?? null,
+          zonaIdFija: ficha?.zonaId ?? null,
         };
       },
     }),

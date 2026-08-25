@@ -40,6 +40,14 @@ Vocabulario del dominio (aparece tal cual en el padrón y en el código):
   normaliza con la tabla `VendedorAlias`; nunca agrupar vendedores por el string del padrón.
 - **Un `Vendedor` puede existir sin cuenta de usuario**: hay vendedores que figuran en el padrón
   pero no usan el sistema. La cuenta (`User`) es opcional.
+- **Balta y Pedro también venden.** Además de administrar tienen títulos propios en el padrón, y
+  venden en las dos zonas. Por eso la ficha de `Vendedor` es **por zona** (el DNI es único dentro
+  de la zona, no en toda la tabla) y una cuenta puede estar enlazada a varias fichas, una por zona.
+  La ficha del agente se engancha a su cuenta de admin desde `/admin/vendedores/[id]`; no se les
+  crea una cuenta de vendedor aparte. Cuál aplica en cada momento lo resuelve
+  `getVendedorDelAdmin()` según la zona activa. Ojo: lo que cobran así es su comisión **como
+  vendedores**; lo que el club les paga **como agentes** —sobre toda la producción, con la escala
+  del contrato de agencia— es otro número y todavía no está implementado.
 - **La zona filtra todo.** El admin elige Salta o Tucumán después de loguearse y esa elección
   define qué ve y qué carga. Los vendedores tienen zona fija. Toda query debe estar scopeada.
 

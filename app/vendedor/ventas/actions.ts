@@ -10,7 +10,7 @@ import {
   guardarAdjunto,
 } from "@/lib/archivos";
 import { db } from "@/lib/db";
-import { requirePermiso } from "@/lib/sesion";
+import { requireAdmin, requirePermiso, requireZonaActivaId } from "@/lib/sesion";
 import { CAMPOS_HISTORIAL, ventaSchema } from "@/lib/validations/venta";
 import type { AdjuntoTipo } from "@/lib/generated/prisma/client";
 
@@ -44,12 +44,30 @@ async function validarArchivo(
   };
 }
 
-export async function crearVenta(
-  _previo: EstadoVenta,
+/**
+ * A nombre de quien queda la venta y quien la esta cargando. Son dos cosas
+ * distintas: Balta y Pedro cargan ventas propias desde /admin, y el dia que
+ * carguen una de otro vendedor el adjunto tiene que quedar a nombre de quien lo
+ * subio, no del vendedor.
+ */
+type ContextoVenta = {
+  vendedorId: string;
+  zonaId: number;
+  /** Usuario que sube los adjuntos y firma la actividad del lead. */
+  userId: string;
+  /** Adonde se vuelve una vez creada. */
+  destino: (ventaId: string) => string;
+};
+
+/**
+ * El alta de la venta en si. Vive aparte de las acciones porque hay dos puertas
+ * de entrada —el vendedor desde /vendedor y el admin desde /admin— y la unica
+ * diferencia entre ellas es quien valida el permiso y de donde sale el vendedor.
+ */
+async function registrarVenta(
+  ctx: ContextoVenta,
   formData: FormData
 ): Promise<EstadoVenta> {
-  const usuario = await requirePermiso("cargarVentas");
-
   const parsed = ventaSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) {
     return { errores: z.flattenError(parsed.error).fieldErrors };
@@ -62,11 +80,6 @@ export async function crearVenta(
 
   const contrato = await validarArchivo(formData.get("adjuntoContrato"), "Contrato");
   if (contrato.error) return { error: contrato.error };
-
-  const vendedor = await db.vendedor.findUniqueOrThrow({
-    where: { id: usuario.vendedorId },
-    select: { zonaId: true },
-  });
 
   const plan = await db.plan.findFirst({
     where: { id: parsed.data.planId, activo: true },
@@ -93,8 +106,8 @@ export async function crearVenta(
     const venta = await db.$transaction(async (tx) => {
       const creada = await tx.venta.create({
         data: {
-          vendedorId: usuario.vendedorId,
-          zonaId: vendedor.zonaId,
+          vendedorId: ctx.vendedorId,
+          zonaId: ctx.zonaId,
           nombreCliente: parsed.data.nombreCliente,
           dni: parsed.data.dni,
           telefono: parsed.data.telefono,
@@ -116,7 +129,7 @@ export async function crearVenta(
           path: rutaDni,
           mimeType: dni.archivo!.mimeType,
           size: dni.archivo!.size,
-          subidoPorUserId: usuario.id,
+          subidoPorUserId: ctx.userId,
         },
       });
 
@@ -128,7 +141,7 @@ export async function crearVenta(
             path: rutaContrato,
             mimeType: contrato.archivo.mimeType,
             size: contrato.archivo.size,
-            subidoPorUserId: usuario.id,
+            subidoPorUserId: ctx.userId,
           },
         });
       }
@@ -136,7 +149,7 @@ export async function crearVenta(
       // Si la venta salio de un lead, el lead queda marcado como vendido.
       if (leadId) {
         const lead = await tx.lead.findFirst({
-          where: { id: leadId, vendedorAsignadoId: usuario.vendedorId },
+          where: { id: leadId, vendedorAsignadoId: ctx.vendedorId },
           select: { id: true, estado: true },
         });
         if (lead && lead.estado !== "VENDIDO") {
@@ -148,7 +161,7 @@ export async function crearVenta(
               estadoAnterior: lead.estado,
               estadoNuevo: "VENDIDO",
               detalle: "Se cargó la venta",
-              actorUserId: usuario.id,
+              actorUserId: ctx.userId,
             },
           });
         }
@@ -168,7 +181,63 @@ export async function crearVenta(
   revalidatePath("/admin/ventas");
   // Fuera del try: redirect() se implementa lanzando, y adentro se confundiria
   // con un fallo y borraria los adjuntos recien guardados.
-  redirect(`/vendedor/ventas/${ventaId}`);
+  redirect(ctx.destino(ventaId));
+}
+
+export async function crearVenta(
+  _previo: EstadoVenta,
+  formData: FormData
+): Promise<EstadoVenta> {
+  const usuario = await requirePermiso("cargarVentas");
+
+  const vendedor = await db.vendedor.findUniqueOrThrow({
+    where: { id: usuario.vendedorId },
+    select: { zonaId: true },
+  });
+
+  return registrarVenta(
+    {
+      vendedorId: usuario.vendedorId,
+      zonaId: vendedor.zonaId,
+      userId: usuario.id,
+      destino: (id) => `/vendedor/ventas/${id}`,
+    },
+    formData
+  );
+}
+
+/**
+ * Alta desde /admin. Balta y Pedro venden ademas de administrar, asi que cargan
+ * su propia venta sin pasar por una cuenta de vendedor.
+ *
+ * El vendedor llega por formulario, asi que se valida contra la zona activa: un
+ * id copiado a mano no puede meter una venta en la otra zona.
+ */
+export async function crearVentaComoAdmin(
+  _previo: EstadoVenta,
+  formData: FormData
+): Promise<EstadoVenta> {
+  const usuario = await requireAdmin();
+  const zonaId = await requireZonaActivaId();
+
+  const vendedorId = String(formData.get("vendedorId") ?? "");
+  const vendedor = await db.vendedor.findFirst({
+    where: { id: vendedorId, zonaId, activo: true },
+    select: { id: true },
+  });
+  if (!vendedor) {
+    return { errores: { vendedorId: ["Elegí un vendedor de esta zona."] } };
+  }
+
+  return registrarVenta(
+    {
+      vendedorId: vendedor.id,
+      zonaId,
+      userId: usuario.id,
+      destino: () => "/admin/ventas",
+    },
+    formData
+  );
 }
 
 export async function editarVenta(

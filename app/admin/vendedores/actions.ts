@@ -152,6 +152,81 @@ export async function crearUsuarioVendedor(
 }
 
 // ---------------------------------------------------------------------------
+// Fichas de los agentes
+//
+// Balta y Pedro venden ademas de administrar, asi que su produccion propia
+// necesita una ficha de `Vendedor` a la que imputarle los titulos del padron.
+// Esa ficha no lleva cuenta nueva: se engancha a la de administracion que ya
+// tienen, porque entran al sistema con esa.
+//
+// La ficha es por zona, y ellos venden en las dos, asi que cada cuenta puede
+// estar enlazada a varias fichas: una por zona, nunca dos en la misma.
+// ---------------------------------------------------------------------------
+
+export async function vincularFichaAAdmin(
+  _previo: EstadoFormulario,
+  formData: FormData
+): Promise<EstadoFormulario> {
+  await requireAdmin();
+  const zonaId = await requireZonaActivaId();
+
+  const id = String(formData.get("vendedorId") ?? "");
+  const userId = String(formData.get("userId") ?? "");
+
+  const vendedor = await db.vendedor.findFirst({
+    where: { id, zonaId },
+    select: { id: true, userId: true },
+  });
+  if (!vendedor) return { error: "No se encontró el vendedor en esta zona." };
+  if (vendedor.userId) return { error: "Esta ficha ya está enlazada a una cuenta." };
+
+  // Solo cuentas de administracion: para las de vendedor esta `crearUsuarioVendedor`,
+  // y enlazar una ficha a la cuenta de otro vendedor le daria su produccion.
+  const cuenta = await db.user.findFirst({
+    where: { id: userId, role: "ADMIN", activo: true },
+    select: { id: true, nombre: true },
+  });
+  if (!cuenta) return { error: "Esa cuenta de administración no existe o está inactiva." };
+
+  // Una sola ficha por cuenta y zona: si no, `getVendedorDelAdmin` tendria que
+  // elegir entre dos y la comision se partiria en dos liquidaciones.
+  const yaTiene = await db.vendedor.findFirst({
+    where: { userId: cuenta.id, zonaId },
+    select: { id: true },
+  });
+  if (yaTiene) {
+    return { error: `${cuenta.nombre} ya tiene una ficha de vendedor en esta zona.` };
+  }
+
+  await db.vendedor.update({ where: { id: vendedor.id }, data: { userId: cuenta.id } });
+
+  revalidatePath(`/admin/vendedores/${id}`);
+  revalidatePath("/admin/dashboard");
+  return { ok: true };
+}
+
+/** Desenlaza la ficha de la cuenta del admin. No borra ni la ficha ni la cuenta. */
+export async function desvincularFichaDeAdmin(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const zonaId = await requireZonaActivaId();
+
+  const id = String(formData.get("vendedorId") ?? "");
+
+  const vendedor = await db.vendedor.findFirst({
+    where: { id, zonaId },
+    select: { id: true, user: { select: { role: true } } },
+  });
+  // Nunca se desenlaza la cuenta de un vendedor comun desde aca: eso lo dejaria
+  // sin poder entrar al sistema sin ningun aviso.
+  if (!vendedor || vendedor.user?.role !== "ADMIN") return;
+
+  await db.vendedor.update({ where: { id: vendedor.id }, data: { userId: null } });
+
+  revalidatePath(`/admin/vendedores/${id}`);
+  revalidatePath("/admin/dashboard");
+}
+
+// ---------------------------------------------------------------------------
 // Cuenta y permisos del vendedor
 //
 // Todas estas acciones llegan al `User` a traves del `Vendedor`, y el vendedor

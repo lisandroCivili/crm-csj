@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, IdCard, ScrollText, Search } from "lucide-react";
+import { FileText, IdCard, Plus, ScrollText, Search } from "lucide-react";
 import { DatoFila, ListaTarjetas, TarjetaFila } from "@/components/layout/lista-tarjetas";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -66,6 +66,14 @@ export default async function VentasAdminPage({ searchParams }: PageProps<"/admi
       <PageHeader
         titulo="Ventas"
         descripcion="Todas las ventas cargadas por el equipo en la zona activa."
+        acciones={
+          <Button asChild>
+            <Link href="/admin/ventas/nueva">
+              <Plus className="size-4" />
+              Cargar venta
+            </Link>
+          </Button>
+        }
       />
 
       <form className="mb-4 flex max-w-md gap-2">

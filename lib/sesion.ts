@@ -67,7 +67,7 @@ export const getUsuarioActual = cache(async (): Promise<Usuario | null> => {
       nombre: true,
       role: true,
       activo: true,
-      vendedor: {
+      vendedores: {
         select: {
           id: true,
           zonaId: true,
@@ -76,32 +76,62 @@ export const getUsuarioActual = cache(async (): Promise<Usuario | null> => {
           puedeCargarVentas: true,
           puedeVerComision: true,
         },
+        orderBy: { createdAt: "asc" },
       },
     },
   });
 
   if (!user || !user.activo) return null;
 
+  // La ficha de vendedor es por zona. Un vendedor comun tiene una sola, y es la
+  // que manda: su zona no es negociable. Balta y Pedro tienen una en cada zona,
+  // asi que para ellos `vendedorId` no significa nada aca; la ficha que
+  // corresponde depende de la zona activa y la resuelve `getVendedorDelAdmin`.
+  const ficha = user.role === "VENDEDOR" ? (user.vendedores[0] ?? null) : null;
+
   // Misma regla que el login: un vendedor dado de baja no entra aunque su
   // usuario siga activo.
-  if (user.role === "VENDEDOR" && !user.vendedor?.activo) return null;
+  if (user.role === "VENDEDOR" && !ficha?.activo) return null;
 
   return {
     id: user.id,
     email: user.email,
     nombre: user.nombre,
     role: user.role,
-    vendedorId: user.vendedor?.id ?? null,
-    zonaIdFija: user.vendedor?.zonaId ?? null,
+    vendedorId: ficha?.id ?? null,
+    zonaIdFija: ficha?.zonaId ?? null,
     permisos:
       user.role === "ADMIN"
         ? PERMISOS_ADMIN
         : {
-            verLeads: user.vendedor?.puedeVerLeads ?? false,
-            cargarVentas: user.vendedor?.puedeCargarVentas ?? false,
-            verComision: user.vendedor?.puedeVerComision ?? false,
+            verLeads: ficha?.puedeVerLeads ?? false,
+            cargarVentas: ficha?.puedeCargarVentas ?? false,
+            verComision: ficha?.puedeVerComision ?? false,
           },
   };
+});
+
+/**
+ * La ficha de vendedor del admin en la zona activa, si la tiene.
+ *
+ * Balta y Pedro son agentes: ademas de administrar, venden en las dos zonas y
+ * cobran comision por sus propios titulos. Como la ficha es por zona, cual de
+ * las dos aplica depende de la zona que tengan elegida en ese momento.
+ *
+ * Devuelve null para los vendedores comunes (su ficha ya esta en `vendedorId`)
+ * y para los admins que no venden.
+ */
+export const getVendedorDelAdmin = cache(async () => {
+  const usuario = await getUsuarioActual();
+  if (!usuario || usuario.role !== "ADMIN") return null;
+
+  const zonaId = await getZonaActivaId();
+  if (zonaId === null) return null;
+
+  return db.vendedor.findFirst({
+    where: { userId: usuario.id, zonaId, activo: true },
+    select: { id: true, nombreCompleto: true, codigo: true, zonaId: true },
+  });
 });
 
 /**

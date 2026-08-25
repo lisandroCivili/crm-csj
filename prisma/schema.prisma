@@ -95,7 +95,9 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  vendedor Vendedor?
+  /// Una ficha por zona. Un vendedor comun tiene una sola; Balta y Pedro tienen
+  /// una en Salta y otra en Tucuman.
+  vendedores Vendedor[]
 
   padronImports     PadronImport[]
   leadImports       LeadImport[]
@@ -108,10 +110,15 @@ model User {
 
 /// Un vendedor puede existir SIN cuenta de usuario: hay vendedores que figuran
 /// en el padron del club pero no usan el sistema. La cuenta es opcional.
+///
+/// La ficha es POR ZONA: Balta y Pedro venden en Salta y en Tucuman, asi que la
+/// misma persona tiene una ficha en cada una. Por eso el DNI es unico dentro de
+/// la zona y no en toda la tabla (igual que `Cliente`), y por eso `userId` no
+/// es unico: una cuenta puede estar atada a varias fichas, una por zona.
 model Vendedor {
   id             String  @id @default(cuid())
   nombreCompleto String
-  dni            String  @unique
+  dni            String
   codigo         String
   direccion      String?
   email          String?
@@ -144,7 +151,7 @@ model Vendedor {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  userId String? @unique
+  userId String?
   user   User?   @relation(fields: [userId], references: [id])
 
   alias      VendedorAlias[]
@@ -154,7 +161,9 @@ model Vendedor {
   comisiones ComisionPeriodo[]
 
   @@unique([zonaId, codigo])
+  @@unique([zonaId, dni])
   @@index([zonaId])
+  @@index([userId])
   @@map("vendedores")
 }
 

@@ -16,11 +16,11 @@ import { StatCard } from "@/components/layout/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CUOTAS_COMISIONABLES } from "@/lib/comisiones/constantes";
-import { obtenerLiquidacion } from "@/lib/comisiones/liquidacion";
+import { obtenerLiquidacion, obtenerLiquidacionVendedor } from "@/lib/comisiones/liquidacion";
 import { etiquetaPeriodo, periodoActual } from "@/lib/comisiones/periodo";
 import { db } from "@/lib/db";
 import { pesos } from "@/lib/formato";
-import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
+import { getVendedorDelAdmin, requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
 const FECHA = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" });
 
@@ -55,6 +55,7 @@ export default async function AdminDashboardPage({
     cuotasPagasPorMes,
     topVendedores,
     liquidacion,
+    fichaPropia,
   ] = await Promise.all([
     db.lead.count({ where: { zonaId, estado: "PENDIENTE" } }),
     db.lead.count({ where: { zonaId, vendedorAsignadoId: null } }),
@@ -87,7 +88,22 @@ export default async function AdminDashboardPage({
       take: 5,
     }),
     obtenerLiquidacion({ zonaId, periodo }),
+    getVendedorDelAdmin(),
   ]);
+
+  // Balta y Pedro venden ademas de administrar. Si tienen ficha en esta zona, lo
+  // primero que quieren ver es lo suyo, no el total del equipo.
+  //
+  // Ojo: esto es lo que cobran por sus propios titulos, con la escala de
+  // vendedor. Lo que el club les paga como agentes —sobre toda la produccion,
+  // con la escala del contrato de agencia— es otro numero y todavia no existe.
+  const comisionPropia = fichaPropia
+    ? await obtenerLiquidacionVendedor({
+        vendedorId: fichaPropia.id,
+        zonaId,
+        periodo,
+      })
+    : null;
 
   const pagasPorPeriodo = new Map(
     cuotasPagasPorMes.map((fila) => [fila.periodoEmision.getTime(), fila._count._all])
@@ -175,8 +191,21 @@ export default async function AdminDashboardPage({
           tono="marca"
           href="/admin/ventas"
         />
+        {comisionPropia ? (
+          <StatCard
+            etiqueta="Mi comisión del mes"
+            valor={pesos(comisionPropia.totalComision)}
+            detalle={`${etiquetaPeriodo(periodo)} · ${comisionPropia.ventasNuevas} venta${
+              comisionPropia.ventasNuevas === 1 ? "" : "s"
+            } nueva${comisionPropia.ventasNuevas === 1 ? "" : "s"}`}
+            icono={BadgeDollarSign}
+            tono="marca"
+            href={`/admin/comisiones/vendedor/${comisionPropia.vendedorId}?periodo=${periodo}`}
+          />
+        ) : null}
+
         <StatCard
-          etiqueta="Comisiones del mes"
+          etiqueta={comisionPropia ? "Comisiones del equipo" : "Comisiones del mes"}
           valor={pesos(liquidacion.totales.total)}
           detalle={`${etiquetaPeriodo(periodo)} · ${
             liquidacion.estado === "CERRADO" ? "cerrado" : "en borrador"
