@@ -386,8 +386,10 @@ async function main() {
   } else {
     console.error(
       "Uso:\n" +
-        "  npx tsx scripts/datos-prueba.ts cargar [SALTA|TUCUMAN]\n" +
-        "  npx tsx scripts/datos-prueba.ts borrar"
+        "  npx tsx scripts/datos-prueba.ts cargar [SALTA|TUCUMAN] [--escala-prueba]\n" +
+        "  npx tsx scripts/datos-prueba.ts borrar\n\n" +
+        "  --escala-prueba  reemplaza la escala cargada por una completa de c1 a c5\n\n" +
+        "Necesita la base local levantada (npm run dev, o npm run dev:db)."
     );
     process.exit(1);
   }
@@ -395,8 +397,35 @@ async function main() {
   await db.$disconnect();
 }
 
+/**
+ * Si la base no esta levantada, Prisma tira un stacktrace largo que no dice lo
+ * unico que importa. Es el mismo sintoma enganoso que el de la web: parece que
+ * se rompio el script, y en realidad falta el proceso de la base.
+ */
+function esFaltaDeBase(error: unknown): boolean {
+  const e = error as { code?: string; message?: string };
+  return (
+    e?.code === "P1001" ||
+    e?.code === "P1017" ||
+    e?.code === "ECONNREFUSED" ||
+    (typeof e?.message === "string" && e.message.includes("ECONNREFUSED"))
+  );
+}
+
 main().catch(async (error) => {
-  console.error(error);
-  await db.$disconnect();
+  if (esFaltaDeBase(error)) {
+    console.error(
+      "\nNo se puede conectar a la base local.\n\n" +
+        "En desarrollo la base es un proceso que vive mientras este abierto, no un\n" +
+        "servicio del sistema. Hay que levantarla antes de correr este script:\n\n" +
+        "  npm run dev        (levanta la base Y la web, en otra terminal)\n" +
+        "  npm run dev:db     (solo la base, si no hace falta la web)\n\n" +
+        "Si la base no arranca con `Lock file is already being held`, quedo un lock\n" +
+        "huerfano de un cierre a la fuerza. Como arreglarlo esta en CLAUDE.md.\n"
+    );
+  } else {
+    console.error(error);
+  }
+  await db.$disconnect().catch(() => {});
   process.exit(1);
 });

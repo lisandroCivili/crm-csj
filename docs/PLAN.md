@@ -337,9 +337,19 @@ primero desde `/admin/ventas`.
 Sirve para controlar que las comisiones se calculan bien. Se puede correr en
 cualquier momento, y es la base de la verificación de las fases 1 y 3.
 
+**Necesita la base levantada**, igual que la web. Van dos terminales:
+
+```bash
+# terminal 1 — se deja abierta
+npm run dev
+```
+
+Si el script se corre sin la base, avisa qué falta y no hace nada.
+
 **Cargar**
 
 ```bash
+# terminal 2
 npx tsx scripts/datos-prueba.ts cargar SALTA --escala-prueba
 ```
 
