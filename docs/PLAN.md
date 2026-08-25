@@ -58,6 +58,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 |---|---|---|
 | 0 | Balta y Pedro también son vendedores | 🔨 commit `3a06dce` |
 | 0.5 | Datos de prueba auditables | 🔨 `scripts/datos-prueba.ts` |
+| 0.6 | Laboratorio: base de desarrollo con datos ficticios | 🔨 `/admin/laboratorio` |
 | 1 | Escalas de comisión por vendedor | ⬜ pendiente |
 | 2 | Renovaciones y pestaña Padrón | ⬜ pendiente |
 | 3 | Comisión del agente (Balta y Pedro) | ⬜ pendiente |
@@ -170,6 +171,39 @@ Hecho en `scripts/datos-prueba.ts`, con subcomandos `cargar` y `borrar`.
 
 Verificado: el motor devuelve exactamente lo mismo que la cuenta a mano
 ($55.000 y $44.000 en el escenario por defecto).
+
+### 🔨 Fase 0.6 — Laboratorio: base de desarrollo con datos ficticios
+
+Trabajar en desarrollo contra el padrón real era incómodo (6.878 filas, cuotas de
+$107.293) y además metía datos personales de miles de clientes reales en una base
+de pruebas. Ahora la base de desarrollo se puede vaciar y recargar con datos
+ficticios **desde la aplicación**, sin consola.
+
+- **`/admin/laboratorio`**, en el menú. Muestra qué hay cargado, separando lo que
+  se borra de lo que se conserva, y tiene tres botones: vaciar el padrón de la
+  zona, crear los vendedores de prueba con sus alias, y cargar una escala
+  completa de c1 a c5.
+- **La ruta devuelve 404 en producción**, y las acciones vuelven a chequearlo por
+  su cuenta: una server action es un endpoint y se puede invocar sin pasar por la
+  pantalla, así que el corte no puede vivir sólo en el componente.
+- Vaciar pide **escribir el nombre de la zona**, como pedir el nombre del repo
+  antes de borrarlo.
+- **`scripts/generar-padrones-prueba.ts`** escribe 7 padrones `.xlsx` en
+  `docs/padrones-prueba/` (ignorada por git, se regeneran). Tienen la misma forma
+  que los del club: 3 emisiones por título, solapadas de a 2 con el padrón
+  anterior, fechas como serial de Excel.
+
+Los archivos son la forma correcta de cargar estos datos porque **la importación
+es justamente lo que hay que probar**: el upsert idempotente, la detección de
+renovaciones (Fase 2) y las caídas (Fase 4) sólo se ven con padrones sucesivos.
+
+El escenario cubre: dos ventas nuevas, un título en curso, uno viejo (cuotas
+54-60, tramo 6-60 del agente), uno muy viejo (cuotas 102+, tramo 61+), una
+**renovación** que aparece en septiembre con cuota 5, un título que **se cae** y
+otro del mismo cliente que sigue pagando, para que quede como **caída parcial**.
+
+Verificado end-to-end: vaciar, crear vendedores, importar los 7 padrones y
+liquidar. Los totales se controlaron a mano y coinciden.
 
 ### ⬜ Fase 1 — Escalas de comisión por vendedor
 
@@ -390,6 +424,61 @@ desde `/admin/comisiones/escalas`.
 
 ---
 
+### Fase 0.6 — Laboratorio: base de desarrollo con datos ficticios
+
+Es el flujo recomendado para trabajar en desarrollo de acá en adelante.
+
+**Una sola vez: generar los archivos**
+
+```bash
+npx tsx scripts/generar-padrones-prueba.ts
+```
+
+Escribe 7 padrones en `docs/padrones-prueba/`. No van a git: se regeneran con ese
+mismo comando.
+
+**Después, todo desde la aplicación** (`npm run dev`, entrar como Balta, zona Salta):
+
+1. Menú **Laboratorio**. Muestra qué hay cargado, separando lo que se borra de lo
+   que se conserva.
+2. **Vaciar el padrón de SALTA** → pide escribir `SALTA` para confirmar.
+   Los contadores de clientes, títulos, cuotas e importaciones quedan en cero.
+3. **Crear los vendedores de prueba** → deja `PRUEBA VENDEDOR UNO` (cobra hasta
+   c4) y `PRUEBA VENDEDOR DOS` (hasta c5), con sus nombres del padrón ya
+   vinculados. Sin esto la importación se planta.
+4. **Cargar escala de ejemplo** → dos tramos completos de c1 a c5. Sin esto las
+   comisiones dan cero y no se ve nada.
+5. **Padrón → Importar padrón**, los 7 archivos **en orden**, del 01 al 07. Cada
+   uno se analiza antes de guardar.
+
+**Qué tiene que dar**
+
+En **Comisiones**, mes de agosto de 2026:
+
+| Vendedor | Ventas nuevas | Base | Comisión |
+|---|---|---|---|
+| PRUEBA VENDEDOR UNO | 2 | $900.000 | **$105.000** |
+| PRUEBA VENDEDOR DOS | 0 | $800.000 | **$38.000** |
+
+La cuenta de UNO, para controlarla a mano: c1 $200.000 × 20 % = $40.000 · c2
+$200.000 × 15 % = $30.000 · c3 $200.000 × 10 % = $20.000 · c4 $300.000 × 5 % =
+$15.000. Sus cuotas 100+ quedan afuera porque cobra hasta c4.
+
+> Todo cae en agosto porque `detectadaPagaAt` se sella al importar, y las
+> importaciones se hacen hoy. No es un error: es la regla de devengamiento.
+
+**Qué mirar en cada pantalla**
+
+- **Clientes**: 7 clientes de prueba. `GINA PRUEBA` tiene dos títulos, uno que
+  paga y otro que no: es el caso de caída parcial de la Fase 4.
+- **Padrón**: las 7 importaciones. De la 2ª en adelante casi todas las cuotas
+  figuran como actualizadas, no nuevas: eso es el solape de 3 meses funcionando.
+- **Comisiones**: los números de la tabla de arriba.
+
+**Volver a empezar**: repetir desde el paso 2.
+
+---
+
 ---
 
 ## Contexto para la próxima sesión
@@ -409,13 +498,18 @@ validó la 0 y la 0.5.
 - **`npm start` (producción) contra la base local revienta el dashboard** con
   `P1017 ConnectionClosed`: `lib/db.ts` sólo limita el pool a 4 en desarrollo y
   `prisma dev` corta a las ~9 conexiones. Para verificar, usar `npm run dev`.
-- **La escala cargada hoy en la base local está incompleta**: sólo tiene c1 (10 %)
-  y c2 (5 %) para el tramo 0-15. Las cuotas 3, 4 y 5 liquidan en cero. La
-  aplicación ya lo avisa en `/admin/comisiones/escalas`. No es un bug: falta que
-  Balta cargue los porcentajes reales.
-- **Para verificar cálculos está `scripts/datos-prueba.ts`.** Carga un escenario
-  chico y auditable e imprime el resultado esperado. Ver la guía de prueba de la
-  Fase 0.5.
+- **La escala de la base local es de ejemplo**, cargada desde el laboratorio: dos
+  tramos completos de c1 a c5. La que estaba antes tenía sólo c1 y c2, así que
+  todo lo demás liquidaba en cero. Los porcentajes reales los tiene que cargar
+  Balta.
+- **Para verificar cálculos hay dos caminos.** `scripts/datos-prueba.ts` escribe
+  directo en la base e imprime la cuenta esperada (rápido, sin importación).
+  `/admin/laboratorio` + los padrones de prueba pasan por la importación real
+  (más lento, pero es lo que hay que usar para las fases 2 y 4).
+- **La base de desarrollo ya no tiene el padrón real.** Se vació Salta y se
+  cargaron los 7 padrones de prueba. Si hiciera falta volver a los datos reales,
+  está `docs/Padron-siscaho-tucu-167-010626.xls`; los otros tres que se habían
+  importado no están en el repositorio.
 - Los archivos sin trackear `app/admin/prototipo-formulario-venta/` y
   `docs/cambios 24-8.txt` son de Lisandro y de la Fase 6: no commitearlos sin
   preguntar.

@@ -4,6 +4,7 @@ import {
   BadgeDollarSign,
   ClipboardList,
   FileSpreadsheet,
+  FlaskConical,
   LayoutDashboard,
   Package,
   ScrollText,
@@ -31,6 +32,12 @@ const ADMIN: ItemNav[] = [
   { href: "/admin/ventas", etiqueta: "Ventas", icono: ScrollText },
   { href: "/admin/planes", etiqueta: "Planes", icono: Package },
   { href: "/admin/comisiones", etiqueta: "Comisiones", icono: BadgeDollarSign },
+  // Solo en desarrollo: vaciar el padron y recargarlo con datos ficticios. La
+  // pagina ademas devuelve 404 en produccion, porque esconder el item del menu
+  // no es seguridad: la URL se puede escribir a mano.
+  ...(process.env.NODE_ENV === "production"
+    ? []
+    : [{ href: "/admin/laboratorio", etiqueta: "Laboratorio", icono: FlaskConical }]),
 ];
 
 // El dashboard nunca lleva permiso: es la ruta a la que se vuelve cuando falta

@@ -40,6 +40,11 @@ yarn-error.log*
 /docs/*.xlsx
 /docs/*.csv
 
+# padrones de prueba: son ficticios, pero se regeneran con
+# `npx tsx scripts/generar-padrones-prueba.ts` y no vale la pena versionar
+# binarios que salen de un script.
+/docs/padrones-prueba
+
 # adjuntos subidos (foto de DNI, contratos) -> volumen de Railway
 /uploads
 
