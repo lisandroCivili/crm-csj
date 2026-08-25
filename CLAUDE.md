@@ -139,6 +139,31 @@ El servidor se levanta con `--name crm-csj`, lo que le fija el puerto (51218) y
 conserva los datos entre reinicios, así el `DATABASE_URL` del `.env` no queda
 viejo. Si alguna vez cambia, hay que actualizar `.env`.
 
+### `ERROR Lock file is already being held`
+
+Si la base no arranca con ese error, quedó un lock huérfano: `prisma dev` lo
+toma al iniciar y sólo lo suelta si se lo cierra bien (Ctrl+C). Si se lo mata a
+la fuerza —`taskkill /F`, matar la terminal, un `timeout` que corta el
+proceso—, el lock queda tomado y el siguiente arranque falla. Como `npm run dev`
+usa `concurrently -k`, la web se cae junto con la base y parece que se rompió
+todo.
+
+No hay que borrar los datos: el lock es un directorio aparte. Con la base
+apagada, se borra y listo:
+
+```bash
+rm -rf "$LOCALAPPDATA/prisma-dev-nodejs/Data/durable-streams/crm-csj/server.lock.lock"
+```
+
+En PowerShell:
+
+```powershell
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\prisma-dev-nodejs\Data\durable-streams\crm-csj\server.lock.lock"
+```
+
+Antes de borrarlo hay que confirmar que no quede ningún `prisma dev` vivo, o se
+va a tomar de nuevo. Los datos viven en `.../Data/crm-csj/.pglite` y no se tocan.
+
 La primera vez el arranque de la base tarda porque descarga el binario
 ("Fetching latest updates…"). Después es inmediato.
 
