@@ -112,19 +112,31 @@ async function cargar(zonaNombre: ZonaNombre, pisarEscala: boolean) {
 
   let contadorCliente = 0;
 
-  // --- Escala ---------------------------------------------------------------
-  const escalasExistentes = await db.escalaComision.count();
+  // --- Escala -----------------------------------------------------------
+  // Los tramos cuelgan de una escala (Fase 1): se usa la predeterminada, o se
+  // crea si todavia no hay ninguna.
+  const predeterminada =
+    (await db.escala.findFirst({ where: { esPredeterminada: true }, select: { id: true } })) ??
+    (await db.escala.create({
+      data: { nombre: "General", esPredeterminada: true },
+      select: { id: true },
+    }));
 
-  if (escalasExistentes > 0 && pisarEscala) {
-    await db.escalaComision.deleteMany({});
-    console.log(`Se borraron las ${escalasExistentes} filas de escala que habia.`);
+  const filasExistentes = await db.escalaComision.count({
+    where: { escalaId: predeterminada.id },
+  });
+
+  if (filasExistentes > 0 && pisarEscala) {
+    await db.escalaComision.deleteMany({ where: { escalaId: predeterminada.id } });
+    console.log(`Se borraron las ${filasExistentes} filas de escala que habia.`);
   }
 
-  if (escalasExistentes === 0 || pisarEscala) {
+  if (filasExistentes === 0 || pisarEscala) {
     for (const tramo of ESCALA_SUGERIDA) {
       for (const [numeroCuota, porcentaje] of Object.entries(tramo.porcentajes)) {
         await db.escalaComision.create({
           data: {
+            escalaId: predeterminada.id,
             ventasMin: tramo.ventasMin,
             ventasMax: tramo.ventasMax,
             numeroCuota: Number(numeroCuota),
@@ -135,7 +147,7 @@ async function cargar(zonaNombre: ZonaNombre, pisarEscala: boolean) {
     }
     console.log("Escala de prueba cargada, completa de c1 a c5.");
   } else {
-    console.log(`La base ya tenia ${escalasExistentes} filas de escala: se usan esas.`);
+    console.log(`La base ya tenia ${filasExistentes} filas de escala: se usan esas.`);
     console.log("Para reemplazarla por la de prueba: agregar --escala-prueba.");
   }
 
@@ -208,15 +220,21 @@ async function cargar(zonaNombre: ZonaNombre, pisarEscala: boolean) {
 
   console.log(`Cargados ${VENDEDORES.length} vendedores de prueba con sus cuotas.\n`);
 
-  await imprimirEsperado(periodo);
+  await imprimirEsperado(periodo, predeterminada.id);
 }
 
 // ---------------------------------------------------------------------------
 // La cuenta, hecha a mano
 // ---------------------------------------------------------------------------
 
-async function imprimirEsperado(periodo: string) {
+/**
+ * Los vendedores de prueba no tienen `escalaId` propio, asi que cobran con la
+ * escala predeterminada: la cuenta esperada tiene que mirar esa y ninguna otra,
+ * o mezclaria tramos de escalas que no les corresponden.
+ */
+async function imprimirEsperado(periodo: string, escalaId: string) {
   const filas = await db.escalaComision.findMany({
+    where: { escalaId },
     orderBy: [{ ventasMin: "asc" }, { numeroCuota: "asc" }],
   });
 

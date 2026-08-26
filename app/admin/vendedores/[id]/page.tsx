@@ -40,6 +40,7 @@ export default async function PerfilVendedorPage({
     include: {
       user: { select: { id: true, email: true, activo: true, role: true, nombre: true } },
       alias: { orderBy: { nomVenPadron: "asc" } },
+      escala: { select: { nombre: true } },
       _count: { select: { leads: true, ventas: true, titulos: true } },
     },
   });
@@ -123,6 +124,12 @@ export default async function PerfilVendedorPage({
               <Dato
                 etiqueta="Cobra comisión hasta"
                 valor={`c${vendedor.topeCuotasComision}`}
+              />
+              <Dato
+                etiqueta="Escala de comisión"
+                valor={
+                  vendedor.escala ? vendedor.escala.nombre : "Predeterminada"
+                }
               />
               <Dato etiqueta="Condiciones" valor={vendedor.condiciones} />
             </dl>

@@ -128,8 +128,9 @@ export async function crearVendedoresDePrueba(): Promise<ResultadoVaciado> {
  * cero. Sin esto, las cuotas sin porcentaje liquidan en cero y la pantalla de
  * comisiones no dice nada util.
  *
- * Reemplaza la escala entera: si Balta tenia una cargada a mano, se pierde. Por
- * eso vive aca y no en la pantalla de escalas.
+ * Reemplaza los tramos de la escala predeterminada (la crea si todavia no
+ * existe ninguna): si Balta tenia algo cargado ahi a mano, se pierde. Por eso
+ * vive aca y no en la pantalla de escalas. Las demas escalas no se tocan.
  */
 export async function cargarEscalaDeEjemplo(): Promise<ResultadoVaciado> {
   soloEnDesarrollo();
@@ -144,11 +145,19 @@ export async function cargarEscalaDeEjemplo(): Promise<ResultadoVaciado> {
   ];
 
   await db.$transaction(async (tx) => {
-    await tx.escalaComision.deleteMany({});
+    const predeterminada =
+      (await tx.escala.findFirst({ where: { esPredeterminada: true }, select: { id: true } })) ??
+      (await tx.escala.create({
+        data: { nombre: "General", esPredeterminada: true },
+        select: { id: true },
+      }));
+
+    await tx.escalaComision.deleteMany({ where: { escalaId: predeterminada.id } });
     for (const tramo of TRAMOS) {
       for (const [indice, porcentaje] of tramo.porcentajes.entries()) {
         await tx.escalaComision.create({
           data: {
+            escalaId: predeterminada.id,
             ventasMin: tramo.ventasMin,
             ventasMax: tramo.ventasMax,
             numeroCuota: indice + 1,

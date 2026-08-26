@@ -41,7 +41,15 @@ function BotonGuardar({ nuevo }: { nuevo: boolean }) {
   );
 }
 
-function BorrarTramo({ ventasMin, rango }: { ventasMin: number; rango: string }) {
+function BorrarTramo({
+  escalaId,
+  ventasMin,
+  rango,
+}: {
+  escalaId: string;
+  ventasMin: number;
+  rango: string;
+}) {
   return (
     <Dialog>
       <DialogTrigger asChild>
@@ -70,6 +78,7 @@ function BorrarTramo({ ventasMin, rango }: { ventasMin: number; rango: string })
             </Button>
           </DialogClose>
           <form action={eliminarTramo}>
+            <input type="hidden" name="escalaId" value={escalaId} />
             <input type="hidden" name="ventasMin" value={ventasMin} />
             <Button type="submit" variant="destructive">
               Eliminar tramo
@@ -81,7 +90,7 @@ function BorrarTramo({ ventasMin, rango }: { ventasMin: number; rango: string })
   );
 }
 
-function FilaTramo({ tramo }: { tramo?: Tramo }) {
+function FilaTramo({ escalaId, tramo }: { escalaId: string; tramo?: Tramo }) {
   const nuevo = !tramo;
   const [estado, accion] = useActionState<EstadoTramo, FormData>(guardarTramo, {});
   const formRef = useRef<HTMLFormElement>(null);
@@ -113,6 +122,7 @@ function FilaTramo({ tramo }: { tramo?: Tramo }) {
       action={accion}
       className={nuevo ? "border-t border-dashed pb-1 pt-3" : "border-t py-1"}
     >
+      <input type="hidden" name="escalaId" value={escalaId} />
       {tramo ? (
         <input type="hidden" name="ventasMinOriginal" value={tramo.ventasMin} />
       ) : null}
@@ -151,7 +161,9 @@ function FilaTramo({ tramo }: { tramo?: Tramo }) {
 
         <div className="flex items-center gap-1 pl-1">
           <BotonGuardar nuevo={nuevo} />
-          {tramo ? <BorrarTramo ventasMin={tramo.ventasMin} rango={rango} /> : null}
+          {tramo ? (
+            <BorrarTramo escalaId={escalaId} ventasMin={tramo.ventasMin} rango={rango} />
+          ) : null}
         </div>
       </div>
 
@@ -165,7 +177,7 @@ function FilaTramo({ tramo }: { tramo?: Tramo }) {
   );
 }
 
-export function EditorEscalas({ tramos }: { tramos: Tramo[] }) {
+export function EditorEscalas({ escalaId, tramos }: { escalaId: string; tramos: Tramo[] }) {
   // El formulario de alta se re-monta al cambiar la cantidad de tramos, asi
   // queda limpio despues de agregar uno sin arrastrar el estado anterior.
   const [mostrarAlta, setMostrarAlta] = useState(tramos.length === 0);
@@ -187,12 +199,12 @@ export function EditorEscalas({ tramos }: { tramos: Tramo[] }) {
         </div>
 
         {tramos.map((tramo) => (
-          <FilaTramo key={tramo.ventasMin} tramo={tramo} />
+          <FilaTramo key={tramo.ventasMin} escalaId={escalaId} tramo={tramo} />
         ))}
 
         {mostrarAlta ? (
           <div className="pt-3">
-            <FilaTramo key={`alta-${tramos.length}`} />
+            <FilaTramo key={`alta-${tramos.length}`} escalaId={escalaId} />
           </div>
         ) : (
           <div className="pt-3">

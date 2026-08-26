@@ -32,6 +32,13 @@ export const vendedorSchema = z.object({
     .min(1, "El tope va de 1 a 5.")
     .max(5, "El tope va de 1 a 5."),
 
+  /// Escala de comision asignada. Vacio = usa la predeterminada.
+  escalaId: z
+    .string()
+    .trim()
+    .optional()
+    .transform((valor) => (valor ? valor : null)),
+
   condiciones: textoOpcional(1000),
 });
 

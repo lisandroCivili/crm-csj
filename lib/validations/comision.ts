@@ -71,6 +71,14 @@ export const tramoEscalaSchema = z
 
 export type DatosTramoEscala = z.infer<typeof tramoEscalaSchema>;
 
+export const nombreEscalaSchema = z.object({
+  nombre: z
+    .string()
+    .trim()
+    .min(2, "Ingresá un nombre para la escala.")
+    .max(60, "No puede superar los 60 caracteres."),
+});
+
 /** Importe manual que Balta suma a la comision del periodo. */
 export const gastosRepresentacionSchema = z.object({
   vendedorId: z.string().min(1),

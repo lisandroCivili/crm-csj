@@ -160,8 +160,9 @@ export default async function LaboratorioPage() {
             </li>
             <li>
               Si las comisiones dan cero, falta la escala: usar{" "}
-              <strong>Cargar escala de ejemplo</strong>. Reemplaza la que haya por una
-              completa de c1 a c5, que es lo que hace falta para que se vea algo.
+              <strong>Cargar escala de ejemplo</strong>. Reemplaza los tramos de la escala
+              predeterminada por una completa de c1 a c5, que es lo que hace falta para que
+              se vea algo.
             </li>
             <li>
               Revisar <strong>Clientes</strong>, <strong>Padrón</strong> y{" "}

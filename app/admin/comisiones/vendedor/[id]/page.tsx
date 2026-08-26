@@ -188,6 +188,10 @@ export default async function DetalleComisionPage({
               </div>
             ) : null}
             <div className="flex justify-between gap-3">
+              <span className="text-muted-foreground">Escala aplicada</span>
+              <span>{linea.escalaNombre ?? "—"}</span>
+            </div>
+            <div className="flex justify-between gap-3">
               <span className="text-muted-foreground">Ventas nuevas del mes</span>
               <span className="tabular-nums">{linea.ventasNuevas}</span>
             </div>

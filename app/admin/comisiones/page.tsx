@@ -149,8 +149,9 @@ export default async function ComisionesPage({ searchParams }: PageProps<"/admin
           <AlertTitle>Todavía no hay escalas cargadas</AlertTitle>
           <AlertDescription>
             <p>
-              Sin escala no hay porcentaje que aplicar y todo liquida en cero. Se carga una
-              sola vez y vale para las dos zonas.
+              Sin ningún tramo cargado en la escala de cada vendedor no hay porcentaje que
+              aplicar y todo liquida en cero. Las escalas valen para las dos zonas; lo que
+              es por vendedor es cuál escala tiene asignada.
             </p>
             <Button size="sm" asChild className="mt-1">
               <Link href="/admin/comisiones/escalas">

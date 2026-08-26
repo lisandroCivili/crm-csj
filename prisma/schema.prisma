@@ -132,6 +132,11 @@ model Vendedor {
   topeCuotasComision Int     @default(4)
   condiciones        String?
 
+  /// Escala de comision asignada. Si es null, se le aplica la escala marcada
+  /// como predeterminada (ver `Escala.esPredeterminada`).
+  escalaId String?
+  escala   Escala? @relation(fields: [escalaId], references: [id])
+
   // --- Permisos ------------------------------------------------------------
   // Que secciones ve el vendedor cuando entra. El permiso se SACA, no se da:
   // por defecto ve todo, asi los vendedores que ya existen no cambian de
@@ -164,6 +169,7 @@ model Vendedor {
   @@unique([zonaId, dni])
   @@index([zonaId])
   @@index([userId])
+  @@index([escalaId])
   @@map("vendedores")
 }
 
@@ -531,10 +537,33 @@ model VentaHistorial {
 // numero de cuota. Ver lib/comisiones/calcularComisionPeriodo.ts.
 // ---------------------------------------------------------------------------
 
-/// Tabla de escalas editable desde la UI: cruza el volumen de ventas nuevas del
-/// mes contra el numero de cuota. NUNCA hardcodear porcentajes.
+/// Una escala con nombre, asignable por vendedor. Se mantienen los dos ejes de
+/// siempre (tramos de ventas del mes x % por cuota); lo que cambia es que
+/// puede haber varias y cada vendedor se asigna a una (`Vendedor.escalaId`).
+/// No tiene `zonaId`: las escalas se comparten entre Salta y Tucuman, es el
+/// vendedor el que esta por zona.
+model Escala {
+  id               String   @id @default(cuid())
+  nombre           String
+  /// La que se le aplica a un vendedor sin escala asignada. Solo una a la vez
+  /// (se controla en la server action, no con un unique parcial).
+  esPredeterminada Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  filas      EscalaComision[]
+  vendedores Vendedor[]
+
+  @@map("escalas")
+}
+
+/// Tabla de tramos editable desde la UI: cruza el volumen de ventas nuevas del
+/// mes contra el numero de cuota, dentro de una escala. NUNCA hardcodear
+/// porcentajes.
 model EscalaComision {
   id          String   @id @default(cuid())
+  escalaId    String
+  escala      Escala   @relation(fields: [escalaId], references: [id], onDelete: Cascade)
   ventasMin   Int
   /// null = sin tope superior.
   ventasMax   Int?
@@ -543,7 +572,8 @@ model EscalaComision {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@unique([ventasMin, numeroCuota])
+  @@unique([escalaId, ventasMin, numeroCuota])
+  @@index([escalaId])
   @@map("escalas_comision")
 }
 

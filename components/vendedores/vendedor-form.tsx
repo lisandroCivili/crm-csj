@@ -20,8 +20,11 @@ type ValoresVendedor = {
   email?: string | null;
   telefono?: string | null;
   topeCuotasComision?: number;
+  escalaId?: string | null;
   condiciones?: string | null;
 };
+
+type EscalaOpcion = { id: string; nombre: string; esPredeterminada: boolean };
 
 function BotonGuardar({ edicion }: { edicion: boolean }) {
   const { pending } = useFormStatus();
@@ -32,7 +35,13 @@ function BotonGuardar({ edicion }: { edicion: boolean }) {
   );
 }
 
-export function VendedorForm({ valores }: { valores?: ValoresVendedor }) {
+export function VendedorForm({
+  valores,
+  escalas,
+}: {
+  valores?: ValoresVendedor;
+  escalas: EscalaOpcion[];
+}) {
   const edicion = Boolean(valores?.id);
   const [estado, accion] = useActionState<EstadoFormulario, FormData>(
     edicion ? editarVendedor : crearVendedor,
@@ -114,6 +123,31 @@ export function VendedorForm({ valores }: { valores?: ValoresVendedor }) {
             {[1, 2, 3, 4, 5].map((n) => (
               <option key={n} value={n}>
                 c{n}
+              </option>
+            ))}
+          </select>
+        </Campo>
+
+        <Campo
+          nombre="escalaId"
+          etiqueta="Escala de comisión"
+          errores={errores.escalaId}
+          ayuda="Si no se elige ninguna, se le aplica la predeterminada."
+        >
+          <select
+            id="escalaId"
+            name="escalaId"
+            defaultValue={valores?.escalaId ?? ""}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          >
+            <option value="">
+              {escalas.find((escala) => escala.esPredeterminada)
+                ? `Predeterminada (${escalas.find((escala) => escala.esPredeterminada)!.nombre})`
+                : "Predeterminada"}
+            </option>
+            {escalas.map((escala) => (
+              <option key={escala.id} value={escala.id}>
+                {escala.nombre}
               </option>
             ))}
           </select>

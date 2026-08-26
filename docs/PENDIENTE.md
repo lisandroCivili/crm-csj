@@ -51,8 +51,11 @@ decía otra cosa.
   `ComisionDetalle` y no se mueve aunque cambie la escala. Si después del cierre
   entra un padrón que le suma cuotas a alguien, esa línea nace en borrador y la
   pantalla vuelve a pedir cierre.
-- **La escala es única para las dos zonas** (`EscalaComision` no tiene `zonaId`).
-  Si alguna vez Salta y Tucumán cobran distinto, hay que agregarle la zona.
+- **Las escalas se comparten entre las dos zonas** (`Escala` no tiene `zonaId`).
+  Desde la Fase 1 puede haber varias, con nombre, y cada `Vendedor` se asigna a
+  una (`Vendedor.escalaId`); sin asignación explícita usa la marcada
+  `esPredeterminada`. Si alguna vez Salta y Tucumán necesitaran escalas
+  exclusivas de una zona, hay que agregarle `zonaId` a `Escala`.
 - Los dashboards ya usan el motor: el de Balta muestra las comisiones del mes,
   el promedio de cuota y un filtro c1-c5; el del vendedor, su ganancia del mes
   con el desglose por cuota.

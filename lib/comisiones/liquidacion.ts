@@ -34,6 +34,8 @@ export type LineaLiquidacion = {
   codigo: string;
   activo: boolean;
   topeCuotasComision: number;
+  /** Nombre de la escala que se le aplicó. null si ninguna escala la cubre. */
+  escalaNombre: string | null;
   ventasNuevas: number;
   tramo: TramoAplicado | null;
   renglones: RenglonLiquidacion[];
@@ -66,8 +68,9 @@ export type Liquidacion = {
 // Lectura
 // ---------------------------------------------------------------------------
 
-export async function listarEscalas(): Promise<FilaEscala[]> {
+export async function listarEscalas(escalaId: string): Promise<FilaEscala[]> {
   const filas = await db.escalaComision.findMany({
+    where: { escalaId },
     orderBy: [{ ventasMin: "asc" }, { numeroCuota: "asc" }],
   });
 
@@ -77,6 +80,65 @@ export async function listarEscalas(): Promise<FilaEscala[]> {
     numeroCuota: fila.numeroCuota,
     porcentaje: Number(fila.porcentaje),
   }));
+}
+
+type EscalaVendedor = { nombre: string | null; filas: FilaEscala[] };
+
+/**
+ * La escala que le corresponde a cada vendedor: la propia si tiene una
+ * asignada, o la predeterminada si no. Trae en una sola consulta los tramos de
+ * todas las escalas involucradas, para no hacer una query por vendedor.
+ */
+export async function escalasDeVendedores(
+  vendedores: { id: string; escalaId: string | null }[]
+): Promise<Map<string, EscalaVendedor>> {
+  const predeterminada = await db.escala.findFirst({
+    where: { esPredeterminada: true },
+    select: { id: true },
+  });
+
+  const idPorVendedor = new Map<string, string | undefined>();
+  const idsUsados = new Set<string>();
+  for (const vendedor of vendedores) {
+    const escalaId = vendedor.escalaId ?? predeterminada?.id;
+    idPorVendedor.set(vendedor.id, escalaId);
+    if (escalaId) idsUsados.add(escalaId);
+  }
+
+  const [escalas, filas] = await Promise.all([
+    db.escala.findMany({ where: { id: { in: [...idsUsados] } }, select: { id: true, nombre: true } }),
+    idsUsados.size > 0
+      ? db.escalaComision.findMany({
+          where: { escalaId: { in: [...idsUsados] } },
+          orderBy: [{ ventasMin: "asc" }, { numeroCuota: "asc" }],
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const nombrePorEscala = new Map(escalas.map((escala) => [escala.id, escala.nombre]));
+
+  const filasPorEscala = new Map<string, FilaEscala[]>();
+  for (const fila of filas) {
+    const lista = filasPorEscala.get(fila.escalaId) ?? [];
+    lista.push({
+      ventasMin: fila.ventasMin,
+      ventasMax: fila.ventasMax,
+      numeroCuota: fila.numeroCuota,
+      porcentaje: Number(fila.porcentaje),
+    });
+    filasPorEscala.set(fila.escalaId, lista);
+  }
+
+  const resultado = new Map<string, EscalaVendedor>();
+  for (const vendedor of vendedores) {
+    const escalaId = idPorVendedor.get(vendedor.id);
+    resultado.set(vendedor.id, {
+      nombre: escalaId ? (nombrePorEscala.get(escalaId) ?? null) : null,
+      filas: escalaId ? (filasPorEscala.get(escalaId) ?? []) : [],
+    });
+  }
+
+  return resultado;
 }
 
 /** Cuotas que el padron mostro recien cobradas dentro del periodo. */
@@ -170,12 +232,12 @@ function armarLinea({
   vendedor,
   guardado,
   cuotas,
-  escalas,
+  escalaInfo,
 }: {
   vendedor: DatosVendedor;
   guardado: Guardado | undefined;
   cuotas: { id: string; numeroCuota: number; importe: number }[];
-  escalas: FilaEscala[];
+  escalaInfo: EscalaVendedor;
 }): LineaLiquidacion {
   const base = {
     vendedorId: vendedor.id,
@@ -183,6 +245,7 @@ function armarLinea({
     codigo: vendedor.codigo,
     activo: vendedor.activo,
     topeCuotasComision: vendedor.topeCuotasComision,
+    escalaNombre: escalaInfo.nombre,
   };
 
   if (guardado && guardado.estado === "CERRADO") {
@@ -204,7 +267,7 @@ function armarLinea({
 
   const resultado = calcularComisionPeriodo({
     cuotas,
-    escalas,
+    escalas: escalaInfo.filas,
     topeCuotasComision: vendedor.topeCuotasComision,
     gastosRepresentacion: guardado?.gastosRepresentacion ?? 0,
   });
@@ -248,7 +311,7 @@ export async function obtenerLiquidacion({
   zonaId: number;
   periodo: string;
 }): Promise<Liquidacion> {
-  const [vendedores, escalas, cuotasPorVendedor, guardados] = await Promise.all([
+  const [vendedores, cuotasPorVendedor, guardados] = await Promise.all([
     db.vendedor.findMany({
       where: { zonaId },
       orderBy: [{ activo: "desc" }, { nombreCompleto: "asc" }],
@@ -258,19 +321,21 @@ export async function obtenerLiquidacion({
         codigo: true,
         activo: true,
         topeCuotasComision: true,
+        escalaId: true,
       },
     }),
-    listarEscalas(),
     cuotasCobradas(zonaId, periodo),
     periodosGuardados(zonaId, periodo),
   ]);
+
+  const escalasPorVendedor = await escalasDeVendedores(vendedores);
 
   const lineas: LineaLiquidacion[] = vendedores.map((vendedor) =>
     armarLinea({
       vendedor,
       guardado: guardados.get(vendedor.id),
       cuotas: cuotasPorVendedor.get(vendedor.id) ?? [],
-      escalas,
+      escalaInfo: escalasPorVendedor.get(vendedor.id)!,
     })
   );
 
@@ -283,10 +348,16 @@ export async function obtenerLiquidacion({
   const cerrado =
     conMovimiento.length > 0 && conMovimiento.every((linea) => linea.estado === "CERRADO");
 
+  // Sin ninguna escala con tramos cargados, todo liquida en cero: da igual si
+  // es porque no hay ninguna `Escala` o porque las asignadas estan vacias.
+  const sinEscalas = vendedores.every(
+    (vendedor) => (escalasPorVendedor.get(vendedor.id)?.filas.length ?? 0) === 0
+  );
+
   return {
     periodo,
     estado: cerrado ? "CERRADO" : "BORRADOR",
-    sinEscalas: escalas.length === 0,
+    sinEscalas,
     lineas,
     totales: {
       ventasNuevas: lineas.reduce((suma, linea) => suma + linea.ventasNuevas, 0),
@@ -361,12 +432,13 @@ export async function obtenerLiquidacionVendedor({
       codigo: true,
       activo: true,
       topeCuotasComision: true,
+      escalaId: true,
     },
   });
   if (!vendedor) return null;
 
-  const [escalas, porVendedor, guardados] = await Promise.all([
-    listarEscalas(),
+  const [escalasPorVendedor, porVendedor, guardados] = await Promise.all([
+    escalasDeVendedores([vendedor]),
     cuotasCobradas(zonaId, periodo, vendedorId),
     periodosGuardados(zonaId, periodo),
   ]);
@@ -375,7 +447,7 @@ export async function obtenerLiquidacionVendedor({
     vendedor,
     guardado: guardados.get(vendedorId),
     cuotas: porVendedor.get(vendedorId) ?? [],
-    escalas,
+    escalaInfo: escalasPorVendedor.get(vendedorId)!,
   });
 }
 

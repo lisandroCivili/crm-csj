@@ -59,7 +59,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 0 | Balta y Pedro también son vendedores | 🔨 commit `3a06dce` |
 | 0.5 | Datos de prueba auditables | 🔨 `scripts/datos-prueba.ts` |
 | 0.6 | Laboratorio: base de desarrollo con datos ficticios | 🔨 `/admin/laboratorio` |
-| 1 | Escalas de comisión por vendedor | ⬜ pendiente |
+| 1 | Escalas de comisión por vendedor | 🔨 migración `20260826153914_escalas_por_vendedor` |
 | 2 | Renovaciones y pestaña Padrón | ⬜ pendiente |
 | 3 | Comisión del agente (Balta y Pedro) | ⬜ pendiente |
 | 4 | Caídas de clientes | ⬜ pendiente |
@@ -205,23 +205,51 @@ otro del mismo cliente que sigue pagando, para que quede como **caída parcial**
 Verificado end-to-end: vaciar, crear vendedores, importar los 7 padrones y
 liquidar. Los totales se controlaron a mano y coinciden.
 
-### ⬜ Fase 1 — Escalas de comisión por vendedor
+### 🔨 Fase 1 — Escalas de comisión por vendedor
 
 Se mantienen los dos ejes; lo que cambia es que hay varias escalas y cada
-vendedor se asigna a una. **El motor no se toca**: sigue recibiendo las filas por
-parámetro.
+vendedor se asigna a una. **El motor no se tocó**: `calcularComisionPeriodo`
+sigue recibiendo las filas por parámetro, sin saber que existen varias escalas.
 
-- Tabla nueva `Escala` (`nombre`, `esPredeterminada`), `EscalaComision.escalaId`,
-  `Vendedor.escalaId` opcional. La clave pasa a `@@unique([escalaId, ventasMin, numeroCuota])`.
-- Migración de datos: crear la escala "General" con las filas actuales.
-- `listarEscalas()` pasa a recibir un `escalaId`; agregar `escalasDeVendedores()`
-  que traiga en una sola query las escalas de todos los vendedores de la zona.
-- UI: listado de escalas en `/admin/comisiones/escalas`, editor por escala, y un
-  select de escala en la ficha del vendedor.
+Qué se hizo:
+
+- **Tabla nueva `Escala`** (`nombre`, `esPredeterminada`). `EscalaComision`
+  cuelga de una escala (`escalaId`, `onDelete: Cascade`), con la clave
+  `@@unique([escalaId, ventasMin, numeroCuota])`. `Vendedor.escalaId` es
+  opcional: sin asignación explícita, usa la que tenga `esPredeterminada`.
+  Migración `20260826153914_escalas_por_vendedor`: crea la escala "General"
+  predeterminada y le imputa todos los tramos que ya existían, antes de exigir
+  que la columna sea `NOT NULL`.
+- **`listarEscalas(escalaId)`** pasa a pedir una escala puntual.
+  **`escalasDeVendedores(vendedores)`** nueva en `lib/comisiones/liquidacion.ts`:
+  resuelve para cada vendedor cuál escala le toca (la propia o la
+  predeterminada) y trae los tramos de todas las escalas involucradas en una
+  sola consulta, en vez de una por vendedor. `obtenerLiquidacion` y
+  `obtenerLiquidacionVendedor` la usan en vez de la escala única de antes.
+- **`/admin/comisiones/escalas`** pasó de ser el editor de una escala a un
+  listado: nombre, cuántos tramos y cuántos vendedores tiene asignados cada
+  una, badge de predeterminada, y acciones para crear, renombrar, marcar como
+  predeterminada y eliminar (bloqueado si es la predeterminada o si algún
+  vendedor la tiene asignada). El editor de tramos de siempre pasó a
+  `/admin/comisiones/escalas/[id]`, sin cambios de fondo.
+- **Select de escala** en el alta y edición del vendedor
+  (`components/vendedores/vendedor-form.tsx`), y el dato en su ficha y en el
+  detalle de su comisión (`/admin/comisiones/vendedor/[id]`, campo "Escala
+  aplicada"), para poder ver a simple vista cuál le tocó sin adivinar.
+- Laboratorio y `scripts/datos-prueba.ts` actualizados: la "escala de ejemplo"
+  ahora se carga en la escala predeterminada (la crea si hace falta) en vez de
+  en una tabla sin cabecera.
 
 > El `escalaId` va en una tabla cabecera y no como `vendedorId` nullable en
 > `EscalaComision` a propósito: en Postgres cada `NULL` es distinto y la clave
 > única no impediría escalas duplicadas.
+
+Verificado con un script ad-hoc contra la base real (no versionado): se cargó
+el escenario de la Fase 0.5, se creó una segunda escala con porcentajes
+distintos para las cuotas c3 y c5, se la asignó a PEREZ ANA (prueba) y
+`obtenerLiquidacion` reflejó el cambio ($44.000 → $22.000) sin mover a GOMEZ
+JUAN (prueba), que se quedó en la predeterminada. Lint, 46 tests y build
+pasan.
 
 ### ⬜ Fase 2 — Renovaciones y pestaña Padrón
 
@@ -479,14 +507,97 @@ $15.000. Sus cuotas 100+ quedan afuera porque cobra hasta c4.
 
 ---
 
+### Fase 1 — Escalas de comisión por vendedor
+
+Usa el mismo escenario chico y auditable de la Fase 0.5, así que se puede
+verificar con la calculadora en la mano.
+
+**Preparación**
+
+```bash
+# terminal 1 — se deja abierta
+npm run dev
+```
+
+```bash
+# terminal 2
+npx tsx scripts/datos-prueba.ts cargar SALTA --escala-prueba
+```
+
+Entrar a http://localhost:3000/login con `balta@crm-csj.local` /
+`CambiarEstePassword123`, zona **Salta**.
+
+**1. Confirmar que nada se rompió**
+
+Menú **Comisiones**. Las filas `GOMEZ JUAN (prueba)` y `PEREZ ANA (prueba)`
+tienen que dar exactamente lo mismo que en la Fase 0.5: **$55.000** y
+**$44.000**. Si alguno cambió, la migración rompió algo.
+
+**2. El listado de escalas** — *esto es lo nuevo*
+
+Menú **Comisiones** → botón **Escalas**. Ya no es un editor: es un listado.
+Tiene que verse una sola escala, **General**, con el badge **Predeterminada**
+y **"10 tramo(s) · 0 vendedor(es)"**. El 0 es correcto: ni GOMEZ ni PEREZ
+tienen esta escala asignada *a mano* aunque los dos cobran con ella (por ser
+la predeterminada).
+
+**3. Crear una escala nueva y asignársela a un vendedor**
+
+En el campo de abajo del listado, escribir `Escala baja` y **Crear escala**.
+Entra directo a su editor (misma pantalla que antes, ahora por escala). Cargar
+un solo tramo: **Desde** `0`, **Hasta** vacío, **c3** `5`, **c5** `1`, el resto
+vacío. Guardar.
+
+Ir a **Vendedores** → `PEREZ ANA (prueba)` → **Editar**. En **Escala de
+comisión** elegir `Escala baja`. Guardar.
+
+**4. Ver el cambio en la liquidación**
+
+Volver a **Comisiones**:
+
+- `PEREZ ANA (prueba)` ahora tiene que dar **$22.000**: c3 $400.000 × 5 % =
+  $20.000, c5 $200.000 × 1 % = $2.000.
+- `GOMEZ JUAN (prueba)` sigue en **$55.000**: no se tocó, sigue con la
+  predeterminada.
+
+Entrar al **detalle** de PEREZ: el campo **Escala aplicada** tiene que decir
+`Escala baja`.
+
+**5. Los candados**
+
+Volver a **Comisiones → Escalas**: `Escala baja` ahora figura con
+**1 vendedor**. Intentar eliminar `General` (la predeterminada): tiene que
+rechazarlo con *"No se puede eliminar la escala predeterminada."*. Intentar
+eliminar `Escala baja` sin antes sacarle el vendedor asignado: tiene que
+rechazarlo por tener 1 vendedor asignado.
+
+**Borrar los datos de prueba**
+
+1. En la ficha de PEREZ, volver **Escala de comisión** a la opción
+   *Predeterminada* y guardar.
+2. En **Comisiones → Escalas**, eliminar `Escala baja` (ya sin vendedores, el
+   botón queda habilitado).
+3. `npx tsx scripts/datos-prueba.ts borrar` (no toca escalas: por eso el paso 2
+   es manual).
+
 ---
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Fase 1 (escalas de comisión por vendedor), si Lisandro ya
-validó la 0 y la 0.5.
+**Dónde retomar:** la Fase 1 (escalas de comisión por vendedor) está
+construida y probada de punta a punta contra la base local; falta que
+Lisandro la valide siguiendo la guía de arriba. Si da OK, sigue la Fase 2
+(renovaciones y pestaña Padrón) o la Fase 3 (comisión del agente), que ya no
+tienen dependencias pendientes.
 
 **Cosas que conviene saber:**
+
+- **Hay vendedores con datos reales en la base de desarrollo** (ej. "GOMEZ
+  HUGO", código `P009`), sobrevivientes de antes de vaciar el padrón en la Fase
+  0.6: vaciar el padrón borra clientes/títulos/cuotas, pero nunca vendedores.
+  Si se escribe un script de verificación ad-hoc, filtrar por `codigo` (los de
+  prueba empiezan con `PRUEBA-`) y no por un fragmento del nombre: buscar por
+  "GOMEZ" a secas encuentra a este vendedor real en vez de al de prueba.
 
 - **La ficha de vendedor de Balta y Pedro todavía no existe con datos reales.**
   Hasta que se cree y se enlace, `getVendedorDelAdmin()` devuelve null y la
@@ -498,10 +609,10 @@ validó la 0 y la 0.5.
 - **`npm start` (producción) contra la base local revienta el dashboard** con
   `P1017 ConnectionClosed`: `lib/db.ts` sólo limita el pool a 4 en desarrollo y
   `prisma dev` corta a las ~9 conexiones. Para verificar, usar `npm run dev`.
-- **La escala de la base local es de ejemplo**, cargada desde el laboratorio: dos
-  tramos completos de c1 a c5. La que estaba antes tenía sólo c1 y c2, así que
-  todo lo demás liquidaba en cero. Los porcentajes reales los tiene que cargar
-  Balta.
+- **La escala predeterminada de la base local ("General") es de ejemplo**,
+  cargada desde el laboratorio: dos tramos completos de c1 a c5. Los
+  porcentajes reales los tiene que cargar Balta. Desde la Fase 1 puede haber
+  más escalas además de esta: se administran en `/admin/comisiones/escalas`.
 - **Para verificar cálculos hay dos caminos.** `scripts/datos-prueba.ts` escribe
   directo en la base e imprime la cuenta esperada (rápido, sin importación).
   `/admin/laboratorio` + los padrones de prueba pasan por la importación real

@@ -11,13 +11,19 @@ export default async function EditarVendedorPage({
   const zonaId = await requireZonaActivaId();
   const { id } = await params;
 
-  const vendedor = await db.vendedor.findFirst({ where: { id, zonaId } });
+  const [vendedor, escalas] = await Promise.all([
+    db.vendedor.findFirst({ where: { id, zonaId } }),
+    db.escala.findMany({
+      orderBy: [{ esPredeterminada: "desc" }, { nombre: "asc" }],
+      select: { id: true, nombre: true, esPredeterminada: true },
+    }),
+  ]);
   if (!vendedor) notFound();
 
   return (
     <>
       <PageHeader titulo="Editar vendedor" descripcion={vendedor.nombreCompleto} />
-      <VendedorForm valores={vendedor} />
+      <VendedorForm valores={vendedor} escalas={escalas} />
     </>
   );
 }
