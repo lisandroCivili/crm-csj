@@ -61,7 +61,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 0.6 | Laboratorio: base de desarrollo con datos ficticios | ✅ `/admin/laboratorio` |
 | 1 | Escalas de comisión por vendedor | ✅ commit `7dbc4ea` |
 | 2 | Renovaciones y pestaña Padrón | ✅ commit `c47735b` |
-| 3 | Comisión del agente (Balta y Pedro) | 🔨 migración `20260827_comision_agente` |
+| 3 | Comisión del agente (Balta y Pedro) | 🔨 commit `f81e22e` |
 | 4 | Caídas de clientes | ⬜ pendiente |
 | 5 | Gráficos del dashboard | ⬜ pendiente |
 | 6 | Formulario de venta | ⬜ bloqueada — falta la lista de campos de Balta |
