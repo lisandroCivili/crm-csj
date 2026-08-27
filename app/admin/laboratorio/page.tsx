@@ -26,7 +26,7 @@ export default async function LaboratorioPage() {
   const zonaId = await requireZonaActivaId();
   const zona = await getZonaActiva();
 
-  const [clientes, titulos, cuotas, importaciones, vendedores, escalas, ventas] =
+  const [clientes, titulos, cuotas, importaciones, vendedores, escalas, tramosAgente, ventas] =
     await Promise.all([
       db.cliente.count({ where: { zonaId } }),
       db.titulo.count({ where: { zonaId } }),
@@ -34,6 +34,7 @@ export default async function LaboratorioPage() {
       db.padronImport.count({ where: { zonaId } }),
       db.vendedor.count({ where: { zonaId } }),
       db.escalaComision.count(),
+      db.escalaAgente.count({ where: { zonaId } }),
       db.venta.count({ where: { zonaId } }),
     ]);
 
@@ -93,6 +94,7 @@ export default async function LaboratorioPage() {
                 <Dato etiqueta="Vendedores" valor={vendedores} />
                 <Dato etiqueta="Ventas" valor={ventas} />
                 <Dato etiqueta="Filas de escala" valor={escalas} />
+                <Dato etiqueta="Tramos del contrato" valor={tramosAgente} />
               </dl>
             </div>
 
@@ -163,6 +165,12 @@ export default async function LaboratorioPage() {
               <strong>Cargar escala de ejemplo</strong>. Reemplaza los tramos de la escala
               predeterminada por una completa de c1 a c5, que es lo que hace falta para que
               se vea algo.
+            </li>
+            <li>
+              La comisión del agente (<strong>Comisiones → Comisión del agente</strong>) usa su
+              propia escala, la del contrato de agencia. Ya viene cargada; si se estuvo
+              probando con otros porcentajes, <strong>Restaurar el contrato de agencia</strong>{" "}
+              la deja como el contrato real.
             </li>
             <li>
               Revisar <strong>Clientes</strong>, <strong>Padrón</strong> y{" "}

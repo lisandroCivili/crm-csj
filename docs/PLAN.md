@@ -60,8 +60,8 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 0.5 | Datos de prueba auditables | ✅ `scripts/datos-prueba.ts` |
 | 0.6 | Laboratorio: base de desarrollo con datos ficticios | ✅ `/admin/laboratorio` |
 | 1 | Escalas de comisión por vendedor | ✅ commit `7dbc4ea` |
-| 2 | Renovaciones y pestaña Padrón | 🔨 migración `20260826212416_origen_de_titulo` |
-| 3 | Comisión del agente (Balta y Pedro) | ⬜ pendiente |
+| 2 | Renovaciones y pestaña Padrón | ✅ commit `c47735b` |
+| 3 | Comisión del agente (Balta y Pedro) | 🔨 migración `20260827_comision_agente` |
 | 4 | Caídas de clientes | ⬜ pendiente |
 | 5 | Gráficos del dashboard | ⬜ pendiente |
 | 6 | Formulario de venta | ⬜ bloqueada — falta la lista de campos de Balta |
@@ -87,6 +87,10 @@ Fase 6  Formulario      (bloqueada por definición de Balta)
 | Cómo cobra la renovación | **No** suma al volumen del tramo. Cobra el % de la cuota real; arriba de la cuota 5 no cobra nada. |
 | Comisión del agente | Sobre las cuotas pagas de sus ventas **y** las de su equipo, según la escala del contrato de agencia. |
 | Base de cálculo | El `Importe` del padrón **ya es la cuota pura**. Se aplica el % tal cual, sin descontar nada. |
+| A quién se le liquida la comisión del agente | **Un número por zona**, no por agente. Balta quiere ver el de Salta y el de Tucumán; no se reparte la producción entre él y Pedro. |
+| Objetivo de contratos del mes | **Tucumán 50, Salta 100.** Las renovaciones **sí** cuentan para el objetivo (a diferencia del tramo del vendedor, donde no suman). |
+| Gastos de representación del agente | **No se suman a la comisión**: van aparte, como balance. El importe se edita a mano porque el club lo aumenta por inflación. |
+| Contrato de agencia de Balta y Pedro | **Es el mismo para los dos.** Los porcentajes no difieren. |
 | Caída | 6 cuotas **consecutivas** impagas; en la 7ª ya está caída. |
 | Caída parcial / total | Parcial: el cliente tiene varios títulos y algunos están caídos. Total: todos. |
 | Caída y comisión | La caída **no** genera contracargo. Es información solamente. |
@@ -251,7 +255,9 @@ distintos para las cuotas c3 y c5, se la asignó a PEREZ ANA (prueba) y
 JUAN (prueba), que se quedó en la predeterminada. Lint, 46 tests y build
 pasan.
 
-### 🔨 Fase 2 — Renovaciones y pestaña Padrón
+### ✅ Fase 2 — Renovaciones y pestaña Padrón
+
+Commit `c47735b`. Validada por Lisandro el 27/08/2026.
 
 Los dos puntos tocaban `PadronImport`, así que fueron **una sola migración**:
 `20260826212416_origen_de_titulo`.
@@ -294,25 +300,53 @@ ahora comprueba el origen (paso 6) y sigue dando TODO OK.
 > verificación con el padrón real carga datos personales de miles de clientes y
 > se vació apenas terminó.
 
-### ⬜ Fase 3 — Comisión del agente
+### 🔨 Fase 3 — Comisión del agente
 
-Motor nuevo, hermano del de vendedores. La fase que más plata mueve.
+Motor nuevo, hermano del de vendedores. La fase que más plata mueve. Migración
+`20260827015729_comision_agente`.
 
-- `EscalaAgente` (`zonaId`, `cuotaDesde`, `cuotaHasta`, `porcentaje`) cargada con
-  el contrato de arriba. `ComisionAgentePeriodo` + `ComisionAgenteDetalle`,
-  espejo de los de vendedor, con el mismo cierre que congela porcentajes.
-- `lib/comisiones/calcularComisionAgente.ts`: función pura con tests. Recibe
-  **todas** las cuotas cobradas de la zona, sin filtrar por vendedor y **sin el
-  tope de c1-c5**. Aritmética en centavos, como el motor de vendedor.
+Qué se hizo:
+
+- **`EscalaAgente`** (`zonaId`, `cuotaDesde`, `cuotaHasta`, `porcentaje`), con
+  `ComisionAgentePeriodo` + `ComisionAgenteDetalle` como espejo de los de
+  vendedor y el mismo cierre que congela porcentajes. La unidad es **la zona**,
+  no el agente: Balta quiere el número de Salta y el de Tucumán, sin repartir la
+  producción entre él y Pedro.
+- **La migración siembra el contrato vigente** (25/20/10/4/2) en las dos zonas y
+  el objetivo mensual (`Zona.objetivoContratosMensual`: Salta 100, Tucumán 50).
+  Es un punto de partida para que el sistema arranque liquidando, no un
+  porcentaje hardcodeado: de ahí en más manda lo que esté cargado en la tabla, y
+  se edita en `/admin/comisiones/agente/escala`.
+- **`lib/comisiones/calcularComisionAgente.ts`**: función pura con 19 tests.
+  Recibe **todas** las cuotas cobradas de la zona, sin filtrar por vendedor y
+  **sin el tope de c1-c5**. Aritmética en centavos, como el motor de vendedor.
+  Agrupa **por tramo del contrato**, no por número de cuota: así se lee el
+  contrato y así se controla contra lo que liquida el club.
 - **No usa `CUOTAS_COMISIONABLES`**: esa constante llega hasta 5 y es del
-  vendedor. En el padrón real, 5.482 de 6.878 filas caen fuera de c1-c5 y hoy no
-  generan nada.
-- Si las ventas del mes no llegan al mínimo del contrato, advertencia visible (no
-  bloquea el cálculo).
-- Gastos de representación: campo manual con el valor base sugerido. El ajuste
-  por IPC queda **fuera de alcance** (necesita fuente externa).
-- Dashboard: comisión del club, lo que se le paga al equipo, y **la diferencia**,
-  que es el margen real de la agencia.
+  vendedor. En el escenario de prueba, 38 de 54 cuotas caen fuera de c1-c5 y son
+  $214.000 de los $564.000; en el padrón real son 5.482 de 6.878 filas.
+- **El objetivo cuenta ventas nuevas + renovaciones** (Balta, 27/08/2026) y se
+  mide por `Titulo.createdAt` con `origen != BASE`: un contrato cuenta en el mes
+  en que el sistema lo vio por primera vez, igual que `detectadaPagaAt` para las
+  cuotas. Si no se llega, advertencia visible; **no bloquea** el cálculo, porque
+  falta saber a qué esquema vuelve el club.
+- **Los gastos de representación NO se suman a la comisión**: van aparte, en el
+  balance del mes, con el importe editable a mano (el club lo ajusta por
+  inflación). El cálculo del IPC queda fuera de alcance.
+- **`/admin/comisiones/agente`**: renglón por tramo, balance del mes, contratos
+  contra el objetivo, y el detalle por número de cuota como auditoría (agregado
+  en la base, no trae miles de filas). Avisa cuando el período incluye la
+  primera importación de la zona, que sin tope de cuota queda muy inflado.
+- **Dashboard**: "Comisión del club" y "Margen de la agencia" (comisión del club
+  menos lo que se le paga al equipo; los gastos de representación no entran).
+- **Laboratorio**: botón para restaurar el contrato de agencia de la zona activa
+  después de haber estado probando porcentajes.
+
+Verificado en dos niveles: los 19 tests de la función pura, y un script ad-hoc
+contra la base local (no versionado) que reimporta los 7 padrones de prueba y
+compara el total del motor contra una cuenta hecha con aritmética propia —
+$564.000 sobre $7.800.000 cobrados—, más el cierre, el congelamiento y la
+reapertura. Lint, 74 tests y build pasan.
 
 ### ⬜ Fase 4 — Caídas de clientes
 
@@ -709,21 +743,137 @@ Desde **Laboratorio** → **Vaciar el padrón de SALTA**. Los vendedores de prue
 quedan (no molestan); si se quieren sacar, se dan de baja desde
 `/admin/vendedores`.
 
+### Fase 3 — Comisión del agente
+
+**Preparación**
+
+La base de desarrollo ya quedó con este escenario cargado. Si hiciera falta
+rearmarlo: `npm run dev`, entrar como `balta@crm-csj.local` /
+`CambiarEstePassword123` en zona **Salta**, y desde **Laboratorio** → **Vaciar
+el padrón de SALTA** → **Crear los vendedores de prueba** → **Cargar escala de
+ejemplo**, y después importar los 7 padrones de `docs/padrones-prueba/` en
+orden desde **Padrón → Importar padrón**.
+
+**1. Abrir la pantalla nueva**
+
+**Comisiones** → botón **Comisión del agente** (o directo
+`/admin/comisiones/agente`). Arriba tiene que verse:
+
+| Tarjeta | Valor |
+|---|---|
+| Comisión del club | **$564.000** |
+| Cuotas cobradas | **54** |
+| Se le paga al equipo | **$143.000** |
+| Margen de la agencia | **$421.000** |
+
+**2. La cuenta, renglón por renglón**
+
+La tabla "Cómo se llega al total" tiene que dar exactamente esto:
+
+| Tramo | Cuotas | Base | % | Comisión |
+|---|---|---|---|---|
+| c1 a c2 | 4 | $400.000 | 25 % | $100.000 |
+| c3 a c4 | 7 | $900.000 | 20 % | $180.000 |
+| c5 | 5 | $700.000 | 10 % | $70.000 |
+| c6 a c60 | 29 | $4.900.000 | 4 % | $196.000 |
+| c61 en adelante | 9 | $900.000 | 2 % | $18.000 |
+
+Suma: **$564.000** sobre **$7.800.000** cobrados. Se puede verificar con la
+calculadora: cada renglón es la base por su porcentaje.
+
+**Lo importante de este cuadro**: 38 de las 54 cuotas están arriba de la c5.
+Esas son las que el vendedor **no** cobra y el agente **sí**: son $214.000 de
+los $564.000. Hasta esta fase el sistema no las contaba en ningún lado.
+
+**3. El detalle por número de cuota**
+
+Abajo de todo, la tabla "Detalle por número de cuota" muestra cuánto se cobró de
+cada cuota puntual. Es de dónde sale la base de cada tramo: sumando las cuotas
+c6 a c60 de esa tabla tiene que dar los $4.900.000 del renglón.
+
+**4. Los contratos del mes y el objetivo**
+
+En la tarjeta derecha: **2 ventas nuevas**, **1 renovación**, **3 de 100**, con
+el cartel **"Por debajo del objetivo"** y un aviso arriba explicándolo. Los 3
+son `PT-0001`, `PT-0002` (ventas nuevas) y `PT-0006` (la renovación de la Fase
+2): la renovación cuenta para el objetivo aunque no sea una venta.
+
+Los 5 títulos `BASE` no cuentan: ya venían de antes del sistema.
+
+**5. Cambiar el contrato mueve el número**
+
+**Contrato** (arriba a la derecha) → cambiar el **2** del tramo `61 en adelante`
+por **5** → **Guardar**. Volver: el último renglón pasa de $18.000 a $45.000 y
+el total a **$591.000**.
+
+Antes de seguir hay que dejarlo como estaba (2), o usar **Laboratorio →
+Restaurar el contrato de agencia**; si no, los números de los pasos que siguen
+no van a coincidir.
+
+**6. El objetivo es por zona**
+
+En la misma pantalla del contrato, **Objetivo del mes** dice **100** en Salta.
+Cambiando de zona a Tucumán (menú de arriba) tiene que decir **50**. Es
+editable.
+
+**7. Los gastos de representación NO suman a la comisión**
+
+En la liquidación, el campo **Gastos de representación** al pie de la tabla:
+escribir **215000** y salir del campo. Tiene que pasar esto:
+
+- la tarjeta **Comisión del club** sigue en **$564.000** (no se movió),
+- el **Balance del mes** al pie pasa a **$636.000** ($564.000 + $215.000 −
+  $143.000),
+- la tarjeta **Margen de la agencia** sigue en **$421.000**.
+
+Es lo que pediste: el reintegro se ve, pero no se mezcla con la comisión.
+
+**8. Cerrar congela**
+
+**Cerrar el período** → confirma con el total. Queda el badge **Cerrado**, el
+campo de gastos deshabilitado y el botón cambia a **Reabrir**. Para comprobar
+que quedó congelado: ir al **Contrato**, cambiar un porcentaje, volver — el
+total **no** se mueve. **Reabrir** y el número se recalcula con el porcentaje
+nuevo.
+
+**9. El dashboard**
+
+**Dashboard**: dos tarjetas nuevas, **Comisión del club** ($564.000) y **Margen
+de la agencia** ($421.000), las dos linkeadas a la pantalla del agente.
+
+**10. Ojo con el aviso de línea base**
+
+Arriba de la liquidación hay un cartel gris: *"Este mes incluye la primera
+importación de la zona"*. Es correcto que aparezca en esta prueba —los 7
+padrones se importaron el mismo día— y avisa que ese total está inflado. En
+producción sólo va a salir el primer mes.
+
+**Borrar los datos de prueba**
+
+**Laboratorio** → **Vaciar el padrón de SALTA**. Los períodos de comisión del
+agente que hayan quedado cerrados no se borran con eso; si molestan, se reabren
+desde la pantalla.
+
 ---
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Lisandro validó la Fase 1 el 26/08/2026. La Fase 2
-(renovaciones y pestaña Padrón) está construida y probada de punta a punta
-contra la base local; falta que la valide siguiendo la guía de arriba. Si da
-OK, sigue la **Fase 3** (comisión del agente), que ya tiene todas sus
-dependencias listas y es la que más plata mueve.
+**Dónde retomar:** Lisandro validó la Fase 2 el 27/08/2026. La Fase 3 (comisión
+del agente) está construida y verificada contra la base local; falta que la
+valide siguiendo la guía de arriba. Si da OK, sigue la **Fase 4** (caídas de
+clientes), que es independiente y sólo necesita los padrones cargados.
 
 **Cosas que conviene saber:**
 
 - **La base de desarrollo tiene los 7 padrones de prueba importados** en Salta,
-  con los orígenes ya resueltos (`PT-0006` es la renovación). Para empezar de
-  cero, vaciar desde `/admin/laboratorio`.
+  con los orígenes ya resueltos (`PT-0006` es la renovación) y sin ningún
+  período de comisión del agente guardado. Para empezar de cero, vaciar desde
+  `/admin/laboratorio`.
+- **La escala del contrato de agencia ya está cargada en las dos zonas**: la
+  sembró la migración `20260827015729_comision_agente`, junto con el objetivo
+  mensual (Salta 100, Tucumán 50). Si se estuvo probando con otros porcentajes,
+  **Laboratorio → Restaurar el contrato de agencia** la deja como el contrato
+  real.
 - **Correr `scripts/verificar-padron.ts` mete el padrón real en la base de
   desarrollo**, con nombre, DNI y domicilio de miles de clientes reales. Es el
   chequeo obligatorio de cualquier fase que toque la importación, pero después
@@ -771,14 +921,16 @@ Ninguno bloquea el avance, salvo el último.
 
 1. **DNI y código de vendedor de Balta y Pedro**, para crear sus fichas reales.
    Mientras tanto se usan datos ficticios marcados.
-2. **Qué es "el esquema anterior"** al que vuelve el contrato si no se llega a los
-   50 contratos mensuales. Por ahora la Fase 3 sólo avisa.
-3. **¿Balta tiene su propio contrato de agencia?** El que se pasó es de Pedro
-   Antonio Toledo. Si los porcentajes difieren, `EscalaAgente` ya queda por zona
-   y alcanza.
-4. **Gastos de representación**: hoy se cargan a mano. ¿Alcanza, o quiere el
-   ajuste bimestral por IPC calculado?
-5. **Campos finales del formulario de venta** — bloquea la Fase 6.
-6. En el padrón, Pedro aparece bajo tres alias (`TOLEDO PEDRO`, `TOLEDO PEDRO A.`,
+2. **Qué es "el esquema anterior"** al que vuelve el contrato si no se llega al
+   objetivo de contratos del mes. Por ahora la Fase 3 sólo avisa y liquida con
+   la escala completa igual.
+3. **Campos finales del formulario de venta** — bloquea la Fase 6.
+4. En el padrón, Pedro aparece bajo tres alias (`TOLEDO PEDRO`, `TOLEDO PEDRO A.`,
    `TOLEDO PEDRO ANTONIO`). Con la Fase 0 hecha, esos títulos se le pueden
    imputar a su ficha de agente. Confirmar que corresponde.
+
+Respondidos el 27/08/2026 (ver [Definiciones confirmadas](#definiciones-confirmadas-por-balta)):
+el contrato de agencia es el mismo para Balta y para Pedro; la comisión del
+agente se calcula por zona y no se reparte entre ellos; los gastos de
+representación se cargan a mano y van aparte de la comisión; el objetivo de
+contratos es 50 en Tucumán y 100 en Salta, y las renovaciones cuentan.

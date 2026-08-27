@@ -3,6 +3,7 @@ import {
   BadgeDollarSign,
   ChevronLeft,
   ChevronRight,
+  Landmark,
   Lock,
   Percent,
   ScrollText,
@@ -76,6 +77,12 @@ export default async function ComisionesPage({ searchParams }: PageProps<"/admin
         descripcion="Lo que le corresponde a cada vendedor por las cuotas que el padrón mostró cobradas en el mes."
         acciones={
           <>
+            <Button variant="outline" asChild>
+              <Link href={`/admin/comisiones/agente?periodo=${periodo}`}>
+                <Landmark className="size-4" />
+                Comisión del agente
+              </Link>
+            </Button>
             <Button variant="outline" asChild>
               <Link href="/admin/comisiones/escalas">
                 <Percent className="size-4" />

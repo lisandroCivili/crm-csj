@@ -173,3 +173,36 @@ export async function cargarEscalaDeEjemplo(): Promise<ResultadoVaciado> {
   revalidatePath("/admin/comisiones/escalas");
   return { ok: true };
 }
+
+/**
+ * Deja la escala del contrato de agencia de la zona activa como la sembro la
+ * migracion (adenda del 13/01/2023). Sirve para volver al contrato real despues
+ * de haber estado probando porcentajes.
+ *
+ * Reemplaza los tramos de esta zona; la otra no se toca.
+ */
+export async function restaurarContratoAgencia(): Promise<ResultadoVaciado> {
+  soloEnDesarrollo();
+  await requireAdmin();
+  const zonaId = await requireZonaActivaId();
+
+  const TRAMOS = [
+    { cuotaDesde: 1, cuotaHasta: 2, porcentaje: 25 },
+    { cuotaDesde: 3, cuotaHasta: 4, porcentaje: 20 },
+    { cuotaDesde: 5, cuotaHasta: 5, porcentaje: 10 },
+    { cuotaDesde: 6, cuotaHasta: 60, porcentaje: 4 },
+    { cuotaDesde: 61, cuotaHasta: null, porcentaje: 2 },
+  ];
+
+  await db.$transaction(async (tx) => {
+    await tx.escalaAgente.deleteMany({ where: { zonaId } });
+    await tx.escalaAgente.createMany({
+      data: TRAMOS.map((tramo) => ({ zonaId, ...tramo })),
+    });
+  });
+
+  revalidatePath("/admin/laboratorio");
+  revalidatePath("/admin/comisiones/agente");
+  revalidatePath("/admin/comisiones/agente/escala");
+  return { ok: true };
+}

@@ -2,10 +2,11 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { AlertCircle, Check, Percent, Trash2, UserPlus } from "lucide-react";
+import { AlertCircle, Check, Landmark, Percent, Trash2, UserPlus } from "lucide-react";
 import {
   cargarEscalaDeEjemplo,
   crearVendedoresDePrueba,
+  restaurarContratoAgencia,
   vaciarPadron,
   type ResultadoVaciado,
 } from "@/app/admin/laboratorio/actions";
@@ -102,6 +103,10 @@ export function HerramientasLaboratorio({ zona }: { zona: string }) {
     cargarEscalaDeEjemplo,
     {}
   );
+  const [estadoContrato, accionContrato] = useActionState<ResultadoVaciado, FormData>(
+    restaurarContratoAgencia,
+    {}
+  );
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -138,11 +143,24 @@ export function HerramientasLaboratorio({ zona }: { zona: string }) {
         </Boton>
       </form>
 
+      <form action={accionContrato}>
+        <Boton type="submit" variant="outline">
+          <Landmark className="size-4" />
+          Restaurar el contrato de agencia
+        </Boton>
+      </form>
+
       {estadoVendedores.ok ? (
         <span className="text-sm text-success">Vendedores de prueba listos.</span>
       ) : null}
       {estadoEscala.ok ? (
         <span className="text-sm text-success">Escala de ejemplo cargada (c1 a c5).</span>
+      ) : null}
+      {estadoContrato.ok ? (
+        <span className="text-sm text-success">Contrato de agencia restaurado.</span>
+      ) : null}
+      {estadoContrato.error ? (
+        <span className="text-sm text-destructive">{estadoContrato.error}</span>
       ) : null}
       {estadoVendedores.error ? (
         <span className="text-sm text-destructive">{estadoVendedores.error}</span>

@@ -4,6 +4,8 @@ import {
   ClipboardList,
   Coins,
   FileSpreadsheet,
+  Landmark,
+  Scale,
   ScrollText,
   TrendingUp,
   UserSquare,
@@ -17,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { CUOTAS_COMISIONABLES } from "@/lib/comisiones/constantes";
 import { obtenerLiquidacion, obtenerLiquidacionVendedor } from "@/lib/comisiones/liquidacion";
+import { obtenerLiquidacionAgente } from "@/lib/comisiones/liquidacionAgente";
 import { etiquetaPeriodo, periodoActual } from "@/lib/comisiones/periodo";
 import { db } from "@/lib/db";
 import { pesos } from "@/lib/formato";
@@ -55,6 +58,7 @@ export default async function AdminDashboardPage({
     cuotasPagasPorMes,
     topVendedores,
     liquidacion,
+    comisionAgente,
     fichaPropia,
   ] = await Promise.all([
     db.lead.count({ where: { zonaId, estado: "PENDIENTE" } }),
@@ -88,15 +92,21 @@ export default async function AdminDashboardPage({
       take: 5,
     }),
     obtenerLiquidacion({ zonaId, periodo }),
+    obtenerLiquidacionAgente({ zonaId, periodo }),
     getVendedorDelAdmin(),
   ]);
+
+  // Lo que el club le paga a la agencia menos lo que la agencia le paga a su
+  // equipo. Los gastos de representacion del agente no entran: son un reintegro
+  // aparte, no ganancia (Balta, 27/08/2026).
+  const margenAgencia = comisionAgente.totalComision - liquidacion.totales.total;
 
   // Balta y Pedro venden ademas de administrar. Si tienen ficha en esta zona, lo
   // primero que quieren ver es lo suyo, no el total del equipo.
   //
   // Ojo: esto es lo que cobran por sus propios titulos, con la escala de
   // vendedor. Lo que el club les paga como agentes —sobre toda la produccion,
-  // con la escala del contrato de agencia— es otro numero y todavia no existe.
+  // con la escala del contrato de agencia— es la tarjeta "Comisión del club".
   const comisionPropia = fichaPropia
     ? await obtenerLiquidacionVendedor({
         vendedorId: fichaPropia.id,
@@ -212,6 +222,22 @@ export default async function AdminDashboardPage({
           }`}
           icono={BadgeDollarSign}
           href="/admin/comisiones"
+        />
+        <StatCard
+          etiqueta="Comisión del club"
+          valor={pesos(comisionAgente.totalComision)}
+          detalle={`lo que el club le paga a la agencia en ${etiquetaPeriodo(periodo)}`}
+          icono={Landmark}
+          tono="exito"
+          href="/admin/comisiones/agente"
+        />
+        <StatCard
+          etiqueta="Margen de la agencia"
+          valor={pesos(margenAgencia)}
+          detalle="comisión del club menos lo del equipo"
+          icono={Scale}
+          tono={margenAgencia >= 0 ? "marca" : "atencion"}
+          href="/admin/comisiones/agente"
         />
         <StatCard
           etiqueta="Clientes en padrón"

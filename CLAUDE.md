@@ -59,7 +59,8 @@ Vocabulario del dominio (aparece tal cual en el padrón y en el código):
   crea una cuenta de vendedor aparte. Cuál aplica en cada momento lo resuelve
   `getVendedorDelAdmin()` según la zona activa. Ojo: lo que cobran así es su comisión **como
   vendedores**; lo que el club les paga **como agentes** —sobre toda la producción, con la escala
-  del contrato de agencia— es otro número y todavía no está implementado.
+  del contrato de agencia— es otro número, y se calcula aparte (ver
+  [Comisión del agente](#comisión-del-agente)).
 - **La zona filtra todo.** El admin elige Salta o Tucumán después de loguearse y esa elección
   define qué ve y qué carga. Los vendedores tienen zona fija. Toda query debe estar scopeada.
 
@@ -117,6 +118,35 @@ lugar donde un bug se traduce en plata mal pagada.
   **Nunca hardcodearlos.**
 - **Cerrar el período congela los porcentajes** en `ComisionDetalle`. Un período cerrado no se
   recalcula aunque después cambie la escala o entre otro padrón; se puede reabrir a mano.
+
+## Comisión del agente
+
+Lo que **el club le paga a la agencia**, distinto de lo que la agencia le paga a sus vendedores.
+Confirmado por Balta el 2026-08-27. Motor en `lib/comisiones/calcularComisionAgente.ts`, también
+función pura y testeada.
+
+Misma materia prima que la del vendedor (las cuotas que el padrón mostró cobradas) y mismo
+devengamiento (`detectadaPagaAt`), pero otras reglas:
+
+- **Se calcula por zona, no por agente.** Balta quiere el número de Salta y el de Tucumán; no se
+  reparte la producción entre él y Pedro. Por eso `ComisionAgentePeriodo` tiene `zonaId`.
+- **Entran todas las cuotas de la zona**, sin filtrar por vendedor: también las de títulos cuyo
+  `NomVen` no se pudo mapear. Al agente le pagan por lo que cobra la agencia entera.
+- **No hay tope de cuota 5.** Ese tope es del vendedor. `CUOTAS_COMISIONABLES` no se usa acá: en
+  el padrón real la mayor parte del volumen son cuotas altas que el vendedor ya no cobra, y son
+  el grueso del margen de la agencia.
+- **Un solo eje: el número de cuota.** El volumen del mes no mueve el porcentaje. Los tramos
+  salen de `EscalaAgente` (editable en `/admin/comisiones/agente/escala`); la migración
+  `20260827015729_comision_agente` siembra el contrato vigente (25/20/10/4/2) como punto de
+  partida. **Nunca hardcodearlos** en el cálculo.
+- **El objetivo de contratos es por zona** (`Zona.objetivoContratosMensual`: Salta 100, Tucumán
+  50) y cuenta **ventas nuevas + renovaciones** — al revés que el tramo del vendedor, donde la
+  renovación no suma. Se mide por `Titulo.createdAt` con `origen != BASE`. Si no se llega, se
+  avisa pero se liquida igual: falta saber a qué esquema vuelve el club.
+- **Los gastos de representación no son comisión**: se cargan a mano, se muestran aparte y no
+  entran en el total ni en el margen. El club los ajusta por inflación.
+- Cerrar congela los porcentajes y el objetivo en `ComisionAgenteDetalle`, igual que en el
+  vendedor.
 
 ## Stack
 
