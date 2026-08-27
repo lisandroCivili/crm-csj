@@ -62,7 +62,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 1 | Escalas de comisión por vendedor | ✅ commit `7dbc4ea` |
 | 2 | Renovaciones y pestaña Padrón | ✅ commit `c47735b` |
 | 3 | Comisión del agente (Balta y Pedro) | ✅ commit `f81e22e` |
-| 4 | Caídas de clientes | 🔨 en curso |
+| 4 | Caídas de clientes | 🔨 commit `23d97fe` |
 | 5 | Gráficos del dashboard | ⬜ pendiente |
 | 6 | Formulario de venta | ⬜ bloqueada — falta la lista de campos de Balta |
 
@@ -355,7 +355,7 @@ reapertura. Lint, 74 tests y build pasan.
 
 ### 🔨 Fase 4 — Caídas de clientes
 
-Migración `20260827023523_caidas_de_titulos`.
+Commit `23d97fe`. Migración `20260827023523_caidas_de_titulos`.
 
 > **Aclaración para Balta**: el sistema no necesita "cargar 7 padrones" como
 > mecanismo; necesita **6 cuotas consecutivas de histórico por título**. Como cada
