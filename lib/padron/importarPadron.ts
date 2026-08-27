@@ -1,5 +1,7 @@
 import type { FilaPadron } from "@/lib/excel/parsePadron";
+import type { TituloOrigen } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
+import { cuotasInicialesDelArchivo, origenDeTituloNuevo } from "./origenTitulo";
 
 /**
  * IMPORTACION DEL PADRON
@@ -13,6 +15,9 @@ import { db } from "@/lib/db";
  * (tituloId, numeroCuota). Reimportar el mismo archivo no duplica ni altera
  * nada, y la numeracion de cuotas continua sola desde donde iba sin que el
  * sistema tenga que adivinar.
+ *
+ * De paso es el unico momento en que se puede saber COMO entro cada titulo:
+ * comparando contra lo que ya habia. Ver `origenTitulo.ts`.
  */
 
 export type ResumenImportacion = {
@@ -26,6 +31,12 @@ export type ResumenImportacion = {
   cuotasSinCambios: number;
   /** Cuotas que pasaron de impagas a pagadas: base del calculo de comisiones. */
   cuotasRecienPagadas: number;
+  /** De los titulos nuevos, los que entraron con cuota 1. */
+  titulosNuevosVenta: number;
+  /** De los titulos nuevos, los que entraron con cuota mayor a 1. */
+  titulosNuevosRenovacion: number;
+  /** Primera importacion de la zona: todos sus titulos quedan como BASE. */
+  esLineaBase: boolean;
   /** Nombres de NomVen que todavia no estan vinculados a un vendedor. */
   nomVenSinMapear: string[];
 };
@@ -95,10 +106,17 @@ export async function importarPadron({
     cuotasActualizadas: 0,
     cuotasSinCambios: 0,
     cuotasRecienPagadas: 0,
+    titulosNuevosVenta: 0,
+    titulosNuevosRenovacion: 0,
+    esLineaBase: false,
     nomVenSinMapear: [],
   };
 
   if (filas.length === 0) return resumen;
+
+  // Sin padron anterior no hay con que comparar: todo lo que traiga el primero
+  // es historia previa al sistema, no produccion del mes.
+  resumen.esLineaBase = (await db.padronImport.count({ where: { zonaId } })) === 0;
 
   // --- 1. NomVen -> vendedor ------------------------------------------------
   // Nunca se agrupa por el texto crudo del padron: se resuelve por alias.
@@ -177,10 +195,27 @@ export async function importarPadron({
   });
   const tituloPorNumTit = new Map(titulosExistentes.map((t) => [t.numTit, t]));
 
+  // El origen se decide una sola vez, con la cuota mas baja que trae el archivo
+  // que lo estrena. Los titulos que ya existen no se tocan: si se recalculara
+  // en cada importacion, un titulo pasaria de venta nueva a renovacion apenas
+  // el padron dejara de traer su cuota 1.
+  const cuotasIniciales = cuotasInicialesDelArchivo(filas);
+  const estrenoPorNumTit = new Map<string, { origen: TituloOrigen; cuotaInicial: number }>();
+
   for (const [numTit, fila] of titulosDelArchivo) {
     const existente = tituloPorNumTit.get(numTit);
     if (!existente) {
       resumen.titulosNuevos++;
+
+      const cuotaInicial = cuotasIniciales.get(numTit)!;
+      const origen = origenDeTituloNuevo({
+        cuotaInicial,
+        esLineaBase: resumen.esLineaBase,
+      });
+      estrenoPorNumTit.set(numTit, { origen, cuotaInicial });
+
+      if (origen === "VENTA_NUEVA") resumen.titulosNuevosVenta++;
+      if (origen === "RENOVACION") resumen.titulosNuevosRenovacion++;
       continue;
     }
     const cambio =
@@ -295,10 +330,16 @@ export async function importarPadron({
           importadoPorUserId: lote.importadoPorUserId,
           filasLeidas: filas.length,
           clientesNuevos: resumen.clientesNuevos,
+          clientesActualizados: resumen.clientesActualizados,
           titulosNuevos: resumen.titulosNuevos,
+          titulosActualizados: resumen.titulosActualizados,
           cuotasNuevas: resumen.cuotasNuevas,
           cuotasActualizadas: resumen.cuotasActualizadas,
+          cuotasSinCambios: resumen.cuotasSinCambios,
           cuotasReciePagadas: resumen.cuotasRecienPagadas,
+          titulosNuevosVenta: resumen.titulosNuevosVenta,
+          titulosNuevosRenovacion: resumen.titulosNuevosRenovacion,
+          esLineaBase: resumen.esLineaBase,
         },
         select: { id: true },
       });
@@ -331,6 +372,8 @@ export async function importarPadron({
         nomDistribucion: string | null;
         rescate: number | null;
         cuotasPagas: number | null;
+        origen: TituloOrigen;
+        cuotaInicial: number;
         zonaId: number;
         vistoEnPadronAt: Date;
         ultimoPadronImportId: string;
@@ -354,9 +397,19 @@ export async function importarPadron({
 
         const existente = tituloPorNumTit.get(numTit);
         if (existente) {
+          // `origen` y `cuotaInicial` quedan afuera a proposito: se sellan al
+          // crear el titulo y no se recalculan nunca mas.
           await tx.titulo.update({ where: { id: existente.id }, data: datos });
         } else {
-          titulosACrear.push({ numTit, clienteId, zonaId, ...datos });
+          const estreno = estrenoPorNumTit.get(numTit)!;
+          titulosACrear.push({
+            numTit,
+            clienteId,
+            zonaId,
+            origen: estreno.origen,
+            cuotaInicial: estreno.cuotaInicial,
+            ...datos,
+          });
         }
       }
 

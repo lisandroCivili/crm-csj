@@ -56,11 +56,11 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 
 | # | Fase | Estado |
 |---|---|---|
-| 0 | Balta y Pedro también son vendedores | 🔨 commit `3a06dce` |
-| 0.5 | Datos de prueba auditables | 🔨 `scripts/datos-prueba.ts` |
-| 0.6 | Laboratorio: base de desarrollo con datos ficticios | 🔨 `/admin/laboratorio` |
-| 1 | Escalas de comisión por vendedor | 🔨 migración `20260826153914_escalas_por_vendedor` |
-| 2 | Renovaciones y pestaña Padrón | ⬜ pendiente |
+| 0 | Balta y Pedro también son vendedores | ✅ commit `3a06dce` |
+| 0.5 | Datos de prueba auditables | ✅ `scripts/datos-prueba.ts` |
+| 0.6 | Laboratorio: base de desarrollo con datos ficticios | ✅ `/admin/laboratorio` |
+| 1 | Escalas de comisión por vendedor | ✅ commit `7dbc4ea` |
+| 2 | Renovaciones y pestaña Padrón | 🔨 migración `20260826212416_origen_de_titulo` |
 | 3 | Comisión del agente (Balta y Pedro) | ⬜ pendiente |
 | 4 | Caídas de clientes | ⬜ pendiente |
 | 5 | Gráficos del dashboard | ⬜ pendiente |
@@ -116,7 +116,7 @@ a sus vendedores.
 
 ## Las fases en detalle
 
-### 🔨 Fase 0 — Balta y Pedro también son vendedores
+### ✅ Fase 0 — Balta y Pedro también son vendedores
 
 Commit `3a06dce`. Verificada en la app con 9 chequeos automáticos, más lint,
 46 tests, `tsc` y build.
@@ -146,7 +146,7 @@ Qué se hizo:
 > Ojo: lo que se ve ahí es la comisión **como vendedor**. Lo que el club les paga
 > **como agentes** es la Fase 3.
 
-### 🔨 Fase 0.5 — Datos de prueba auditables
+### ✅ Fase 0.5 — Datos de prueba auditables
 
 Antes de tocar comisiones hace falta un juego de datos que Lisandro pueda
 verificar con una calculadora. El padrón real tiene 6.878 filas y cuotas de
@@ -172,7 +172,7 @@ Hecho en `scripts/datos-prueba.ts`, con subcomandos `cargar` y `borrar`.
 Verificado: el motor devuelve exactamente lo mismo que la cuenta a mano
 ($55.000 y $44.000 en el escenario por defecto).
 
-### 🔨 Fase 0.6 — Laboratorio: base de desarrollo con datos ficticios
+### ✅ Fase 0.6 — Laboratorio: base de desarrollo con datos ficticios
 
 Trabajar en desarrollo contra el padrón real era incómodo (6.878 filas, cuotas de
 $107.293) y además metía datos personales de miles de clientes reales en una base
@@ -205,7 +205,7 @@ otro del mismo cliente que sigue pagando, para que quede como **caída parcial**
 Verificado end-to-end: vaciar, crear vendedores, importar los 7 padrones y
 liquidar. Los totales se controlaron a mano y coinciden.
 
-### 🔨 Fase 1 — Escalas de comisión por vendedor
+### ✅ Fase 1 — Escalas de comisión por vendedor
 
 Se mantienen los dos ejes; lo que cambia es que hay varias escalas y cada
 vendedor se asigna a una. **El motor no se tocó**: `calcularComisionPeriodo`
@@ -251,21 +251,48 @@ distintos para las cuotas c3 y c5, se la asignó a PEREZ ANA (prueba) y
 JUAN (prueba), que se quedó en la predeterminada. Lint, 46 tests y build
 pasan.
 
-### ⬜ Fase 2 — Renovaciones y pestaña Padrón
+### 🔨 Fase 2 — Renovaciones y pestaña Padrón
 
-Dos puntos que tocan `PadronImport`: **una sola migración para los dos**.
+Los dos puntos tocaban `PadronImport`, así que fueron **una sola migración**:
+`20260826212416_origen_de_titulo`.
 
-- Enum `TituloOrigen { VENTA_NUEVA, RENOVACION, BASE }`; `Titulo.origen` y
-  `Titulo.cuotaInicial`.
-- `PadronImport` gana `clientesActualizados`, `titulosActualizados`,
-  `cuotasSinCambios` (hoy se calculan pero **no se guardan**), más
-  `titulosNuevosVenta`, `titulosNuevosRenovacion` y `esLineaBase`.
-- Regla: primera importación de la zona → todo `BASE`. Después, título que no
-  existe → cuota mínima 1 = `VENTA_NUEVA`, > 1 = `RENOVACION`.
-- **El cálculo no cambia**: la renovación no tiene cuota 1, así que no suma al
-  tramo, y sus cuotas cobran el % de la cuota real dentro del tope. Ya funciona
-  así; se cubre con un test para que no se rompa por accidente.
-- `/admin/padron` muestra el mismo panel que el preview de análisis.
+Qué se hizo:
+
+- **Enum `TituloOrigen { VENTA_NUEVA, RENOVACION, BASE }`**, con `Titulo.origen`
+  y `Titulo.cuotaInicial`. La regla vive en `lib/padron/origenTitulo.ts`, aparte
+  y como función pura para poder testearla sin base: primera importación de la
+  zona → todo `BASE`; después, un título que no existía entra por su cuota más
+  baja del archivo, y esa cuota decide (1 = venta nueva, > 1 = renovación).
+- **El origen se sella una sola vez**, cuando el título se crea. No se recalcula
+  en cada importación: si se hiciera, un título pasaría de venta nueva a
+  renovación apenas el padrón dejara de traer su cuota 1.
+- **`PadronImport` guarda todo lo que ya calculaba y tiraba**:
+  `clientesActualizados`, `titulosActualizados`, `cuotasSinCambios`, más
+  `titulosNuevosVenta`, `titulosNuevosRenovacion` y `esLineaBase`. La migración
+  hace el backfill: `cuotaInicial` sale de la cuota más baja conocida de cada
+  título, y `esLineaBase` queda en true para la primera importación de cada zona.
+- **El panel de cifras se compartió** (`components/padron/panel-resumen.tsx`):
+  el mismo que muestra el preview de análisis aparece ahora en `/admin/padron`
+  para la última importación, con "Ventas nuevas" y "Renovaciones" destacadas.
+  Antes esos números se veían una sola vez y se perdían al confirmar. En el
+  histórico, cada fila muestra el desglose `N vta · N renov`.
+- **El origen también se ve por título** en la ficha del cliente, como badge
+  ("venta nueva · entró en la cuota 1").
+- **El cálculo de comisiones no cambió**: la renovación no trae cuota 1, así que
+  no mueve el tramo, y sus cuotas cobran el % de la cuota real dentro del tope.
+  Eso ya funcionaba solo, porque el motor únicamente mira números de cuota; se
+  agregaron tres tests (`describe("renovaciones")`) para que siga siendo así.
+
+Verificado en tres niveles: los tests de la función pura y del motor (55 en
+total, 9 nuevos), el escenario de padrones de prueba importado de punta a punta contra la
+base local (el padrón 01 queda como línea base con 5 títulos, el 02 trae 2
+ventas nuevas y el 04 la renovación PT-0006 por la cuota 5), y
+`scripts/verificar-padron.ts` contra el padrón real de 6.878 filas, que además
+ahora comprueba el origen (paso 6) y sigue dando TODO OK.
+
+> La base de desarrollo quedó otra vez con los 7 padrones ficticios: la
+> verificación con el padrón real carga datos personales de miles de clientes y
+> se vació apenas terminó.
 
 ### ⬜ Fase 3 — Comisión del agente
 
@@ -582,15 +609,126 @@ rechazarlo por tener 1 vendedor asignado.
 
 ---
 
+### Fase 2 — Renovaciones y pestaña Padrón
+
+Esta se prueba con los padrones de prueba, porque **la detección de renovaciones
+sólo se ve importando archivos sucesivos**: hace falta que un título no esté en
+un padrón y aparezca en el siguiente.
+
+**Preparación**
+
+```bash
+# terminal 1 — se deja abierta
+npm run dev
+```
+
+Si `docs/padrones-prueba/` está vacía, generarlos una vez:
+
+```bash
+npx tsx scripts/generar-padrones-prueba.ts
+```
+
+Entrar a http://localhost:3000/login con `balta@crm-csj.local` /
+`CambiarEstePassword123`, zona **Salta**.
+
+**1. Empezar de cero**
+
+Menú **Laboratorio** → **Vaciar el padrón de SALTA** (pide escribir `SALTA`) →
+**Crear los vendedores de prueba** → **Cargar escala de ejemplo**.
+
+**2. El primer padrón es la línea base** — *esto es lo nuevo*
+
+**Padrón → Importar padrón** → `padron-prueba-01-2026-06.xlsx` → **Analizar**.
+
+En el panel de "Qué va a pasar si confirmás" tiene que verse:
+
+- **Títulos nuevos: 5**
+- **Ventas nuevas: —** y **Renovaciones: —**, las dos con el texto
+  *"sin padrón anterior"*,
+- un aviso abajo: **"Es el primer padrón de la zona"**, explicando que sus 5
+  títulos quedan como históricos.
+
+Confirmar. Eso es lo correcto y es la parte fácil de equivocar: si el primer
+padrón marcara "5 ventas nuevas", el sistema estaría inventando producción que
+en realidad tiene años.
+
+**3. El segundo trae ventas nuevas de verdad**
+
+Importar `padron-prueba-02-2026-07.xlsx`. Ahora el panel tiene que decir
+**Ventas nuevas: 2** y **Renovaciones: 0**, sin el aviso de línea base. Son
+`PT-0001` y `PT-0002`, que entran con cuota 1.
+
+**4. La renovación**
+
+Importar `padron-prueba-03-2026-08.xlsx` (no trae títulos nuevos: 0 y 0) y
+después `padron-prueba-04-2026-09.xlsx`.
+
+El cuarto tiene que dar **Ventas nuevas: 0** y **Renovaciones: 1**. Es
+`PT-0006`, de FABIO PRUEBA: el club no lo listaba en junio, julio ni agosto, y
+en septiembre lo manda con las cuotas 5, 6 y 7. Entra por la 5, así que **no es
+una venta del mes**.
+
+**5. Queda registrado** — *esto es lo nuevo*
+
+Ir a **Padrón**. Antes esta pantalla era sólo una lista; ahora arriba está el
+panel completo de la **última importación**, con las mismas cifras que se vieron
+al analizarla. En la tabla de abajo, la columna **Títulos** muestra el desglose
+de cada archivo:
+
+| Archivo | Títulos |
+|---|---|
+| `padron-prueba-01…` | +5 · línea base |
+| `padron-prueba-02…` | +2 · 2 vta · 0 renov |
+| `padron-prueba-03…` | +0 · 0 vta · 0 renov |
+| `padron-prueba-04…` | +1 · 0 vta · 1 renov |
+
+**6. El origen, título por título**
+
+**Clientes** → `FABIO PRUEBA` → en la tarjeta del título `PT-0006` tiene que
+haber un badge **"renovación · entró en la cuota 5"**. Comparar con
+`ANA PRUEBA` (`PT-0001`), que dice **"venta nueva · entró en la cuota 1"**, y
+con `CARLA PRUEBA` (`PT-0003`), que dice **"ya venía del padrón"**.
+
+**7. La comisión no cambió**
+
+Menú **Comisiones**. Los totales tienen que seguir siendo los mismos que en la
+Fase 0.6, porque la renovación no altera el cálculo: no suma al tramo (no trae
+cuota 1) y sus cuotas cobran el porcentaje de la cuota real. Si se importan los
+7 padrones, PRUEBA VENDEDOR UNO da **$105.000** y DOS, **$38.000**.
+
+**8. Reimportar sigue sin cambiar nada**
+
+Volver a importar `padron-prueba-04-2026-09.xlsx`. Tiene que avisar
+**"Este padrón no trae novedades"**, con títulos nuevos en 0 y todas sus cuotas
+en "ya cargadas". El origen de `PT-0006` no se recalcula: sigue siendo
+renovación.
+
+**Borrar los datos de prueba**
+
+Desde **Laboratorio** → **Vaciar el padrón de SALTA**. Los vendedores de prueba
+quedan (no molestan); si se quieren sacar, se dan de baja desde
+`/admin/vendedores`.
+
+---
+
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** la Fase 1 (escalas de comisión por vendedor) está
-construida y probada de punta a punta contra la base local; falta que
-Lisandro la valide siguiendo la guía de arriba. Si da OK, sigue la Fase 2
-(renovaciones y pestaña Padrón) o la Fase 3 (comisión del agente), que ya no
-tienen dependencias pendientes.
+**Dónde retomar:** Lisandro validó la Fase 1 el 26/08/2026. La Fase 2
+(renovaciones y pestaña Padrón) está construida y probada de punta a punta
+contra la base local; falta que la valide siguiendo la guía de arriba. Si da
+OK, sigue la **Fase 3** (comisión del agente), que ya tiene todas sus
+dependencias listas y es la que más plata mueve.
 
 **Cosas que conviene saber:**
+
+- **La base de desarrollo tiene los 7 padrones de prueba importados** en Salta,
+  con los orígenes ya resueltos (`PT-0006` es la renovación). Para empezar de
+  cero, vaciar desde `/admin/laboratorio`.
+- **Correr `scripts/verificar-padron.ts` mete el padrón real en la base de
+  desarrollo**, con nombre, DNI y domicilio de miles de clientes reales. Es el
+  chequeo obligatorio de cualquier fase que toque la importación, pero después
+  hay que vaciar la zona y recargar los padrones de prueba, como se hizo en la
+  Fase 2.
 
 - **Hay vendedores con datos reales en la base de desarrollo** (ej. "GOMEZ
   HUGO", código `P009`), sobrevivientes de antes de vaciar el padrón en la Fase

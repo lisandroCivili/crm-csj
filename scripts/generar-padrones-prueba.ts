@@ -134,7 +134,9 @@ const TITULOS: TituloPrueba[] = [
     importe: 200_000,
     mesCuota1: "2026-03",
     apareceDesde: "2026-09",
-    proposito: "RENOVACION: no esta en los padrones de junio a agosto y aparece en septiembre con cuota 7.",
+    proposito:
+      "RENOVACION: no esta en los padrones de junio a agosto y aparece en el de septiembre, " +
+      "que lo trae con las cuotas 5, 6 y 7. Entra por la 5, asi que no es venta nueva.",
   },
   {
     numTit: "PT-0007",

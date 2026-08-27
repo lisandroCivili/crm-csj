@@ -5,6 +5,7 @@ import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { AlertCircle, CheckCircle2, FileSpreadsheet, TriangleAlert } from "lucide-react";
 import { pasoImportacion, type EstadoImportacion } from "@/app/admin/padron/actions";
+import { PanelResumenPadron } from "@/components/padron/panel-resumen";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,32 +31,6 @@ function Boton({ children, ...props }: React.ComponentProps<typeof Button>) {
   );
 }
 
-function Cifra({
-  etiqueta,
-  valor,
-  detalle,
-  destacado,
-}: {
-  etiqueta: string;
-  valor: number;
-  detalle?: string;
-  destacado?: boolean;
-}) {
-  return (
-    <div className="rounded-lg border p-3">
-      <p className="text-xs uppercase tracking-wide text-muted-foreground">{etiqueta}</p>
-      <p
-        className={`mt-1 text-2xl font-semibold tabular-nums ${
-          destacado && valor > 0 ? "text-primary" : ""
-        }`}
-      >
-        {valor.toLocaleString("es-AR")}
-      </p>
-      {detalle ? <p className="mt-0.5 text-xs text-muted-foreground">{detalle}</p> : null}
-    </div>
-  );
-}
-
 export function ImportarPadron({ vendedores }: { vendedores: VendedorOpcion[] }) {
   const [estado, accion] = useActionState<EstadoImportacion, FormData>(pasoImportacion, {
     paso: "inicial",
@@ -74,17 +49,7 @@ export function ImportarPadron({ vendedores }: { vendedores: VendedorOpcion[] })
           <CardDescription>{estado.archivoNombre}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Cifra etiqueta="Clientes nuevos" valor={resumen.clientesNuevos} />
-            <Cifra etiqueta="Títulos nuevos" valor={resumen.titulosNuevos} />
-            <Cifra etiqueta="Cuotas nuevas" valor={resumen.cuotasNuevas} />
-            <Cifra
-              etiqueta="Recién cobradas"
-              valor={resumen.cuotasRecienPagadas}
-              detalle="pasaron de impagas a pagadas"
-              destacado
-            />
-          </div>
+          <PanelResumenPadron cifras={resumen} enPasado />
           <div className="flex gap-2">
             <Button asChild>
               <Link href="/admin/clientes">Ver el padrón de clientes</Link>
@@ -159,25 +124,7 @@ export function ImportarPadron({ vendedores }: { vendedores: VendedorOpcion[] })
         <CardContent className="space-y-6">
           <div>
             <p className="mb-2 text-sm font-medium">Qué va a pasar si confirmás</p>
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Cifra etiqueta="Clientes nuevos" valor={resumen.clientesNuevos} />
-              <Cifra etiqueta="Títulos nuevos" valor={resumen.titulosNuevos} />
-              <Cifra etiqueta="Cuotas nuevas" valor={resumen.cuotasNuevas} />
-              <Cifra
-                etiqueta="Cuotas ya cargadas"
-                valor={resumen.cuotasSinCambios}
-                detalle="no se tocan"
-              />
-              <Cifra etiqueta="Clientes con cambios" valor={resumen.clientesActualizados} />
-              <Cifra etiqueta="Títulos con cambios" valor={resumen.titulosActualizados} />
-              <Cifra etiqueta="Cuotas con cambios" valor={resumen.cuotasActualizadas} />
-              <Cifra
-                etiqueta="Recién cobradas"
-                valor={resumen.cuotasRecienPagadas}
-                detalle="pasan de impagas a pagadas"
-                destacado
-              />
-            </div>
+            <PanelResumenPadron cifras={resumen} />
           </div>
 
           {sinNovedades ? (

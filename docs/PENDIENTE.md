@@ -46,7 +46,9 @@ decía otra cosa.
 - **El primer padrón infla su período.** `detectadaPagaAt` se sella en la
   importación, así que todas las cuotas que ya venían pagadas quedan
   "detectadas" el día de la primera importación. El período de esa importación
-  no sirve para liquidar; los siguientes sí.
+  no sirve para liquidar; los siguientes sí. Desde la Fase 2 esa importación
+  queda marcada (`PadronImport.esLineaBase`) y sus títulos entran como
+  `origen: BASE`, así que al menos se sabe cuál es.
 - **Cerrar congela, reabrir recalcula.** Un período cerrado se muestra desde
   `ComisionDetalle` y no se mueve aunque cambie la escala. Si después del cierre
   entra un padrón que le suma cuotas a alguien, esa línea nace en borrador y la

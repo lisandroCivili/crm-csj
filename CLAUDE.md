@@ -40,6 +40,13 @@ Vocabulario del dominio (aparece tal cual en el padrón y en el código):
   importante del sistema; ver `lib/padron/importarPadron.ts`.
 - **`FchPago` vacío = cuota impaga.** Una cuota que pasa de vacía a tener fecha es una cuota
   recién cobrada, y es la materia prima del cálculo de comisiones.
+- **Una renovación es un título que no estaba en el padrón anterior y aparece con cuota > 1.**
+  Si aparece con cuota 1, es una venta nueva. La única forma de saberlo es comparando contra lo
+  que ya había, así que el origen se decide en la importación y se **sella** en `Titulo.origen`;
+  no se recalcula nunca (ver `lib/padron/origenTitulo.ts`). La primera importación de una zona no
+  tiene con qué comparar: todo entra como `BASE`. Para la comisión no hace falta ningún caso
+  especial —la renovación no trae cuota 1, así que no suma al tramo, y sus cuotas cobran el % de
+  la cuota real—; el dato sirve para medir la producción del mes sin inflarla.
 - **`NomVen` es texto libre e inconsistente**: el mismo vendedor aparece escrito de varias formas
   (ej. `TOLEDO PEDRO`, `TOLEDO PEDRO A.`, `TOLEDO PEDRO ANTONIO` son la misma persona). Se
   normaliza con la tabla `VendedorAlias`; nunca agrupar vendedores por el string del padrón.

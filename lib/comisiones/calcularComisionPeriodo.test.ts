@@ -268,6 +268,58 @@ describe("tope de cuotas del vendedor", () => {
   });
 });
 
+/**
+ * Una renovacion es un titulo que aparece en el padron sin haber estado en el
+ * anterior y con cuota mayor a 1 (ver `lib/padron/origenTitulo.ts`). Balta
+ * confirmo el 24/08/2026 como cobra: NO suma al volumen del tramo, y sus cuotas
+ * cobran el porcentaje de la cuota real, dentro del tope del vendedor.
+ *
+ * El motor ya hace exactamente eso sin saber que existen las renovaciones: solo
+ * mira numeros de cuota. Estos tests estan para que siga siendo asi.
+ */
+describe("renovaciones", () => {
+  it("no suman al volumen del tramo: sin cuotas 1 el vendedor queda en el tramo mas bajo", () => {
+    // Seis renovaciones que entran por la cuota 3. Si contaran como ventas
+    // nuevas caeria en el tramo 5-9 y cobraria 3 % en vez de 2 %.
+    const resultado = calcularComisionPeriodo({
+      cuotas: cuotas(3, 6),
+      escalas: ESCALA,
+      topeCuotasComision: SIN_TOPE,
+    });
+
+    expect(resultado.ventasNuevas).toBe(0);
+    expect(resultado.tramo).toEqual({ ventasMin: 0, ventasMax: 4 });
+    expect(resultado.grupos[0].porcentajeAplicado).toBe(2);
+    expect(resultado.totalComisionCuotas).toBe(120);
+  });
+
+  it("cobran el porcentaje de la cuota real, no el de la cuota 1", () => {
+    const resultado = calcularComisionPeriodo({
+      cuotas: [...cuotas(1, 1), ...cuotas(4, 1)],
+      escalas: ESCALA,
+      topeCuotasComision: SIN_TOPE,
+    });
+
+    // c1 al 5 % = $50; la renovacion entra por c4, al 1 % = $10.
+    expect(resultado.grupos).toEqual([
+      expect.objectContaining({ numeroCuota: 1, porcentajeAplicado: 5, monto: 50 }),
+      expect.objectContaining({ numeroCuota: 4, porcentajeAplicado: 1, monto: 10 }),
+    ]);
+  });
+
+  it("arriba del tope del vendedor no cobran nada", () => {
+    const resultado = calcularComisionPeriodo({
+      cuotas: cuotas(7, 3),
+      escalas: ESCALA,
+      topeCuotasComision: SIN_TOPE,
+    });
+
+    expect(resultado.grupos).toHaveLength(0);
+    expect(resultado.cuotasFueraDeTope).toBe(3);
+    expect(resultado.totalComision).toBe(0);
+  });
+});
+
 describe("totales y redondeo", () => {
   it("suma los gastos de representacion al total", () => {
     const resultado = calcularComisionPeriodo({

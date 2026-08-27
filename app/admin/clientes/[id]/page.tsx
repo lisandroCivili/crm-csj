@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { db } from "@/lib/db";
+import type { TituloOrigen } from "@/lib/generated/prisma/client";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
 const PESOS = new Intl.NumberFormat("es-AR", {
@@ -33,6 +34,16 @@ const MES = new Intl.DateTimeFormat("es-AR", {
   timeZone: "UTC",
 });
 const FECHA = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
+
+/**
+ * Como entro el titulo al sistema. `BASE` es el que ya venia cuando se importo
+ * el primer padron de la zona: no se puede saber si fue venta o renovacion.
+ */
+const ORIGEN: Record<TituloOrigen, string> = {
+  VENTA_NUEVA: "venta nueva",
+  RENOVACION: "renovación",
+  BASE: "ya venía del padrón",
+};
 
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode }) {
   return (
@@ -127,6 +138,10 @@ export default async function FichaClientePage({
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <Badge variant={titulo.origen === "BASE" ? "outline" : "secondary"}>
+                    {ORIGEN[titulo.origen]}
+                    {titulo.cuotaInicial ? ` · entró en la cuota ${titulo.cuotaInicial}` : ""}
+                  </Badge>
                   {titulo.debitoAutomatico ? (
                     <Badge variant="secondary">débito automático</Badge>
                   ) : null}

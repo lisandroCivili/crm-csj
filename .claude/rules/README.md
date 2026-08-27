@@ -7,6 +7,8 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
 
 - **Scope de zona**: toda query que lea datos de negocio se filtra por la zona activa.
 - **Importación de padrón**: siempre upsert idempotente por `(tituloId, numeroCuota)`, nunca append.
+- **Origen del título**: se decide al crearlo y no se recalcula. Primera importación de la zona =
+  `BASE`; después, cuota mínima 1 = `VENTA_NUEVA`, mayor = `RENOVACION`.
 - **Vendedores**: agrupar por `VendedorAlias`, nunca por el texto crudo de `NomVen`.
 - **Comisiones**: los porcentajes salen de `EscalaComision`, nunca hardcodeados. El cálculo se
   hace desde el padrón (`TituloCuota`), nunca desde `Venta`, y se devenga por `detectadaPagaAt`,

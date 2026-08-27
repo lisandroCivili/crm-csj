@@ -3,12 +3,14 @@
  *
  *   npx tsx scripts/verificar-padron.ts "docs/Padron-xxx.xls" [--limpiar]
  *
- * Comprueba las tres propiedades de las que depende todo el modulo:
+ * Comprueba las propiedades de las que depende todo el modulo:
  *
  *   1. El archivo se parsea y los totales coinciden con el contenido real.
  *   2. Reimportar el mismo archivo no cambia absolutamente nada (idempotencia).
  *   3. Un padron del periodo siguiente, que se solapa con el anterior, continua
  *      la numeracion de cuotas sin duplicar ni saltear.
+ *   4. El origen de cada titulo: todo BASE en la primera importacion de la zona,
+ *      y despues venta nueva o renovacion segun la cuota con la que aparezca.
  *
  * Crea vendedores de relleno para los NomVen que no esten vinculados, porque en
  * la aplicacion real ese mapeo lo hace el admin antes de importar.
@@ -126,6 +128,26 @@ async function main() {
     enBase.cuotas === parseo.filas.length;
   console.log(okTotales ? "OK: los totales coinciden con el archivo" : "FALLA: los totales no coinciden");
 
+  // Origen de los titulos: en la primera importacion de la zona no hay padron
+  // anterior contra el cual comparar, asi que todo tiene que quedar como BASE.
+  const porOrigen = await db.titulo.groupBy({
+    by: ["origen"],
+    where: { zonaId: zona.id },
+    _count: true,
+  });
+  console.log("\norigen de los titulos:");
+  console.table(Object.fromEntries(porOrigen.map((o) => [o.origen, o._count])));
+
+  const okOrigenBase =
+    !primera.esLineaBase || porOrigen.every((o) => o.origen === "BASE");
+  console.log(
+    primera.esLineaBase
+      ? okOrigenBase
+        ? "OK: era la primera importacion de la zona, todos los titulos quedaron como BASE"
+        : "FALLA: la primera importacion marco titulos como venta nueva o renovacion"
+      : "(ya habia padrones cargados: el origen se decidio contra lo que existia)"
+  );
+
   titulo("4. REIMPORTACION DEL MISMO ARCHIVO (idempotencia)");
   const segunda = await importarPadron({
     filas: parseo.filas,
@@ -198,8 +220,73 @@ async function main() {
       (consecutivas ? "(consecutivas, sin huecos)" : "(FALLA: hay huecos)")
   );
 
+  titulo("6. VENTA NUEVA vs. RENOVACION");
+  // Dos titulos que el padron todavia no traia: uno arranca en la cuota 1 (se
+  // vendio este mes) y el otro en la 20 (el cliente ya venia pagando). Es la
+  // regla que Balta definio el 24/08/2026, probada contra la base y no solo en
+  // el test de la funcion pura.
+  const molde = parseo.filas[0];
+  const mesNuevo = sumarMes(new Date(ultimoMes));
+  const filasDeAlta: FilaPadron[] = [
+    ...[1, 2, 3].map((numeroCuota) => ({
+      ...molde,
+      numTit: "VERIF-VENTA",
+      dni: "99999901",
+      nombre: "PRUEBA VERIFICACION VENTA",
+      emision: mesNuevo,
+      numeroCuota,
+      fechaPago: null,
+    })),
+    ...[20, 21, 22].map((numeroCuota) => ({
+      ...molde,
+      numTit: "VERIF-RENOV",
+      dni: "99999902",
+      nombre: "PRUEBA VERIFICACION RENOVACION",
+      emision: mesNuevo,
+      numeroCuota,
+      fechaPago: null,
+    })),
+  ];
+
+  const conAltas = await importarPadron({
+    filas: filasDeAlta,
+    zonaId: zona.id,
+    soloSimular: false,
+    lote: { ...lote, archivoNombre: "simulado-altas.xls" },
+  });
+  console.table(conAltas);
+
+  const altas = await db.titulo.findMany({
+    where: { numTit: { in: ["VERIF-VENTA", "VERIF-RENOV"] } },
+    select: { numTit: true, origen: true, cuotaInicial: true },
+    orderBy: { numTit: "asc" },
+  });
+  console.table(altas);
+
+  const venta = altas.find((t) => t.numTit === "VERIF-VENTA");
+  const renovacion = altas.find((t) => t.numTit === "VERIF-RENOV");
+  const okOrigenes =
+    !conAltas.esLineaBase &&
+    conAltas.titulosNuevos === 2 &&
+    conAltas.titulosNuevosVenta === 1 &&
+    conAltas.titulosNuevosRenovacion === 1 &&
+    venta?.origen === "VENTA_NUEVA" &&
+    venta.cuotaInicial === 1 &&
+    renovacion?.origen === "RENOVACION" &&
+    renovacion.cuotaInicial === 20;
+  console.log(
+    okOrigenes
+      ? "OK: el titulo que arranca en cuota 1 quedo como venta nueva y el que arranca en la 20, como renovacion"
+      : "FALLA: el origen de los titulos nuevos no se resolvio bien"
+  );
+
+  // Los de prueba no quedan en la base: no son parte del padron.
+  await db.titulo.deleteMany({ where: { numTit: { in: ["VERIF-VENTA", "VERIF-RENOV"] } } });
+  await db.cliente.deleteMany({ where: { dni: { in: ["99999901", "99999902"] } } });
+
   titulo("RESULTADO");
-  const todoOk = okTotales && idempotente && continua && consecutivas;
+  const todoOk =
+    okTotales && okOrigenBase && idempotente && continua && consecutivas && okOrigenes;
   console.log(todoOk ? "TODO OK" : "HAY FALLAS, revisar arriba");
   process.exitCode = todoOk ? 0 : 1;
 

@@ -58,6 +58,21 @@ enum ComisionEstado {
   CERRADO
 }
 
+/// Como entro un titulo al sistema. Se sella cuando se lo ve por primera vez y
+/// despues no cambia.
+///
+/// - `VENTA_NUEVA`: aparecio con cuota 1, es una venta del mes.
+/// - `RENOVACION`: aparecio con cuota > 1. El cliente ya venia pagando en otro
+///   lado (o el club lo paso de agencia). No suma al volumen del tramo, pero
+///   sus cuotas se comisionan normal.
+/// - `BASE`: venia de antes del sistema. Es lo que trae la primera importacion
+///   de la zona, donde todavia no hay con que comparar.
+enum TituloOrigen {
+  VENTA_NUEVA
+  RENOVACION
+  BASE
+}
+
 // ---------------------------------------------------------------------------
 // Base: zonas y usuarios
 // ---------------------------------------------------------------------------
@@ -203,14 +218,28 @@ model PadronImport {
   periodoDesde        DateTime?
   periodoHasta        DateTime?
 
-  filasLeidas         Int @default(0)
-  clientesNuevos      Int @default(0)
-  titulosNuevos       Int @default(0)
-  cuotasNuevas        Int @default(0)
-  cuotasActualizadas  Int @default(0)
+  filasLeidas          Int @default(0)
+  clientesNuevos       Int @default(0)
+  clientesActualizados Int @default(0)
+  titulosNuevos        Int @default(0)
+  titulosActualizados  Int @default(0)
+  cuotasNuevas         Int @default(0)
+  cuotasActualizadas   Int @default(0)
+  /// Filas que ya estaban cargadas identicas. Con el solape de 3 meses del
+  /// padron son la mayoria, y verlas confirma que el upsert no duplico nada.
+  cuotasSinCambios     Int @default(0)
   /// Cuotas que pasaron de impagas a pagadas en esta importacion: es la
   /// materia prima del calculo de comisiones.
-  cuotasReciePagadas  Int @default(0)
+  cuotasReciePagadas   Int @default(0)
+
+  /// De los `titulosNuevos`, cuantos entraron con cuota 1 (venta del mes) y
+  /// cuantos con cuota mayor (renovacion). En una linea base los dos son 0.
+  titulosNuevosVenta      Int @default(0)
+  titulosNuevosRenovacion Int @default(0)
+  /// Primera importacion de la zona: no hay padron anterior contra el cual
+  /// comparar, asi que todos sus titulos quedan como BASE y no se puede saber
+  /// cuales eran ventas nuevas.
+  esLineaBase             Boolean @default(false)
 
   importadoPorUserId String
   importadoPor       User   @relation(fields: [importadoPorUserId], references: [id])
@@ -269,6 +298,13 @@ model Titulo {
   nomDistribucion  String?
   rescate          Decimal? @db.Decimal(14, 2)
   cuotasPagas      Int?
+
+  /// Como entro al sistema. Se decide en la importacion que lo trajo por
+  /// primera vez y no se vuelve a tocar.
+  origen TituloOrigen @default(BASE)
+  /// Numero de cuota mas bajo con el que se lo vio. Es lo que define el origen:
+  /// 1 = venta nueva, mayor = renovacion.
+  cuotaInicial Int?
 
   zonaId Int
   zona   Zona @relation(fields: [zonaId], references: [id])
