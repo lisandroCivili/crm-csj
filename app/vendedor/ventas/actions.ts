@@ -75,8 +75,9 @@ async function registrarVenta(
 
   const dni = await validarArchivo(formData.get("adjuntoDni"), "Foto del DNI");
   if (dni.error) return { error: dni.error };
-  // La foto del DNI es obligatoria para dar de alta la venta.
-  if (!dni.archivo) return { errores: { adjuntoDni: ["Adjuntá la foto del DNI."] } };
+  // La foto del DNI paso a ser opcional (Balta, 27/08/2026): frenaba el alta de
+  // ventas que se cargan desde la calle, con el cliente adelante y sin la foto
+  // sacada todavia. Se sigue pudiendo subir despues, editando la venta.
 
   const contrato = await validarArchivo(formData.get("adjuntoContrato"), "Contrato");
   if (contrato.error) return { error: contrato.error };
@@ -95,8 +96,10 @@ async function registrarVenta(
   let ventaId: string;
 
   try {
-    const rutaDni = await guardarAdjunto(dni.archivo.contenido, dni.archivo.mimeType);
-    rutas.push(rutaDni);
+    const rutaDni = dni.archivo
+      ? await guardarAdjunto(dni.archivo.contenido, dni.archivo.mimeType)
+      : null;
+    if (rutaDni) rutas.push(rutaDni);
 
     const rutaContrato = contrato.archivo
       ? await guardarAdjunto(contrato.archivo.contenido, contrato.archivo.mimeType)
@@ -112,26 +115,28 @@ async function registrarVenta(
           dni: parsed.data.dni,
           telefono: parsed.data.telefono,
           direccion: parsed.data.direccion,
-          localidad: parsed.data.localidad,
-          provincia: parsed.data.provincia,
+          nroSuscripcion: parsed.data.nroSuscripcion,
+          numeroTitulo: parsed.data.numeroTitulo,
+          observacion: parsed.data.observacion,
           planId: plan.id,
           codigoProducto: plan.codigoProducto,
-          debitoAutomatico: parsed.data.debitoAutomatico,
           ...(leadId ? { leadId } : {}),
         },
         select: { id: true },
       });
 
-      await tx.ventaAdjunto.create({
-        data: {
-          ventaId: creada.id,
-          tipo: "DNI",
-          path: rutaDni,
-          mimeType: dni.archivo!.mimeType,
-          size: dni.archivo!.size,
-          subidoPorUserId: ctx.userId,
-        },
-      });
+      if (rutaDni && dni.archivo) {
+        await tx.ventaAdjunto.create({
+          data: {
+            ventaId: creada.id,
+            tipo: "DNI",
+            path: rutaDni,
+            mimeType: dni.archivo.mimeType,
+            size: dni.archivo.size,
+            subidoPorUserId: ctx.userId,
+          },
+        });
+      }
 
       if (rutaContrato && contrato.archivo) {
         await tx.ventaAdjunto.create({
@@ -268,11 +273,11 @@ export async function editarVenta(
     dni: parsed.data.dni,
     telefono: parsed.data.telefono,
     direccion: parsed.data.direccion,
-    localidad: parsed.data.localidad,
-    provincia: parsed.data.provincia,
+    nroSuscripcion: parsed.data.nroSuscripcion,
+    numeroTitulo: parsed.data.numeroTitulo,
+    observacion: parsed.data.observacion,
     planId: plan.id,
     codigoProducto: plan.codigoProducto,
-    debitoAutomatico: parsed.data.debitoAutomatico,
   };
 
   // Se guarda el diff campo por campo, no la fila entera: el historial tiene

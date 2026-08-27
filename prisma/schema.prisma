@@ -529,10 +529,28 @@ model Venta {
 
   nombreCliente String
   dni           String
+  /// "Calle Nro y Barrio" en el formulario.
   direccion     String?
-  localidad     String?
-  provincia     String?
   telefono      String?
+
+  /// Localidad, provincia y debito automatico salieron del formulario cuando
+  /// Balta definio los campos (27/08/2026). Las columnas se conservan porque
+  /// las ventas viejas las tienen cargadas y borrarlas seria perder ese dato;
+  /// no se piden mas al cargar una venta.
+  localidad String?
+  provincia String?
+
+  /// Numero de suscripcion que le da el club a la venta. Es el identificador
+  /// hasta que el club asigna el titulo definitivo; por eso deja de ser
+  /// obligatorio cuando `numeroTitulo` esta cargado.
+  nroSuscripcion String?
+  /// `NumTit` del padron, cuando el club ya lo asigno. Se guarda como texto y
+  /// no como relacion a `Titulo`: al cargar la venta ese titulo todavia no
+  /// existe en el sistema, porque llega recien con el padron siguiente.
+  numeroTitulo   String?
+  /// Texto libre del vendedor. Obligatorio mientras la venta se identifique
+  /// por numero de suscripcion.
+  observacion    String?
 
   planId           String?
   plan             Plan?   @relation(fields: [planId], references: [id])

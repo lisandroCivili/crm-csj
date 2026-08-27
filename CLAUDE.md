@@ -177,6 +177,35 @@ listado de clientes filtra y cuenta por él.
   en total, no si dejó de pagar seguidas—, pero se contrasta: si cubre hasta la
   última cuota que conocemos, se avisa que el club lo da al día.
 
+## El formulario de venta
+
+Los campos los definió Balta el 27/08/2026 (ver `docs/PLAN.md`, Fase 6). Dos de
+ellos no son ni obligatorios ni opcionales siempre:
+
+- **Nro Suscripción** es obligatorio, **salvo** que se cargue **Título**. Es como
+  identifica el club a una venta: arranca con un número de suscripción y cuando
+  le asignan el título definitivo, ese pasa a ser el identificador. Una venta sin
+  ninguno de los dos no se puede rastrear.
+- **Observación** es obligatoria cuando hay Nro Suscripción.
+
+Las dos se validan en `ventaSchema` con `superRefine`, **en el servidor**: la
+pantalla mueve el asterisco mientras se escribe, pero el formulario es un
+endpoint y se puede mandar sin pasar por el navegador.
+
+- **Los campos "Número" se guardan como texto de dígitos, nunca como enteros.**
+  Un DNI, un teléfono, un número de suscripción y un título son identificadores,
+  no cantidades: no se suman, y como número se rompen los que empiezan con cero
+  (`0387…`). Se acepta escribirlos con espacios, guiones y paréntesis y se
+  limpian al guardar.
+- **`Venta.numeroTitulo` es lo que anota el vendedor; `Venta.tituloId` es el
+  título que el sistema encontró en el padrón.** No son lo mismo y la ficha los
+  muestra por separado: al cargar la venta ese título todavía no existe en el
+  sistema, porque llega recién con el padrón siguiente.
+- **La foto del DNI es opcional**: frenaba el alta de ventas cargadas desde la
+  calle. Se sube después editando la venta.
+- Localidad, provincia y débito automático salieron del formulario, pero **las
+  columnas siguen**: las ventas viejas las tienen cargadas.
+
 ## Gráficos
 
 Los tres gráficos del dashboard son **SVG y divs renderizados en el servidor**,

@@ -81,9 +81,15 @@ export default async function DetalleVentaPage({ params }: PageProps<"/vendedor/
           <CardContent>
             <dl className="grid gap-4 sm:grid-cols-2">
               <Dato etiqueta="Teléfono" valor={venta.telefono} />
-              <Dato etiqueta="Dirección" valor={venta.direccion} />
-              <Dato etiqueta="Localidad" valor={venta.localidad} />
-              <Dato etiqueta="Provincia" valor={venta.provincia} />
+              <Dato etiqueta="Calle Nro y Barrio" valor={venta.direccion} />
+              {/* Localidad y provincia salieron del formulario, pero las ventas
+                  cargadas antes las tienen: se muestran solo si hay algo. */}
+              {venta.localidad ? (
+                <Dato etiqueta="Localidad" valor={venta.localidad} />
+              ) : null}
+              {venta.provincia ? (
+                <Dato etiqueta="Provincia" valor={venta.provincia} />
+              ) : null}
             </dl>
           </CardContent>
         </Card>
@@ -101,9 +107,27 @@ export default async function DetalleVentaPage({ params }: PageProps<"/vendedor/
                 valor={venta.plan?.duracionMeses ? `${venta.plan.duracionMeses} meses` : null}
               />
               <Dato
-                etiqueta="Débito automático"
-                valor={venta.debitoAutomatico ? "Sí" : "No"}
+                etiqueta="Nro Suscripción"
+                valor={
+                  venta.nroSuscripcion ? (
+                    <span className="tabular-nums">{venta.nroSuscripcion}</span>
+                  ) : null
+                }
               />
+              <Dato
+                etiqueta="Título"
+                valor={
+                  venta.numeroTitulo ? (
+                    <span className="tabular-nums">{venta.numeroTitulo}</span>
+                  ) : (
+                    <span className="text-muted-foreground">
+                      el club todavía no lo asignó
+                    </span>
+                  )
+                }
+              />
+              {/* Distinto del anterior: este es el titulo que el sistema
+                  encontro en el padron, no el que anoto el vendedor. */}
               <Dato
                 etiqueta="Título en el padrón"
                 valor={
@@ -133,6 +157,17 @@ export default async function DetalleVentaPage({ params }: PageProps<"/vendedor/
           </CardContent>
         </Card>
 
+        {venta.observacion ? (
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-base">Observación</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="whitespace-pre-wrap text-sm">{venta.observacion}</p>
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Documentación</CardTitle>
@@ -149,8 +184,10 @@ export default async function DetalleVentaPage({ params }: PageProps<"/vendedor/
                 </a>
               </Button>
             ) : (
-              <Badge variant="outline" className="text-destructive">
-                falta la foto del DNI
+              // La foto dejo de ser obligatoria para cargar la venta, asi que
+              // esto ya no es un error: es un pendiente.
+              <Badge variant="outline" className="text-amber-700 dark:text-amber-500">
+                sin foto del DNI todavía
               </Badge>
             )}
 

@@ -487,15 +487,67 @@ Verificado mirando la pantalla renderizada, en claro y en oscuro, además de lin
 barra no se dibujaba (un `height` en porcentaje contra un padre de alto
 automático da cero) y la leyenda decía "Marzo De 2026".
 
-### ⬜ Fase 6 — Formulario de venta
+### 🔨 Fase 6 — Formulario de venta
 
-**Bloqueada**: falta la anotación con los campos que definió Balta.
+Migración `20260827173116_campos_formulario_venta`. Los campos los definió Balta
+armándolos en el prototipo y los pasó por captura de pantalla el 27/08/2026.
 
-- Contrastarla con el prototipo (`app/admin/prototipo-formulario-venta/`, sin
-  commitear) y con `components/ventas/venta-form.tsx`.
-- Ajustar `Venta`, `ventaSchema`, `CAMPOS_HISTORIAL` y el formulario.
-- Decidir qué pasa con el prototipo: si los campos quedan fijos, se borra; si
-  Balta los quiere poder cambiar solo, es una fase aparte más grande.
+| # | Campo | Tipo | Obligatoriedad |
+|---|---|---|---|
+| 1 | Plan | Desplegable | Siempre |
+| 2 | Nro Suscripción | Número | Sí, **salvo** que se cargue Título |
+| 3 | D.N.I | Número | Siempre |
+| 4 | Nombre y Apellido | Texto | Siempre |
+| 5 | Calle Nro y Barrio | Texto | Siempre |
+| 6 | Teléfono | Número | Siempre |
+| 7 | Título | Número | Opcional |
+| 8 | Observación | Área de texto | Sí **si** se cargó Nro Suscripción |
+
+Qué se hizo:
+
+- **Tres campos nuevos en `Venta`**: `nroSuscripcion`, `numeroTitulo` y
+  `observacion`.
+- **Las dos reglas condicionales se validan en el servidor**, en `ventaSchema`
+  con un `superRefine`, y no sólo en la pantalla: el formulario es un endpoint y
+  se puede mandar sin pasar por el navegador. Tienen 15 tests.
+- **En la pantalla, el asterisco se mueve mientras se escribe.** Al cargar el
+  título, "Nro Suscripción" deja de ser obligatorio y lo dice; al cargar la
+  suscripción, "Observación" pasa a serlo. Es el mismo par de reglas, contado
+  antes de que el vendedor apriete Cargar.
+- **El desplegable de planes muestra sólo el nombre** y, al elegir uno, aparece
+  el precio debajo, aclarando que es una referencia y no se guarda. El precio
+  que vale es el que después trae el padrón.
+- **La foto del DNI pasó a ser opcional.** Frenaba el alta de ventas que se
+  cargan desde la calle, con el cliente adelante y sin la foto sacada. Se sube
+  después editando la venta; la ficha marca las que todavía no la tienen.
+- **Salieron del formulario Localidad, Provincia y Débito automático.** Las
+  columnas se conservan: las ventas viejas las tienen cargadas y borrarlas sería
+  perder ese dato. La ficha las muestra sólo si hay algo.
+
+**Los campos "Número" se guardan como texto de dígitos, no como enteros.** Un
+DNI, un teléfono, un número de suscripción y un título son identificadores, no
+cantidades: no se suman ni se promedian, y como número se rompen los que
+empiezan con cero (`0387…`). Se acepta escribirlos con espacios, guiones y
+paréntesis, y se limpian antes de guardar: `(0387) 415-1234` queda
+`03874151234`.
+
+> **Para hablar con Balta.** Como "Nro Suscripción" es obligatorio salvo que
+> haya título, y "Observación" es obligatoria cuando hay suscripción, en la
+> práctica **la observación va a ser obligatoria en casi toda venta nueva** —el
+> título recién lo asigna el club después—. Está implementado tal cual lo
+> definió; si la idea era otra, se cambia en una línea.
+
+**El prototipo (`app/admin/prototipo-formulario-venta/`) sigue sin commitear.**
+No guarda nada: es `useState` puro, así que la configuración vive sólo en la
+pestaña abierta y se pierde al recargar. Ahora que los campos están fijos en el
+formulario real, hay que decidir si se borra o si Balta los quiere poder cambiar
+solo, que es una fase aparte bastante más grande (definición de campos en base,
+render dinámico y validación armada en tiempo de ejecución).
+
+Verificado contra la aplicación levantada: las dos reglas rechazan y aceptan
+donde corresponde, la venta se guarda con el teléfono `03874151234` (cero
+adelante, sin símbolos) y la ficha muestra los campos nuevos. Lint, 117 tests y
+build pasan.
 
 ---
 
@@ -1171,15 +1223,106 @@ Los meses de ejemplo son períodos de comisión cerrados. Se sacan desde
 **Comisiones → Comisión del agente**, navegando a cada mes y apretando
 **Reabrir**; o se vuelven a pisar apretando otra vez **Cerrar meses de ejemplo**.
 
+### Fase 6 — Formulario de venta
+
+**Preparación**
+
+No hace falta cargar nada: alcanza con `npm run dev` y entrar como
+`balta@crm-csj.local` / `CambiarEstePassword123`, zona **Salta**. Los planes ya
+están cargados desde la pestaña Planes.
+
+**1. Los campos nuevos** — *esto es lo nuevo*
+
+**Ventas** → **Cargar venta**. De arriba abajo tiene que verse exactamente este
+orden:
+
+| Tarjeta | Campos |
+|---|---|
+| Vendedor | Vendedor \* |
+| Plan y suscripción | Plan \* · Nro Suscripción |
+| Datos del cliente | D.N.I \* · Nombre y Apellido \* · Calle Nro y Barrio \* · Teléfono \* |
+| Título y observación | Título · Observación |
+| Documentación | Foto del DNI · Contrato |
+
+Ya no están *Localidad*, *Provincia* ni *Adhiere a débito automático*.
+
+**2. El desplegable de planes** — *esto es lo nuevo*
+
+Abrir **Plan**: las opciones muestran **sólo el nombre** (`Plan Auto 330`,
+`Plan Moto 120`…), sin el código ni el precio. Salen de la pestaña **Planes**:
+si cargás uno nuevo ahí, aparece acá.
+
+Al elegir uno, debajo aparece un renglón gris con **la cuota y el código**, y
+aclara *"sólo como referencia, no se guarda"*. Es el recordatorio que pediste
+para el vendedor.
+
+**3. La regla del número de suscripción** — *esto es lo nuevo*
+
+Con el formulario recién abierto, **Nro Suscripción** tiene asterisco. Escribí
+algo en **Título** (abajo): el asterisco de Nro Suscripción **desaparece** y el
+texto de ayuda pasa a decir *"Opcional: ya cargaste el título"*. Borrá el
+título y vuelve.
+
+Para ver que no es sólo la pantalla: completá todo **menos** los dos, y apretá
+**Cargar venta**. Tiene que rechazarlo con *"Cargá el número de suscripción, o
+el título si el club ya lo asignó."*
+
+**4. La regla de la observación** — *esto es lo nuevo*
+
+Escribí algo en **Nro Suscripción**: **Observación** pasa a tener asterisco y
+avisa *"Obligatoria mientras la venta no tenga título"*. Si intentás guardar sin
+completarla, lo rechaza.
+
+> Ojo con esto: como la suscripción es obligatoria hasta que llegue el título,
+> en la práctica **la observación va a ser obligatoria en casi toda venta
+> nueva**. Está hecho tal cual lo definiste; si no era la idea, avisame.
+
+**5. Una venta que sí se guarda**
+
+Completá: Vendedor, Plan, **D.N.I** `99999999`, Nombre `PRUEBA FASE SEIS`,
+Calle `Calle Falsa 123, Barrio Centro`, Teléfono `0387 415-1234`, Título
+`998877`. Dejá Nro Suscripción y Observación vacíos. **Cargar venta** → guarda y
+vuelve al listado.
+
+**6. El teléfono no pierde el cero**
+
+Entrá a la venta (desde la cuenta del vendedor que la cargó, que es donde vive
+la ficha). El teléfono tiene que decir **03874151234**: se guardó con el cero de
+adelante y sin el paréntesis ni el guion. Si se hubiera guardado como número,
+diría `3874151234`, que es otro teléfono.
+
+En la misma ficha: **Calle Nro y Barrio**, **Nro Suscripción** en `—`, **Título**
+`998877`, y **Título en el padrón** *"todavía no apareció"* — son dos cosas
+distintas: uno lo anota el vendedor, el otro lo encuentra el sistema al importar.
+
+**7. La foto del DNI es opcional** — *esto es lo nuevo*
+
+En el paso 5 no adjuntaste nada y la venta se cargó igual. En la ficha, la
+tarjeta **Documentación** muestra **"sin foto del DNI todavía"** en ámbar: es un
+pendiente, no un error. Se sube después con **Editar**.
+
+**Borrar los datos de prueba**
+
+La venta quedó con DNI `99999999`. Se anula o se borra desde el listado de
+ventas; si quedaron varias, pedime que las borre por script.
+
 ---
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Lisandro validó la Fase 4 el 27/08/2026. La Fase 5 (gráficos
-del dashboard) está construida y revisada en pantalla; falta que la valide
-siguiendo la guía de arriba. Después queda sólo la **Fase 6** (formulario de
-venta), que sigue **bloqueada** esperando la lista de campos de Balta: sin eso no
-se puede empezar.
+**Dónde retomar:** Lisandro validó la Fase 5 el 27/08/2026. La Fase 6
+(formulario de venta) está construida y verificada contra la aplicación
+levantada; falta que la valide siguiendo la guía de arriba. **Con eso el plan
+queda terminado.**
+
+Lo que queda abierto después de la Fase 6:
+
+- **Confirmar con Balta que la observación sea obligatoria en casi toda venta
+  nueva**, que es la consecuencia de las dos reglas como las definió (ver la
+  Fase 6). Si no era la idea, se cambia en una línea.
+- **Decidir qué pasa con el prototipo** `app/admin/prototipo-formulario-venta/`:
+  borrarlo, o convertirlo en algo real si Balta quiere poder cambiar los campos
+  solo. Lo segundo es una fase aparte bastante más grande.
 
 **Cosas que conviene saber:**
 
@@ -1188,6 +1331,21 @@ se puede empezar.
   calculadas (`PT-0007` caído, `PT-0009` sin datos suficientes) y sin ningún
   período de comisión del agente guardado. Para empezar de cero, vaciar desde
   `/admin/laboratorio`.
+- **El prototipo del formulario no guarda nada.** Es `useState` puro, sin
+  `localStorage` ni backend: lo que se configura vive en la pestaña abierta y se
+  pierde al recargar (y un hot-reload lo borra). Si hace falta volver a definir
+  campos con Balta, conviene primero agregarle persistencia o pedirle una
+  captura antes de tocar el archivo.
+- **La ficha de una venta es sólo para vendedores** (`/vendedor/ventas/[id]`);
+  desde `/admin` se ve el listado pero no la ficha. Para revisarla como admin
+  hay que crear una cuenta de vendedor y engancharla a la ficha del vendedor
+  dueño de la venta.
+- **`prisma generate` no le llega al `next dev` que ya está corriendo.**
+  `lib/db.ts` guarda el cliente en `globalThis` para sobrevivir al hot-reload,
+  así que después de una migración hay que reiniciar el servidor o levantar uno
+  aparte (`npx next start -p 3010` sobre el build, que es lo que se hizo en la
+  Fase 6). El síntoma es un `PrismaClientValidationError: Unknown argument`
+  sobre una columna que sí existe en la base.
 - **Los colores de los gráficos se validan, no se eligen a ojo.** La Fase 5 dejó
   la regla asentada en `CLAUDE.md`: rojo (`--chart-1`) y verde (`--chart-2`) no
   se pueden usar juntos en un mismo gráfico porque bajo deuteranopia son

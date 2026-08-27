@@ -21,6 +21,10 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
 - **Caídas**: 6 cuotas consecutivas impagas, contadas desde la cuota más alta hacia atrás y
   sólo sobre numeración contigua. Un hueco en el histórico **corta la racha**: el título queda
   como "sin datos suficientes", nunca como "al día". No afecta ninguna comisión.
+- **Formulario de venta**: "Nro Suscripción" es obligatorio salvo que haya "Título", y
+  "Observación" lo es cuando hay suscripción. Las dos reglas se validan en el servidor
+  (`ventaSchema`), no sólo en la pantalla. Los campos numéricos (DNI, teléfono, suscripción,
+  título) son identificadores: se guardan como texto de dígitos, nunca como enteros.
 - **Gráficos**: los colores de serie salen de `--chart-*` y se validan contra daltonismo
   antes de usarlos; **rojo y verde nunca juntos**. Una serie con orden (meses) lleva rampa
   de un solo tono, no colores distintos. El texto no lleva el color de la serie, y lo que

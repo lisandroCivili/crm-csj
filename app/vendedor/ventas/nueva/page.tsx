@@ -24,8 +24,6 @@ export default async function NuevaVentaPage({
             nombre: true,
             telefono: true,
             direccion: true,
-            localidad: true,
-            provincia: true,
           },
         })
       : null,
@@ -55,8 +53,6 @@ export default async function NuevaVentaPage({
                 nombreCliente: lead.nombre,
                 telefono: lead.telefono,
                 direccion: lead.direccion,
-                localidad: lead.localidad,
-                provincia: lead.provincia,
               }
             : undefined
         }
