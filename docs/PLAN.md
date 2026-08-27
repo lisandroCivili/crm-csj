@@ -63,7 +63,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 2 | Renovaciones y pestaña Padrón | ✅ commit `c47735b` |
 | 3 | Comisión del agente (Balta y Pedro) | ✅ commit `f81e22e` |
 | 4 | Caídas de clientes | ✅ commit `23d97fe` |
-| 5 | Gráficos del dashboard | 🔨 en curso |
+| 5 | Gráficos del dashboard | 🔨 commit `816628f` |
 | 6 | Formulario de venta | ⬜ bloqueada — falta la lista de campos de Balta |
 
 Dependencias:
@@ -433,6 +433,8 @@ tests y build pasan.
 > unexpectedly"* contra la base local. Ahora el corte mira el host.
 
 ### 🔨 Fase 5 — Gráficos del dashboard
+
+Commit `816628f`.
 
 Sin migración: las dos series salen de tablas que ya se llenaban solas.
 
