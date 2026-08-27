@@ -63,8 +63,8 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 2 | Renovaciones y pestaña Padrón | ✅ commit `c47735b` |
 | 3 | Comisión del agente (Balta y Pedro) | ✅ commit `f81e22e` |
 | 4 | Caídas de clientes | ✅ commit `23d97fe` |
-| 5 | Gráficos del dashboard | 🔨 commit `816628f` |
-| 6 | Formulario de venta | ⬜ bloqueada — falta la lista de campos de Balta |
+| 5 | Gráficos del dashboard | ✅ commit `816628f` |
+| 6 | Formulario de venta | 🔨 en curso |
 
 Dependencias:
 
@@ -432,9 +432,9 @@ tests y build pasan.
 > variable, así que se quedaban sin límite y morían con *"Connection terminated
 > unexpectedly"* contra la base local. Ahora el corte mira el host.
 
-### 🔨 Fase 5 — Gráficos del dashboard
+### ✅ Fase 5 — Gráficos del dashboard
 
-Commit `816628f`.
+Commit `816628f`. Validada por Lisandro el 27/08/2026.
 
 Sin migración: las dos series salen de tablas que ya se llenaban solas.
 
