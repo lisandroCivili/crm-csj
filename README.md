@@ -1,6 +1,6 @@
 # CRM Club San Jorge
 
-Sistema de gestión hecho a medida para **Balta y Pedro Toledo**, agentes mercantiles de
+Sistema de gestión hecho a medida para agentes mercantiles de
 Club San Jorge S.A. de Capitalización y Ahorro: administran su equipo de vendedores, el
 padrón de clientes, las ventas y la liquidación de comisiones de dos zonas (Salta y
 Tucumán) desde una sola aplicación.
@@ -13,7 +13,7 @@ del negocio con el cliente, modelado de datos, desarrollo y despliegue.
 Club San Jorge vende planes de ahorro con sorteo: el cliente paga cuotas mensuales y, si
 sale sorteado, recibe el bien antes de terminar de pagarlo. El club le manda a la agencia
 un Excel periódico ("padrón") con el estado de todos los títulos activos, y a partir de
-ahí Balta y Pedro tienen que saber quién cobró, a quién hay que llamar porque dejó de
+ahí los agentes tienen que saber quién cobró, a quién hay que llamar porque dejó de
 pagar, cuánto le corresponde a cada vendedor de su equipo y cuánto le paga el club a la
 agencia. Antes de este sistema, eso se resolvía a mano sobre el Excel.
 
@@ -40,7 +40,7 @@ permisos por sección.
   pedido, para que sacarle un permiso a alguien surta efecto en el acto y no semanas
   después.
 - **Normalización de texto libre y sucio.** El vendedor de un título viene escrito en el
-  padrón de forma inconsistente (`TOLEDO PEDRO`, `TOLEDO PEDRO A.`, `TOLEDO PEDRO
+  padrón de forma inconsistente (`PEREZ JUAN`, `PEREZ JUAN A.`, `PEREZ JUAN
   ANTONIO`); una tabla de alias los agrupa en la persona real en vez de contar por string.
 - **Gráficos accesibles sin librería de charts.** Los del dashboard son SVG renderizados
   en el servidor con una paleta de colores validada contra daltonismo (nunca rojo y verde
@@ -107,7 +107,6 @@ todas las páginas fallan con `ECONNREFUSED` porque no hay base.
 ## Datos sensibles
 
 Los padrones reales del club traen nombre, DNI, domicilio, teléfono y email de miles de
-clientes, y el sistema guarda fotos de DNI como adjunto. Nada de eso se versiona (ver
-`.gitignore`) ni se sirve por URL pública: los adjuntos salen por una ruta que valida
+clientes, y el sistema guarda fotos de DNI como adjunto. Nada de eso se versiona ni se sirve por URL pública: los adjuntos salen por una ruta que valida
 sesión y permiso en cada descarga, y los Excel de padrón real nunca se suben al
 repositorio.
