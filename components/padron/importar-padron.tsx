@@ -3,9 +3,16 @@
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
-import { AlertCircle, CheckCircle2, FileSpreadsheet, TriangleAlert } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  FileSpreadsheet,
+  PhoneOff,
+  TriangleAlert,
+} from "lucide-react";
 import { pasoImportacion, type EstadoImportacion } from "@/app/admin/padron/actions";
 import { PanelResumenPadron } from "@/components/padron/panel-resumen";
+import { IMPAGAS_PARA_CAIDA } from "@/lib/padron/caidas";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -50,6 +57,23 @@ export function ImportarPadron({ vendedores }: { vendedores: VendedorOpcion[] })
         </CardHeader>
         <CardContent className="space-y-6">
           <PanelResumenPadron cifras={resumen} enPasado />
+
+          {resumen.titulosCaidos > 0 ? (
+            <Alert>
+              <PhoneOff />
+              <AlertTitle>
+                {resumen.titulosCaidos.toLocaleString("es-AR")} título
+                {resumen.titulosCaidos === 1 ? "" : "s"} de este padrón{" "}
+                {resumen.titulosCaidos === 1 ? "está caído" : "están caídos"}
+              </AlertTitle>
+              <AlertDescription>
+                Acumulan {IMPAGAS_PARA_CAIDA} cuotas impagas seguidas o más. No cambia
+                ninguna comisión: es para saber a quién llamar. En Clientes están los
+                filtros por caída total, parcial y en riesgo.
+              </AlertDescription>
+            </Alert>
+          ) : null}
+
           <div className="flex gap-2">
             <Button asChild>
               <Link href="/admin/clientes">Ver el padrón de clientes</Link>

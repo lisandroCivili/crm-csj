@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Info } from "lucide-react";
+import { BadgeCaidaTitulo } from "@/components/clientes/badge-caida";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import { db } from "@/lib/db";
 import type { TituloOrigen } from "@/lib/generated/prisma/client";
+import { contradiceAlClub } from "@/lib/padron/caidas";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
 const PESOS = new Intl.NumberFormat("es-AR", {
@@ -112,7 +114,14 @@ export default async function FichaClientePage({
       </Card>
 
       {cliente.titulos.map((titulo) => {
-        const impagas = titulo.cuotas.filter((cuota) => cuota.fechaPago === null).length;
+        // El club manda cuantas cuotas lleva pagas; si ese numero llega hasta
+        // la ultima que conocemos, lo esta dando al dia y lo que vemos impago
+        // seguramente se pago despues de emitido el padron.
+        const desmentidoPorElClub = contradiceAlClub({
+          cuotasPagas: titulo.cuotasPagas,
+          cuotaMaxConocida: titulo.cuotaMaxConocida,
+          impagasConsecutivas: titulo.impagasConsecutivas,
+        });
 
         return (
           <Card key={titulo.id} className="mb-4">
@@ -138,6 +147,7 @@ export default async function FichaClientePage({
                   </CardDescription>
                 </div>
                 <div className="flex flex-wrap gap-2">
+                  <BadgeCaidaTitulo titulo={titulo} />
                   <Badge variant={titulo.origen === "BASE" ? "outline" : "secondary"}>
                     {ORIGEN[titulo.origen]}
                     {titulo.cuotaInicial ? ` · entró en la cuota ${titulo.cuotaInicial}` : ""}
@@ -147,12 +157,6 @@ export default async function FichaClientePage({
                   ) : null}
                   {titulo.nomDistribucion ? (
                     <Badge variant="outline">{titulo.nomDistribucion}</Badge>
-                  ) : null}
-                  {impagas > 0 ? (
-                    <Badge variant="outline" className="text-amber-700 dark:text-amber-500">
-                      {impagas} impaga{impagas === 1 ? "" : "s"} de las últimas{" "}
-                      {titulo.cuotas.length}
-                    </Badge>
                   ) : null}
                 </div>
               </div>
@@ -171,7 +175,53 @@ export default async function FichaClientePage({
                   etiqueta="Rescate"
                   valor={titulo.rescate ? PESOS.format(Number(titulo.rescate)) : null}
                 />
+                <Dato
+                  etiqueta="Última cuota paga"
+                  valor={
+                    titulo.cuotaUltimaPaga ? (
+                      `cuota ${titulo.cuotaUltimaPaga}`
+                    ) : (
+                      <span className="text-muted-foreground">ninguna que hayamos visto</span>
+                    )
+                  }
+                />
+                <Dato
+                  etiqueta="Histórico conocido"
+                  valor={
+                    titulo.cuotaMinConocida
+                      ? `cuotas ${titulo.cuotaMinConocida} a ${titulo.cuotaMaxConocida}`
+                      : null
+                  }
+                />
+                {titulo.caidoAt ? (
+                  <Dato etiqueta="Caído desde" valor={FECHA.format(titulo.caidoAt)} />
+                ) : null}
               </div>
+
+              {!titulo.caidaConfiable ? (
+                <p className="mb-3 flex items-start gap-2 rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                  <Info className="mt-0.5 size-4 shrink-0" />
+                  <span>
+                    <strong className="font-medium">No alcanza para decir si está caído.</strong>{" "}
+                    Faltan cuotas entre las que conocemos, o la racha de impagas llega hasta el
+                    principio del historial. Una cuota que el sistema nunca vio pudo estar
+                    pagada, así que no se la cuenta como impaga. Se resuelve importando los
+                    padrones que faltan.
+                  </span>
+                </p>
+              ) : null}
+
+              {desmentidoPorElClub ? (
+                <p className="mb-3 flex items-start gap-2 rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                  <Info className="mt-0.5 size-4 shrink-0" />
+                  <span>
+                    <strong className="font-medium">El club lo da al día.</strong> Informa{" "}
+                    {titulo.cuotasPagas} cuotas pagas, que cubren hasta la última que tenemos
+                    cargada. Lo que figura impago abajo probablemente se cobró después de
+                    emitido ese padrón.
+                  </span>
+                </p>
+              ) : null}
 
               <div className="max-h-96 overflow-y-auto rounded-md border">
                 <Table>

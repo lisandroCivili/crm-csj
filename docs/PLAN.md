@@ -61,8 +61,8 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 0.6 | Laboratorio: base de desarrollo con datos ficticios | ✅ `/admin/laboratorio` |
 | 1 | Escalas de comisión por vendedor | ✅ commit `7dbc4ea` |
 | 2 | Renovaciones y pestaña Padrón | ✅ commit `c47735b` |
-| 3 | Comisión del agente (Balta y Pedro) | 🔨 commit `f81e22e` |
-| 4 | Caídas de clientes | ⬜ pendiente |
+| 3 | Comisión del agente (Balta y Pedro) | ✅ commit `f81e22e` |
+| 4 | Caídas de clientes | 🔨 en curso |
 | 5 | Gráficos del dashboard | ⬜ pendiente |
 | 6 | Formulario de venta | ⬜ bloqueada — falta la lista de campos de Balta |
 
@@ -299,8 +299,13 @@ ahora comprueba el origen (paso 6) y sigue dando TODO OK.
 > La base de desarrollo quedó otra vez con los 7 padrones ficticios: la
 > verificación con el padrón real carga datos personales de miles de clientes y
 > se vació apenas terminó.
+>
+> El primer padrón trae 6 títulos y no 5 desde que la Fase 4 sumó `PT-0009` al
+> escenario. Los números de comisión no cambiaron.
 
-### 🔨 Fase 3 — Comisión del agente
+### ✅ Fase 3 — Comisión del agente
+
+Commit `f81e22e`. Validada por Lisandro el 27/08/2026.
 
 Motor nuevo, hermano del de vendedores. La fase que más plata mueve. Migración
 `20260827015729_comision_agente`.
@@ -348,21 +353,83 @@ compara el total del motor contra una cuenta hecha con aritmética propia —
 $564.000 sobre $7.800.000 cobrados—, más el cierre, el congelamiento y la
 reapertura. Lint, 74 tests y build pasan.
 
-### ⬜ Fase 4 — Caídas de clientes
+### 🔨 Fase 4 — Caídas de clientes
+
+Migración `20260827023523_caidas_de_titulos`.
 
 > **Aclaración para Balta**: el sistema no necesita "cargar 7 padrones" como
-> mecanismo; necesita **7 cuotas consecutivas de histórico por título**. Como cada
+> mecanismo; necesita **6 cuotas consecutivas de histórico por título**. Como cada
 > padrón trae 3 meses y se solapan, con padrones mensuales seguidos eso son unos
-> 5 archivos. Lo que sí es cierto es que sin ese histórico no se puede detectar
-> nada, y el sistema tiene que decirlo en pantalla en vez de mostrar cero caídas.
+> 4 archivos. Lo que sí es cierto es que sin ese histórico no se puede detectar
+> nada, y el sistema lo dice en pantalla en vez de mostrar cero caídas.
+>
+> Se comprobó contra el padrón real: con **un solo** padrón cargado, ninguno de
+> los 2.334 títulos puede darse por caído —trae 3 meses, nunca 6— y 436 quedan
+> como "sin datos suficientes". Eso es lo correcto, y es exactamente lo que
+> antes se hubiera visto como "no hay ninguna caída".
 
-- `Titulo`: `impagasConsecutivas`, `caidoAt`, `cuotaUltimaPaga`, y la cobertura
-  del histórico (`cuotaMinConocida`, `cuotaMaxConocida`).
-- Se recalcula al importar. Script `scripts/recalcular-caidas.ts` para la primera
-  pasada.
-- **Si hay un hueco en la numeración, no se marca**: se informa "sin datos
-  suficientes". Contrastar con `Titulo.cuotasPagas`, que viene del club.
-- `/admin/clientes`: filtro `?caida=riesgo|parcial|total` y badge de estado.
+Qué se hizo:
+
+- **`lib/padron/caidas.ts`**: función pura con 23 tests. Cuenta la racha de
+  impagas **desde la cuota más alta hacia atrás**, y sólo mientras la numeración
+  sea contigua. Un título se cae con `IMPAGAS_PARA_CAIDA = 6`; desde
+  `IMPAGAS_PARA_RIESGO = 3` se muestra en riesgo.
+- **La parte que importa es saber cuándo no se sabe.** Si falta un número de
+  cuota en el medio, esa cuota pudo estar paga: contarla como impaga inventaría
+  una caída. En ese caso la racha se corta ahí y el título queda
+  `caidaConfiable = false`, que en pantalla es *"sin datos suficientes"* y no
+  *"al día"*. La excepción: si la racha **ya llegó a 6**, que falte historia
+  hacia atrás no la desmiente —más impagas sólo la alargarían—, así que ahí sí
+  se afirma.
+- **`Titulo`** guarda el derivado: `impagasConsecutivas`, `cuotaUltimaPaga`,
+  `cuotaMinConocida`, `cuotaMaxConocida`, `caidoAt` y `caidaConfiable`. Se
+  guarda en vez de calcularse al vuelo porque el listado filtra y cuenta por él;
+  hacerlo en memoria obligaría a traer el histórico entero de la zona en cada
+  visita.
+- **Se recalcula dentro de la transacción de la importación**
+  (`lib/padron/recalcularCaidas.ts`), sólo para los títulos que trae el archivo
+  y escribiendo únicamente los que cambiaron: reimportar el mismo padrón no toca
+  nada, ni siquiera la fecha de caída.
+- **`scripts/recalcular-caidas.ts`** para la primera pasada sobre títulos que ya
+  estaban cargados, y el mismo botón en el Laboratorio para no depender de la
+  consola. Los defaults de la migración dejan todo como "sin datos suficientes",
+  que es la verdad hasta que se lo corra.
+- **La caída no se calcula en SQL** aunque se pueda: la regla ya está en
+  TypeScript con tests, y la parte difícil —distinguir *"no pagó"* de *"no lo
+  vimos"*— es justamente la que no conviene escribir dos veces.
+- **`/admin/clientes`**: chips de filtro con contadores (caída total, parcial, en
+  riesgo, sin datos suficientes), columna de estado y badge en la tarjeta móvil.
+  Un cliente está en caída **total** cuando todos sus títulos cayeron y
+  **parcial** cuando sólo algunos.
+- **Ficha del cliente**: badge por título, última cuota paga, rango del histórico
+  conocido, fecha de caída, y dos avisos: por qué no alcanza el historial, y
+  cuándo `Titulo.cuotasPagas` (el dato del club) **contradice** lo que vemos
+  —típicamente porque la cuota se cobró después de emitido el padrón—.
+- **Al terminar una importación** se avisa cuántos títulos de ese padrón quedaron
+  caídos.
+- La caída **no toca ninguna comisión**, como confirmó Balta. Se verificó: con el
+  escenario de prueba, los totales de las fases 2 y 3 no se movieron
+  ($105.000 · $38.000 · $564.000).
+
+Verificado en tres niveles: los 23 tests de la función pura; un script ad-hoc
+contra la base local (no versionado) que reimporta los 7 padrones de prueba y
+compara título por título contra una cuenta hecha recorriendo el histórico a
+mano; y `scripts/verificar-padron.ts` contra el padrón real de 6.878 filas, que
+ahora comprueba también las caídas (paso 7) y sigue dando TODO OK. Lint, 97
+tests y build pasan.
+
+> El escenario de prueba creció con un título nuevo, **`PT-0009` de HUGO
+> PRUEBA**: el club lo lista en el primer padrón (cuotas 16 a 18) y recién
+> vuelve a listarlo en el último (22 a 24). Las cuotas 19, 20 y 21 nunca se
+> vieron, así que es el caso de "sin datos suficientes". Ninguna de sus cuotas
+> está paga, así que **no movió ningún número de las fases anteriores**; lo único
+> que cambia es que el primer padrón ahora trae 6 títulos en vez de 5, y que hay
+> 8 clientes de prueba en vez de 7.
+
+> Arreglo de paso: `lib/db.ts` limitaba el pool de conexiones mirando
+> `NODE_ENV === "development"`, y los scripts de `scripts/` corren sin esa
+> variable, así que se quedaban sin límite y morían con *"Connection terminated
+> unexpectedly"* contra la base local. Ahora el corte mira el host.
 
 ### ⬜ Fase 5 — Gráficos del dashboard
 
@@ -558,8 +625,9 @@ $15.000. Sus cuotas 100+ quedan afuera porque cobra hasta c4.
 
 **Qué mirar en cada pantalla**
 
-- **Clientes**: 7 clientes de prueba. `GINA PRUEBA` tiene dos títulos, uno que
-  paga y otro que no: es el caso de caída parcial de la Fase 4.
+- **Clientes**: 8 clientes de prueba. `GINA PRUEBA` tiene dos títulos, uno que
+  paga y otro que no: es el caso de caída parcial de la Fase 4. `HUGO PRUEBA`
+  es el de "sin datos suficientes", también de la Fase 4.
 - **Padrón**: las 7 importaciones. De la 2ª en adelante casi todas las cuotas
   figuran como actualizadas, no nuevas: eso es el solape de 3 meses funcionando.
 - **Comisiones**: los números de la tabla de arriba.
@@ -676,14 +744,14 @@ Menú **Laboratorio** → **Vaciar el padrón de SALTA** (pide escribir `SALTA`)
 
 En el panel de "Qué va a pasar si confirmás" tiene que verse:
 
-- **Títulos nuevos: 5**
+- **Títulos nuevos: 6**
 - **Ventas nuevas: —** y **Renovaciones: —**, las dos con el texto
   *"sin padrón anterior"*,
-- un aviso abajo: **"Es el primer padrón de la zona"**, explicando que sus 5
+- un aviso abajo: **"Es el primer padrón de la zona"**, explicando que sus 6
   títulos quedan como históricos.
 
 Confirmar. Eso es lo correcto y es la parte fácil de equivocar: si el primer
-padrón marcara "5 ventas nuevas", el sistema estaría inventando producción que
+padrón marcara "6 ventas nuevas", el sistema estaría inventando producción que
 en realidad tiene años.
 
 **3. El segundo trae ventas nuevas de verdad**
@@ -711,7 +779,7 @@ de cada archivo:
 
 | Archivo | Títulos |
 |---|---|
-| `padron-prueba-01…` | +5 · línea base |
+| `padron-prueba-01…` | +6 · línea base |
 | `padron-prueba-02…` | +2 · 2 vta · 0 renov |
 | `padron-prueba-03…` | +0 · 0 vta · 0 renov |
 | `padron-prueba-04…` | +1 · 0 vta · 1 renov |
@@ -854,21 +922,128 @@ producción sólo va a salir el primer mes.
 agente que hayan quedado cerrados no se borran con eso; si molestan, se reabren
 desde la pantalla.
 
+### Fase 4 — Caídas de clientes
+
+Igual que la Fase 2, se prueba con los padrones de prueba: **una caída sólo se
+ve importando archivos sucesivos**, porque hacen falta 6 cuotas consecutivas de
+histórico y cada padrón trae 3 meses.
+
+**Preparación**
+
+La base de desarrollo ya quedó con el escenario cargado y las caídas
+calculadas. Si hiciera falta rearmarlo, primero regenerar los archivos —el
+escenario cambió en esta fase—:
+
+```bash
+npx tsx scripts/generar-padrones-prueba.ts
+```
+
+y después, con `npm run dev` levantado y entrando como `balta@crm-csj.local` /
+`CambiarEstePassword123` en zona **Salta**: **Laboratorio** → **Vaciar el padrón
+de SALTA** → **Crear los vendedores de prueba** → **Cargar escala de ejemplo**,
+e importar los 7 padrones en orden desde **Padrón → Importar padrón**.
+
+**1. Los filtros nuevos** — *esto es lo nuevo*
+
+Menú **Clientes**. Arriba del listado hay una fila de botones con contadores:
+
+| Filtro | Tiene que decir |
+|---|---|
+| Caída total | **0** |
+| Caída parcial | **1** |
+| En riesgo | **1** |
+| Sin datos suficientes | **1** |
+
+Y en la tabla, una columna **Estado** nueva: `GINA PRUEBA` con el badge
+**caída parcial**, `HUGO PRUEBA` con **en riesgo**, y el resto en "al día".
+
+**2. La caída parcial**
+
+Apretar **Caída parcial**: queda sola `GINA PRUEBA`. Entrar a su ficha. Tiene
+dos títulos:
+
+- **`PT-0007`** con el badge rojo **"caído · 9 impagas seguidas"**, "Última
+  cuota paga: ninguna que hayamos visto", "Histórico conocido: cuotas 4 a 12" y
+  la fecha de caída.
+- **`PT-0008`**, el otro título de la misma clienta, sin ningún badge de caída.
+
+Eso es lo que hace que sea **parcial** y no total: se le cayó un plan, no los
+dos. Si tuviera los dos caídos, el filtro **Caída total** la traería a ella.
+
+**3. Lo importante: el título que el sistema NO puede juzgar** — *esto es lo
+nuevo*
+
+Apretar **Sin datos suficientes**: queda `HUGO PRUEBA`. En su ficha, el título
+`PT-0009` tiene el badge gris **"sin datos suficientes"** y abajo un recuadro
+que explica por qué.
+
+La cuenta, para verla con los ojos: en la tabla de cuotas de ese título están
+las cuotas **16, 17, 18** y después **22, 23, 24**. Las seis figuran impagas. Si
+el sistema contara "seis impagas seguidas" lo daría por caído — pero **las
+cuotas 19, 20 y 21 nunca se importaron**, y pudieron estar pagas. Así que corta
+la racha en 3 y dice que no sabe.
+
+Es el error que hay que evitar: dar por caído a alguien que viene pagando.
+
+**4. El riesgo**
+
+`HUGO PRUEBA` también aparece en **En riesgo**, con 3 impagas seguidas de las 6
+que hacen falta. Son dos cosas distintas y conviven: *"se está yendo"* y *"no
+tengo el historial completo"*.
+
+**5. Se recalcula sola al importar**
+
+**Padrón → Importar padrón** → volver a subir `padron-prueba-07-2026-12.xlsx`.
+Al confirmar, además del panel de siempre tiene que aparecer un aviso: **"1
+título de este padrón está caído"**. Y en **Clientes** los contadores quedan
+exactamente iguales que antes: reimportar no cambia nada.
+
+**6. La caída no toca la plata**
+
+**Comisiones**: `PRUEBA VENDEDOR UNO` sigue en **$105.000** y `DOS` en
+**$38.000**. **Comisiones → Comisión del agente**: sigue en **$564.000** sobre
+54 cuotas. La caída es información, no un contracargo — como lo definiste.
+
+**7. La primera pasada, para títulos que ya estaban cargados**
+
+**Laboratorio** → botón **Recalcular las caídas**. Tiene que responder
+*"9 títulos revisados: 1 caídos, 1 sin datos suficientes"*, y los números de
+**Clientes** no se mueven. Es el mismo trabajo que hace
+`npx tsx scripts/recalcular-caidas.ts` desde una terminal; sirve una sola vez,
+sobre títulos importados antes de esta fase.
+
+**8. Qué se ve con un padrón solo**
+
+Vale la pena tenerlo presente para cuando esto corra con datos reales: con un
+único padrón cargado **ningún título puede figurar caído**, porque trae 3 meses
+y hacen falta 6. Se comprobó contra el padrón real: 2.334 títulos, 0 caídos y
+436 sin datos suficientes. El sistema lo dice; no muestra "no hay caídas".
+
+**Borrar los datos de prueba**
+
+**Laboratorio** → **Vaciar el padrón de SALTA**.
+
 ---
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Lisandro validó la Fase 2 el 27/08/2026. La Fase 3 (comisión
-del agente) está construida y verificada contra la base local; falta que la
-valide siguiendo la guía de arriba. Si da OK, sigue la **Fase 4** (caídas de
-clientes), que es independiente y sólo necesita los padrones cargados.
+**Dónde retomar:** Lisandro validó la Fase 3 el 27/08/2026. La Fase 4 (caídas de
+clientes) está construida y verificada contra la base local y contra el padrón
+real; falta que la valide siguiendo la guía de arriba. Si da OK, sigue la
+**Fase 5** (gráficos del dashboard), que ya tiene sus dos fuentes listas:
+`ComisionAgentePeriodo` de la Fase 3 y `PadronImport.titulosNuevosVenta` /
+`titulosNuevosRenovacion` de la Fase 2.
 
 **Cosas que conviene saber:**
 
 - **La base de desarrollo tiene los 7 padrones de prueba importados** en Salta,
-  con los orígenes ya resueltos (`PT-0006` es la renovación) y sin ningún
+  con los orígenes ya resueltos (`PT-0006` es la renovación), las caídas
+  calculadas (`PT-0007` caído, `PT-0009` sin datos suficientes) y sin ningún
   período de comisión del agente guardado. Para empezar de cero, vaciar desde
   `/admin/laboratorio`.
+- **El escenario de prueba tiene 9 títulos y 8 clientes desde la Fase 4.** Si se
+  regeneran los padrones con una copia vieja del script, `PT-0009` no va a estar
+  y la guía de la Fase 4 no va a coincidir.
 - **La escala del contrato de agencia ya está cargada en las dos zonas**: la
   sembró la migración `20260827015729_comision_agente`, junto con el objetivo
   mensual (Salta 100, Tucumán 50). Si se estuvo probando con otros porcentajes,
@@ -880,12 +1055,11 @@ clientes), que es independiente y sólo necesita los padrones cargados.
   hay que vaciar la zona y recargar los padrones de prueba, como se hizo en la
   Fase 2.
 
-- **Hay vendedores con datos reales en la base de desarrollo** (ej. "GOMEZ
-  HUGO", código `P009`), sobrevivientes de antes de vaciar el padrón en la Fase
-  0.6: vaciar el padrón borra clientes/títulos/cuotas, pero nunca vendedores.
-  Si se escribe un script de verificación ad-hoc, filtrar por `codigo` (los de
-  prueba empiezan con `PRUEBA-`) y no por un fragmento del nombre: buscar por
-  "GOMEZ" a secas encuentra a este vendedor real en vez de al de prueba.
+- **`scripts/verificar-padron.ts` deja vendedores con nombres reales** en la base
+  de desarrollo: crea uno de relleno por cada `NomVen` del archivo, con código
+  `P000`, `P001`… Vaciar el padrón borra clientes, títulos y cuotas, pero **nunca
+  vendedores**, así que hay que borrarlos aparte. En la Fase 4 se sacaron los 36
+  que habían quedado; si se vuelve a correr el script, hay que repetirlo.
 
 - **La ficha de vendedor de Balta y Pedro todavía no existe con datos reales.**
   Hasta que se cree y se enlace, `getVendedorDelAdmin()` devuelve null y la
@@ -894,9 +1068,17 @@ clientes), que es independiente y sólo necesita los padrones cargados.
 - **`prisma dev` deja un lock huérfano si se lo mata a la fuerza.** Si la base no
   arranca con `Lock file is already being held`, está documentado en
   `CLAUDE.md`. No hay que borrar datos, sólo un directorio.
-- **`npm start` (producción) contra la base local revienta el dashboard** con
-  `P1017 ConnectionClosed`: `lib/db.ts` sólo limita el pool a 4 en desarrollo y
-  `prisma dev` corta a las ~9 conexiones. Para verificar, usar `npm run dev`.
+- **El pool contra la base local está limitado a 4** en `lib/db.ts`, porque
+  `prisma dev` corta a las ~9 conexiones. Desde la Fase 4 el corte mira el host y
+  no `NODE_ENV`, así que también aplica a los scripts de `scripts/`, que corren
+  sin esa variable. Para verificar en producción-local, igual conviene
+  `npm run dev` y no `npm start`.
+- **`prisma dev` se puede colgar sin caerse.** Pasó en la Fase 4: el proceso
+  seguía escuchando en el 51218 pero cerraba toda conexión (`P1017
+  ConnectionClosed`, y `ECONNRESET` con `pg` directo). Se arregla con
+  `npx prisma dev stop crm-csj` y `npx prisma dev --name crm-csj --detach`; es un
+  cierre limpio, no deja el lock huérfano y no toca los datos. Ojo que eso
+  también tumba el `npm run dev` que lo tenga adentro.
 - **La escala predeterminada de la base local ("General") es de ejemplo**,
   cargada desde el laboratorio: dos tramos completos de c1 a c5. Los
   porcentajes reales los tiene que cargar Balta. Desde la Fase 1 puede haber

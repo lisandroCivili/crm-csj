@@ -148,6 +148,35 @@ devengamiento (`detectadaPagaAt`), pero otras reglas:
 - Cerrar congela los porcentajes y el objetivo en `ComisionAgenteDetalle`, igual que en el
   vendedor.
 
+## Caídas
+
+Un título se **cae** cuando acumula **6 cuotas consecutivas impagas** (Balta,
+24/08/2026). La caída **no genera contracargo** y no toca ninguna comisión: es
+información, para saber a quién llamar. La regla vive en `lib/padron/caidas.ts`,
+función pura y testeada; el estado derivado se guarda en `Titulo` porque el
+listado de clientes filtra y cuenta por él.
+
+- **La racha se cuenta desde la cuota más alta hacia atrás**, y sólo mientras la
+  numeración sea contigua. No es "cuántas impagas tiene en total": un cliente que
+  se atrasó ocho meses y se puso al día no está caído.
+- **El sistema tiene que poder decir "no sé".** Si falta un número de cuota en el
+  medio del histórico, esa cuota pudo estar paga; contarla como impaga inventaría
+  una caída. Ahí la racha se corta y el título queda `caidaConfiable = false`, que
+  en pantalla es *"sin datos suficientes"* y nunca *"al día"*. La excepción: si la
+  racha ya llegó a 6, que falte historia hacia atrás no la desmiente.
+- **Sin histórico no hay caídas que detectar, y eso se dice en pantalla.** Cada
+  padrón trae 3 meses, así que con uno solo ningún título puede llegar a 6: hacen
+  falta unos 4 archivos consecutivos. Mostrar "0 caídas" ahí sería mentir.
+- **Caída parcial vs. total** es del cliente, no del título: parcial cuando sólo
+  algunos de sus títulos cayeron, total cuando todos.
+- **Se recalcula dentro de la transacción de la importación**, sólo para los
+  títulos de ese archivo y escribiendo únicamente los que cambiaron. Para la
+  primera pasada sobre títulos ya cargados está `scripts/recalcular-caidas.ts`
+  (y el mismo botón en el laboratorio).
+- `Titulo.cuotasPagas` viene del club y **no** decide la caída —dice cuántas pagó
+  en total, no si dejó de pagar seguidas—, pero se contrasta: si cubre hasta la
+  última cuota que conocemos, se avisa que el club lo da al día.
+
 ## Stack
 
 Next.js 16 (App Router) · TypeScript · Prisma 7 + PostgreSQL · Auth.js v5 (Credentials) ·

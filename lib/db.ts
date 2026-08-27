@@ -23,12 +23,24 @@ const globalForPrisma = globalThis as unknown as {
  * El Postgres que levanta `prisma dev` corta la conexion pasadas ~9 en paralelo,
  * y una pagina como el dashboard dispara mas que eso en un solo `Promise.all`.
  * Con el pool en 4 las consultas se encolan y ninguna se cae; el costo es unos
- * milisegundos de espera que solo se pagan en desarrollo.
+ * milisegundos de espera que solo se pagan contra la base local.
  *
- * En produccion manda el `connection_limit` de la URL, que es lo que espera el
- * Postgres administrado.
+ * El corte mira el host y no `NODE_ENV`: los scripts de `scripts/` tambien
+ * pegan contra esta base y corren sin `NODE_ENV=development`, asi que con esa
+ * condicion se quedaban sin el limite y se caian con "Connection terminated
+ * unexpectedly". En produccion el host es el de Railway y manda el
+ * `connection_limit` de la URL, que es lo que espera el Postgres administrado.
  */
-const MAX_CONEXIONES = process.env.NODE_ENV === "development" ? 4 : undefined;
+function esBaseLocal(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  } catch {
+    return false;
+  }
+}
+
+const MAX_CONEXIONES = esBaseLocal(connectionString) ? 4 : undefined;
 
 export const db =
   globalForPrisma.prisma ??

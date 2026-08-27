@@ -323,6 +323,25 @@ model Titulo {
   /// importaciones nuevas, es candidato a baja.
   vistoEnPadronAt DateTime?
 
+  // --- Caidas (ver lib/padron/caidas.ts) -----------------------------------
+  // Todo esto es derivado del historico de cuotas: se recalcula despues de cada
+  // importacion y con scripts/recalcular-caidas.ts. Se guarda porque hace falta
+  // filtrar y contar por estado sin recorrer millones de cuotas.
+
+  /// Cuotas impagas consecutivas al final del historico conocido.
+  impagasConsecutivas Int       @default(0)
+  /// Numero de la ultima cuota que algun padron mostro pagada.
+  cuotaUltimaPaga     Int?
+  /// Entre estas dos cuotas es lo que el sistema llego a ver del titulo.
+  cuotaMinConocida    Int?
+  cuotaMaxConocida    Int?
+  /// Cuando el sistema lo dio por caido. Null = no esta caido.
+  caidoAt             DateTime?
+  /// El historico alcanza para afirmar el estado. False = "sin datos
+  /// suficientes": hay un hueco en la numeracion o la racha llega al borde de
+  /// lo que conocemos, y afirmar una caida ahi seria inventarla.
+  caidaConfiable      Boolean   @default(false)
+
   ultimoPadronImportId String?
   ultimoPadronImport   PadronImport? @relation(fields: [ultimoPadronImportId], references: [id])
 
@@ -335,6 +354,7 @@ model Titulo {
   @@index([clienteId])
   @@index([vendedorId])
   @@index([zonaId])
+  @@index([zonaId, caidoAt])
   @@map("titulos")
 }
 

@@ -11,6 +11,8 @@
  *      la numeracion de cuotas sin duplicar ni saltear.
  *   4. El origen de cada titulo: todo BASE en la primera importacion de la zona,
  *      y despues venta nueva o renovacion segun la cuota con la que aparezca.
+ *   5. El estado de caida que deja la importacion coincide con recorrer el
+ *      historico de cuotas a mano, y ningun titulo con huecos se da por caido.
  *
  * Crea vendedores de relleno para los NomVen que no esten vinculados, porque en
  * la aplicacion real ese mapeo lo hace el admin antes de importar.
@@ -284,9 +286,80 @@ async function main() {
   await db.titulo.deleteMany({ where: { numTit: { in: ["VERIF-VENTA", "VERIF-RENOV"] } } });
   await db.cliente.deleteMany({ where: { dni: { in: ["99999901", "99999902"] } } });
 
+  titulo("7. CAIDAS");
+  // El estado de caida lo deja la importacion. Aca no se comprueba un numero
+  // esperado —depende del padron— sino la propiedad que importa: que lo que
+  // quedo guardado coincida con recorrer el historico a mano, y que ningun
+  // titulo con huecos en la numeracion se haya dado por caido.
+  const conCuotas = await db.titulo.findMany({
+    where: { zonaId: zona.id },
+    select: {
+      numTit: true,
+      impagasConsecutivas: true,
+      caidoAt: true,
+      caidaConfiable: true,
+      cuotaMinConocida: true,
+      cuotaMaxConocida: true,
+      cuotas: { select: { numeroCuota: true, fechaPago: true } },
+    },
+  });
+
+  let rachasMal = 0;
+  let caidosSinRespaldo = 0;
+  let caidos = 0;
+  let sinDatos = 0;
+
+  for (const t of conCuotas) {
+    const pagada = new Map(t.cuotas.map((c) => [c.numeroCuota, c.fechaPago !== null]));
+    const max = Math.max(...pagada.keys());
+    const min = Math.min(...pagada.keys());
+
+    let racha = 0;
+    let cerrada = false;
+    for (let n = max; n >= 1; n--) {
+      if (!pagada.has(n)) break;
+      if (pagada.get(n)) {
+        cerrada = true;
+        break;
+      }
+      racha++;
+      if (n === 1) cerrada = true;
+    }
+
+    if (
+      t.impagasConsecutivas !== racha ||
+      t.cuotaMinConocida !== min ||
+      t.cuotaMaxConocida !== max ||
+      t.caidaConfiable !== (racha >= 6 || cerrada)
+    ) {
+      rachasMal++;
+    }
+    if ((t.caidoAt !== null) !== racha >= 6) caidosSinRespaldo++;
+    if (t.caidoAt) caidos++;
+    if (!t.caidaConfiable) sinDatos++;
+  }
+
+  console.log(`titulos ............... ${conCuotas.length}`);
+  console.log(`caidos ................ ${caidos}`);
+  console.log(`sin datos suficientes . ${sinDatos}`);
+  console.log(`rachas que no coinciden ${rachasMal}`);
+
+  const okCaidas = rachasMal === 0 && caidosSinRespaldo === 0;
+  console.log(
+    okCaidas
+      ? "OK: el estado guardado coincide con recorrer el historico a mano, titulo por titulo"
+      : `FALLA: ${rachasMal} rachas mal calculadas, ${caidosSinRespaldo} caidas sin respaldo`
+  );
+
   titulo("RESULTADO");
   const todoOk =
-    okTotales && okOrigenBase && idempotente && continua && consecutivas && okOrigenes;
+    okTotales &&
+    okOrigenBase &&
+    idempotente &&
+    continua &&
+    consecutivas &&
+    okOrigenes &&
+    okCaidas;
   console.log(todoOk ? "TODO OK" : "HAY FALLAS, revisar arriba");
   process.exitCode = todoOk ? 0 : 1;
 

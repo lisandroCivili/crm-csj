@@ -26,17 +26,29 @@ export default async function LaboratorioPage() {
   const zonaId = await requireZonaActivaId();
   const zona = await getZonaActiva();
 
-  const [clientes, titulos, cuotas, importaciones, vendedores, escalas, tramosAgente, ventas] =
-    await Promise.all([
-      db.cliente.count({ where: { zonaId } }),
-      db.titulo.count({ where: { zonaId } }),
-      db.tituloCuota.count({ where: { titulo: { zonaId } } }),
-      db.padronImport.count({ where: { zonaId } }),
-      db.vendedor.count({ where: { zonaId } }),
-      db.escalaComision.count(),
-      db.escalaAgente.count({ where: { zonaId } }),
-      db.venta.count({ where: { zonaId } }),
-    ]);
+  const [
+    clientes,
+    titulos,
+    cuotas,
+    importaciones,
+    vendedores,
+    escalas,
+    tramosAgente,
+    ventas,
+    caidos,
+    sinDatos,
+  ] = await Promise.all([
+    db.cliente.count({ where: { zonaId } }),
+    db.titulo.count({ where: { zonaId } }),
+    db.tituloCuota.count({ where: { titulo: { zonaId } } }),
+    db.padronImport.count({ where: { zonaId } }),
+    db.vendedor.count({ where: { zonaId } }),
+    db.escalaComision.count(),
+    db.escalaAgente.count({ where: { zonaId } }),
+    db.venta.count({ where: { zonaId } }),
+    db.titulo.count({ where: { zonaId, caidoAt: { not: null } } }),
+    db.titulo.count({ where: { zonaId, caidaConfiable: false } }),
+  ]);
 
   let padrones: string[] = [];
   try {
@@ -96,6 +108,20 @@ export default async function LaboratorioPage() {
                 <Dato etiqueta="Filas de escala" valor={escalas} />
                 <Dato etiqueta="Tramos del contrato" valor={tramosAgente} />
               </dl>
+            </div>
+
+            <div>
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Caídas
+              </p>
+              <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                <Dato etiqueta="Títulos caídos" valor={caidos} />
+                <Dato etiqueta="Sin datos suficientes" valor={sinDatos} />
+              </dl>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Se recalculan solas al importar. El botón sirve para la primera pasada sobre
+                títulos que ya estaban cargados.
+              </p>
             </div>
 
             <HerramientasLaboratorio zona={nombreZona} />
@@ -171,6 +197,12 @@ export default async function LaboratorioPage() {
               propia escala, la del contrato de agencia. Ya viene cargada; si se estuvo
               probando con otros porcentajes, <strong>Restaurar el contrato de agencia</strong>{" "}
               la deja como el contrato real.
+            </li>
+            <li>
+              Las <strong>caídas</strong> se calculan solas con cada importación. Si los
+              títulos ya estaban cargados de antes, una vez hay que apretar{" "}
+              <strong>Recalcular las caídas</strong>; se ven en <strong>Clientes</strong>,
+              con los filtros de arriba del listado.
             </li>
             <li>
               Revisar <strong>Clientes</strong>, <strong>Padrón</strong> y{" "}

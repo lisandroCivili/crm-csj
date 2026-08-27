@@ -2,6 +2,7 @@ import type { FilaPadron } from "@/lib/excel/parsePadron";
 import type { TituloOrigen } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
 import { cuotasInicialesDelArchivo, origenDeTituloNuevo } from "./origenTitulo";
+import { recalcularCaidas } from "./recalcularCaidas";
 
 /**
  * IMPORTACION DEL PADRON
@@ -39,6 +40,12 @@ export type ResumenImportacion = {
   esLineaBase: boolean;
   /** Nombres de NomVen que todavia no estan vinculados a un vendedor. */
   nomVenSinMapear: string[];
+  /**
+   * De los titulos del archivo, cuantos quedaron caidos despues de importarlo.
+   * Es el total, no los que se cayeron recien. Al simular queda en 0: la caida
+   * se calcula sobre el historico ya escrito.
+   */
+  titulosCaidos: number;
 };
 
 type OpcionesImportacion = {
@@ -110,6 +117,7 @@ export async function importarPadron({
     titulosNuevosRenovacion: 0,
     esLineaBase: false,
     nomVenSinMapear: [],
+    titulosCaidos: 0,
   };
 
   if (filas.length === 0) return resumen;
@@ -471,6 +479,14 @@ export async function importarPadron({
           )
         );
       }
+
+      // --- 6. Caidas ---------------------------------------------------------
+      // Va adentro de la transaccion y despues de escribir las cuotas: el
+      // estado se calcula sobre el historico completo, incluidas las cuotas que
+      // acaba de traer este archivo. Solo se revisan los titulos del padron;
+      // los que no vinieron no cambiaron de historia.
+      const caidas = await recalcularCaidas(tx, [...idTituloPorNumTit.values()], ahora);
+      resumen.titulosCaidos = caidas.caidos;
     },
     { timeout: 180_000, maxWait: 20_000 }
   );

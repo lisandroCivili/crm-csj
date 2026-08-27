@@ -18,6 +18,9 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
   toma todas las cuotas sin filtrar por vendedor, **no** aplica `CUOTAS_COMISIONABLES` ni el tope
   del vendedor, y sus porcentajes salen de `EscalaAgente`. Los gastos de representación van
   aparte: no se suman a la comisión.
+- **Caídas**: 6 cuotas consecutivas impagas, contadas desde la cuota más alta hacia atrás y
+  sólo sobre numeración contigua. Un hueco en el histórico **corta la racha**: el título queda
+  como "sin datos suficientes", nunca como "al día". No afecta ninguna comisión.
 - **Datos sensibles**: padrones reales y fotos de DNI no se versionan ni se sirven por URL pública.
 - **Sesión**: el rol, el estado de la cuenta y los permisos se leen de la base en cada request
   (`getUsuarioActual`), nunca de los claims del JWT. Sacar a alguien del sistema se hace por

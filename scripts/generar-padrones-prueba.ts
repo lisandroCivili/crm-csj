@@ -63,6 +63,12 @@ type TituloPrueba = {
    * titulo entra al sistema con una cuota mayor a 1: eso es una RENOVACION.
    */
   apareceDesde: string;
+  /**
+   * Los unicos padrones que lo listan. Sin esto aparece en todos, desde
+   * `apareceDesde`. Sirve para dejar un HUECO en el historico: si el club salta
+   * meses, hay cuotas que el sistema nunca vio y no puede dar por impagas.
+   */
+  apareceEnPadrones?: string[];
   /** A partir de esta cuota deja de pagar. Sin esto, paga todo. */
   dejaDePagarEnCuota?: number;
   /** Para explicar el escenario por pantalla. */
@@ -161,6 +167,24 @@ const TITULOS: TituloPrueba[] = [
     apareceDesde: "2026-06",
     proposito: "Segundo titulo de GINA, este si paga: la deja como caida PARCIAL, no total.",
   },
+  {
+    numTit: "PT-0009",
+    nomVen: VENDEDOR_UNO,
+    nombre: "HUGO PRUEBA",
+    dni: "99990009",
+    localidad: "SALTA",
+    importe: 100_000,
+    mesCuota1: "2025-01",
+    apareceDesde: "2026-06",
+    apareceEnPadrones: ["2026-06", "2026-12"],
+    dejaDePagarEnCuota: 16,
+    proposito:
+      "SIN DATOS SUFICIENTES: el club lo lista en el primer padron (cuotas 16 a 18) y " +
+      "recien vuelve a listarlo en el ultimo (22 a 24). Las cuotas 19, 20 y 21 nunca se " +
+      "vieron, asi que la racha de impagas se corta ahi: son 3, no 6, y el sistema no " +
+      "puede afirmar que este caido. Ninguna de sus cuotas esta paga, asi que no toca " +
+      "las comisiones.",
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -218,8 +242,11 @@ function generarPadron(mesPadron: string): { filas: unknown[][]; resumen: Resume
   const detalle: string[] = [];
 
   for (const t of TITULOS) {
-    // Todavia no lo lista el club.
-    if (distanciaEnMeses(t.apareceDesde, mesPadron) < 0) continue;
+    // Todavia no lo lista el club, o este mes no lo lista.
+    const loLista = t.apareceEnPadrones
+      ? t.apareceEnPadrones.includes(mesPadron)
+      : distanciaEnMeses(t.apareceDesde, mesPadron) >= 0;
+    if (!loLista) continue;
 
     const cuotasEnEstePadron: number[] = [];
 

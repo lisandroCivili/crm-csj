@@ -2,10 +2,19 @@
 
 import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { AlertCircle, Check, Landmark, Percent, Trash2, UserPlus } from "lucide-react";
+import {
+  AlertCircle,
+  Check,
+  Landmark,
+  Percent,
+  PhoneOff,
+  Trash2,
+  UserPlus,
+} from "lucide-react";
 import {
   cargarEscalaDeEjemplo,
   crearVendedoresDePrueba,
+  recalcularCaidasDeLaZona,
   restaurarContratoAgencia,
   vaciarPadron,
   type ResultadoVaciado,
@@ -107,6 +116,10 @@ export function HerramientasLaboratorio({ zona }: { zona: string }) {
     restaurarContratoAgencia,
     {}
   );
+  const [estadoCaidas, accionCaidas] = useActionState<ResultadoVaciado, FormData>(
+    recalcularCaidasDeLaZona,
+    {}
+  );
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -150,6 +163,19 @@ export function HerramientasLaboratorio({ zona }: { zona: string }) {
         </Boton>
       </form>
 
+      <form action={accionCaidas}>
+        <Boton type="submit" variant="outline">
+          <PhoneOff className="size-4" />
+          Recalcular las caídas
+        </Boton>
+      </form>
+
+      {estadoCaidas.ok ? (
+        <span className="text-sm text-success">{estadoCaidas.mensaje}</span>
+      ) : null}
+      {estadoCaidas.error ? (
+        <span className="text-sm text-destructive">{estadoCaidas.error}</span>
+      ) : null}
       {estadoVendedores.ok ? (
         <span className="text-sm text-success">Vendedores de prueba listos.</span>
       ) : null}

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { recalcularCaidas } from "@/lib/padron/recalcularCaidas";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
 /**
@@ -21,6 +22,8 @@ function soloEnDesarrollo() {
 export type ResultadoVaciado = {
   ok?: boolean;
   error?: string;
+  /** Detalle para mostrar al lado del boton cuando el numero importa. */
+  mensaje?: string;
   borrados?: {
     cuotas: number;
     titulos: number;
@@ -205,4 +208,31 @@ export async function restaurarContratoAgencia(): Promise<ResultadoVaciado> {
   revalidatePath("/admin/comisiones/agente");
   revalidatePath("/admin/comisiones/agente/escala");
   return { ok: true };
+}
+
+/**
+ * Vuelve a calcular el estado de caida de todos los titulos de la zona activa.
+ *
+ * La importacion ya lo deja al dia, pero solo para los titulos que trae ese
+ * archivo. Este boton es el equivalente de `scripts/recalcular-caidas.ts` sin
+ * consola: sirve para la primera pasada sobre datos que ya estaban cargados y
+ * para rehacer el calculo despues de tocar la regla.
+ */
+export async function recalcularCaidasDeLaZona(): Promise<ResultadoVaciado> {
+  soloEnDesarrollo();
+  await requireAdmin();
+  const zonaId = await requireZonaActivaId();
+
+  const titulos = await db.titulo.findMany({ where: { zonaId }, select: { id: true } });
+  const resumen = await recalcularCaidas(db, titulos.map((titulo) => titulo.id));
+
+  revalidatePath("/admin/laboratorio");
+  revalidatePath("/admin/clientes");
+
+  return {
+    ok: true,
+    mensaje:
+      `${resumen.titulosRevisados} títulos revisados: ${resumen.caidos} caídos, ` +
+      `${resumen.sinDatos} sin datos suficientes.`,
+  };
 }
