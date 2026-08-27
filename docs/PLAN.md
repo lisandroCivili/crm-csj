@@ -64,7 +64,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 3 | Comisión del agente (Balta y Pedro) | ✅ commit `f81e22e` |
 | 4 | Caídas de clientes | ✅ commit `23d97fe` |
 | 5 | Gráficos del dashboard | ✅ commit `816628f` |
-| 6 | Formulario de venta | 🔨 en curso |
+| 6 | Formulario de venta | 🔨 commit `4bd1ab9` |
 
 Dependencias:
 
@@ -489,7 +489,7 @@ automático da cero) y la leyenda decía "Marzo De 2026".
 
 ### 🔨 Fase 6 — Formulario de venta
 
-Migración `20260827173116_campos_formulario_venta`. Los campos los definió Balta
+Commit `4bd1ab9`. Migración `20260827173116_campos_formulario_venta`. Los campos los definió Balta
 armándolos en el prototipo y los pasó por captura de pantalla el 27/08/2026.
 
 | # | Campo | Tipo | Obligatoriedad |
