@@ -73,9 +73,14 @@ export function ComisionesPorMes({ meses }: { meses: MesComision[] }) {
     const largo = parte * CIRCUNFERENCIA;
     const previo = meses.slice(0, i).reduce((suma, otro) => suma + otro.total, 0);
 
+    const porcentaje = Math.round(parte * 100);
+
     return {
       ...mes,
       parte,
+      porcentaje,
+      etiqueta: etiquetaPeriodo(mes.periodo),
+      detalle: `${etiquetaPeriodo(mes.periodo)}: ${pesos(mes.total)} (${porcentaje} %)`,
       color: RAMPA[pasoDeRampa(i, meses.length)],
       visible: unico ? largo : Math.max(0.5, largo - SEPARACION),
       desplazamiento: -(previo / total) * CIRCUNFERENCIA,
@@ -100,10 +105,11 @@ export function ComisionesPorMes({ meses }: { meses: MesComision[] }) {
                   strokeDasharray={`${gajo.visible} ${CIRCUNFERENCIA - gajo.visible}`}
                   strokeDashoffset={gajo.desplazamiento}
                 >
-                  <title>
-                    {etiquetaPeriodo(gajo.periodo)}: {pesos(gajo.total)} (
-                    {Math.round(gajo.parte * 100)} %)
-                  </title>
+                  {/* Una sola cadena, no varios trozos: dentro de un <title>
+                      de SVG, React serializa distinto los nodos de texto
+                      separados en el servidor y en el cliente, y la hidratacion
+                      falla. */}
+                  <title>{gajo.detalle}</title>
                 </circle>
               )
             )}
@@ -136,11 +142,11 @@ export function ComisionesPorMes({ meses }: { meses: MesComision[] }) {
               />
               {/* Solo la primera letra: `capitalize` pondria "Marzo De 2026". */}
               <span className="min-w-0 flex-1 truncate first-letter:uppercase">
-                {etiquetaPeriodo(gajo.periodo)}
+                {gajo.etiqueta}
               </span>
               <span className="shrink-0 tabular-nums">{pesos(gajo.total)}</span>
               <span className="w-10 shrink-0 text-right tabular-nums text-muted-foreground">
-                {Math.round(gajo.parte * 100)} %
+                {gajo.porcentaje} %
               </span>
             </li>
           ))}
