@@ -177,6 +177,31 @@ listado de clientes filtra y cuenta por él.
   en total, no si dejó de pagar seguidas—, pero se contrasta: si cubre hasta la
   última cuota que conocemos, se avisa que el club lo da al día.
 
+## Gráficos
+
+Los tres gráficos del dashboard son **SVG y divs renderizados en el servidor**,
+no Recharts. La librería está en `package.json` pero no la importa nadie: usarla
+obligaría a volver de cliente pantallas que hoy no lo son, a cambio de nada que
+haga falta todavía. El tooltip es el `title` nativo.
+
+- **Los colores de serie salen de `--chart-*` y se validan, no se eligen a ojo.**
+  **Rojo (`--chart-1`) y verde (`--chart-2`) no se pueden usar juntos**: bajo
+  deuteranopia quedan a un ΔE de 4,9 y son el mismo color. El par que pasa en los
+  dos modos es `--chart-1` con `--chart-4`. Ningún color de serie baja de 0.1 de
+  croma, porque por debajo de eso se lee como gris.
+- **Una serie ordenada lleva rampa de un solo tono, no colores distintos.** Los
+  meses de la torta van del más claro (viejo) al más oscuro (nuevo): el color
+  dice el orden. Los pasos son `--serie-1` a `--serie-6`, y en modo oscuro se
+  invierten con sus propios valores medidos contra el fondo oscuro.
+- **El texto nunca lleva el color de la serie.** El color va en la marca —el
+  cuadradito de la leyenda, la barra, el gajo—; las etiquetas y los importes van
+  en tinta.
+- **Al lado de la torta va siempre la lista con los importes.** Comparar ángulos
+  se hace mal; el reparto se ve en el dibujo y el número se lee escrito.
+- **"No se sabe" no se dibuja como cero.** El primer padrón de una zona no tiene
+  con qué comparar, así que su barra va gris y dice "sin comparación". Es la
+  misma regla que las caídas: mostrar un cero sería afirmar algo que no consta.
+
 ## Stack
 
 Next.js 16 (App Router) · TypeScript · Prisma 7 + PostgreSQL · Auth.js v5 (Credentials) ·

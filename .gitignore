@@ -61,5 +61,4 @@ yarn-error.log*
 next-env.d.ts
 
 # capturas de pantalla de desarrollo
-/.capturas
-/.capturas-movil
+/.capturas*

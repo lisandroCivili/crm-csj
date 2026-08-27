@@ -8,11 +8,13 @@ import {
   Landmark,
   Percent,
   PhoneOff,
+  PieChart,
   Trash2,
   UserPlus,
 } from "lucide-react";
 import {
   cargarEscalaDeEjemplo,
+  cerrarMesesDeEjemplo,
   crearVendedoresDePrueba,
   recalcularCaidasDeLaZona,
   restaurarContratoAgencia,
@@ -120,6 +122,10 @@ export function HerramientasLaboratorio({ zona }: { zona: string }) {
     recalcularCaidasDeLaZona,
     {}
   );
+  const [estadoMeses, accionMeses] = useActionState<ResultadoVaciado, FormData>(
+    cerrarMesesDeEjemplo,
+    {}
+  );
 
   return (
     <div className="flex flex-wrap items-center gap-3">
@@ -169,6 +175,20 @@ export function HerramientasLaboratorio({ zona }: { zona: string }) {
           Recalcular las caídas
         </Boton>
       </form>
+
+      <form action={accionMeses}>
+        <Boton type="submit" variant="outline">
+          <PieChart className="size-4" />
+          Cerrar meses de ejemplo
+        </Boton>
+      </form>
+
+      {estadoMeses.ok ? (
+        <span className="text-sm text-success">{estadoMeses.mensaje}</span>
+      ) : null}
+      {estadoMeses.error ? (
+        <span className="text-sm text-destructive">{estadoMeses.error}</span>
+      ) : null}
 
       {estadoCaidas.ok ? (
         <span className="text-sm text-success">{estadoCaidas.mensaje}</span>

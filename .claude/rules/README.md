@@ -21,6 +21,10 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
 - **Caídas**: 6 cuotas consecutivas impagas, contadas desde la cuota más alta hacia atrás y
   sólo sobre numeración contigua. Un hueco en el histórico **corta la racha**: el título queda
   como "sin datos suficientes", nunca como "al día". No afecta ninguna comisión.
+- **Gráficos**: los colores de serie salen de `--chart-*` y se validan contra daltonismo
+  antes de usarlos; **rojo y verde nunca juntos**. Una serie con orden (meses) lleva rampa
+  de un solo tono, no colores distintos. El texto no lleva el color de la serie, y lo que
+  no se sabe no se dibuja como cero.
 - **Datos sensibles**: padrones reales y fotos de DNI no se versionan ni se sirven por URL pública.
 - **Sesión**: el rol, el estado de la cuenta y los permisos se leen de la base en cada request
   (`getUsuarioActual`), nunca de los claims del JWT. Sacar a alguien del sistema se hace por

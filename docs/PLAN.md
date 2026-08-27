@@ -62,8 +62,8 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 1 | Escalas de comisión por vendedor | ✅ commit `7dbc4ea` |
 | 2 | Renovaciones y pestaña Padrón | ✅ commit `c47735b` |
 | 3 | Comisión del agente (Balta y Pedro) | ✅ commit `f81e22e` |
-| 4 | Caídas de clientes | 🔨 commit `23d97fe` |
-| 5 | Gráficos del dashboard | ⬜ pendiente |
+| 4 | Caídas de clientes | ✅ commit `23d97fe` |
+| 5 | Gráficos del dashboard | 🔨 en curso |
 | 6 | Formulario de venta | ⬜ bloqueada — falta la lista de campos de Balta |
 
 Dependencias:
@@ -353,9 +353,10 @@ compara el total del motor contra una cuenta hecha con aritmética propia —
 $564.000 sobre $7.800.000 cobrados—, más el cierre, el congelamiento y la
 reapertura. Lint, 74 tests y build pasan.
 
-### 🔨 Fase 4 — Caídas de clientes
+### ✅ Fase 4 — Caídas de clientes
 
-Commit `23d97fe`. Migración `20260827023523_caidas_de_titulos`.
+Commit `23d97fe`. Validada por Lisandro el 27/08/2026. Migración
+`20260827023523_caidas_de_titulos`.
 
 > **Aclaración para Balta**: el sistema no necesita "cargar 7 padrones" como
 > mecanismo; necesita **6 cuotas consecutivas de histórico por título**. Como cada
@@ -431,14 +432,58 @@ tests y build pasan.
 > variable, así que se quedaban sin límite y morían con *"Connection terminated
 > unexpectedly"* contra la base local. Ahora el corte mira el host.
 
-### ⬜ Fase 5 — Gráficos del dashboard
+### 🔨 Fase 5 — Gráficos del dashboard
 
-- **Torta de comisiones de meses anteriores.** Balta la pidió así. Sale de
-  `ComisionAgentePeriodo`, que sólo tiene los meses **cerrados** — hay que
-  aclararlo para que un mes abierto no parezca que valió cero.
-- **Barras: diferencia en ventas entre los últimos 5 padrones.** Sale de
-  `PadronImport.titulosNuevosVenta` / `titulosNuevosRenovacion` (Fase 2).
-- Reusar el patrón de `components/dashboard/cobranza-por-mes.tsx` (Recharts).
+Sin migración: las dos series salen de tablas que ya se llenaban solas.
+
+Qué se hizo:
+
+- **Torta de comisiones** (`components/dashboard/comisiones-por-mes.tsx`). Sale
+  de `ComisionAgentePeriodo` y toma **sólo los meses cerrados**, con la
+  aclaración escrita en la tarjeta: un mes en borrador se sigue moviendo con
+  cada padrón que entra, así que se mostraría más chico de lo que va a terminar
+  siendo.
+- **Barras de producción** (`components/dashboard/produccion-por-padron.tsx`).
+  Los últimos 5 padrones, con los títulos nuevos partidos en venta nueva y
+  renovación, desde `PadronImport` (Fase 2).
+- **Se quitaron dos tarjetas del dashboard** a pedido de Lisandro: *Leads sin
+  asignar* y *Clientes en padrón*. Quedan 6. Sus consultas se sacaron también,
+  así que el dashboard hace cuatro queries menos.
+- Las consultas nuevas viven en `lib/dashboard/graficos.ts`, y la única lógica
+  que se puede equivocar en silencio —qué paso de color le toca a cada mes— está
+  aparte y testeada en `lib/dashboard/rampa.ts`.
+
+**El gráfico no usa Recharts**, aunque el plan lo decía. La librería está
+instalada pero no la usaba nadie: `cobranza-por-mes.tsx` siempre fue CSS
+renderizado en el servidor. Los dos gráficos nuevos siguen ese camino —SVG y
+divs, sin JavaScript de cliente ni hidratación—, que además es lo que permite
+que sean componentes de servidor como el resto del dashboard.
+
+**Sobre el color**, que fue la parte que más cambió respecto de lo obvio:
+
+- **Rojo y verde no se pueden usar juntos.** Era la combinación natural para
+  "ventas nuevas vs. renovaciones" y el chequeo de daltonismo la rechaza: bajo
+  deuteranopia quedan a un ΔE de 4,9, o sea indistinguibles. El par que quedó es
+  `--chart-1` (rojo) con `--chart-4` (azul), que pasa en claro y en oscuro.
+- **`--chart-4` y `--chart-5` tenían croma 0.09**, por debajo del piso de 0.1 a
+  partir del cual un color deja de leerse como color y pasa por gris. Subieron a
+  0.11.
+- **La torta usa una rampa de un solo tono, no seis colores.** Los meses tienen
+  orden, así que el color lo muestra: del más viejo (claro) al más nuevo
+  (oscuro). En modo oscuro la rampa se invierte, con sus propios pasos medidos
+  contra el fondo oscuro, no dando vuelta los de claro.
+- **Una torta es mala para comparar valores parecidos** —el ojo mide mal los
+  ángulos—, así que al lado va la lista con el importe y el porcentaje de cada
+  mes. El reparto se ve en el dibujo y el número se lee escrito.
+- **La línea base no se dibuja como cero.** En el primer padrón de una zona no
+  hay con qué comparar, así que no se sabe cuáles títulos eran ventas: esa barra
+  va gris y dice "sin comparación". Pintarla en cero estaría diciendo que ese mes
+  no se vendió nada, que es otra cosa.
+
+Verificado mirando la pantalla renderizada, en claro y en oscuro, además de lint,
+102 tests y build. Ahí salieron dos defectos que no se veían en el código: la
+barra no se dibujaba (un `height` en porcentaje contra un padre de alto
+automático da cero) y la leyenda decía "Marzo De 2026".
 
 ### ⬜ Fase 6 — Formulario de venta
 
@@ -1023,16 +1068,116 @@ y hacen falta 6. Se comprobó contra el padrón real: 2.334 títulos, 0 caídos 
 
 **Laboratorio** → **Vaciar el padrón de SALTA**.
 
+### Fase 5 — Gráficos del dashboard
+
+**Preparación**
+
+La base ya quedó con todo cargado. Si hiciera falta rearmarlo: los 7 padrones de
+prueba importados en Salta (ver la guía de la Fase 2) y, para que la torta tenga
+datos, **Laboratorio → Cerrar meses de ejemplo**.
+
+Ese botón hace falta porque un mes cerrado es el resultado de haber liquidado
+ese mes, y en la base de desarrollo se importó todo el mismo día: no hay forma de
+fabricar meses anteriores desde la pantalla.
+
+**1. El dashboard quedó con 6 tarjetas** — *esto es lo nuevo*
+
+Menú **Dashboard**. Arriba tienen que quedar exactamente estas seis:
+
+| Tarjeta |
+|---|
+| Cobranza acumulada |
+| Promedio de cuota |
+| Ventas del mes |
+| Comisiones del mes |
+| Comisión del club |
+| Margen de la agencia |
+
+Ya **no** están *Leads sin asignar* ni *Clientes en padrón*. Los leads se siguen
+viendo en su propia pantalla y los clientes en la suya; lo que se sacó es la
+tarjeta del dashboard.
+
+**2. La torta de comisiones** — *esto es lo nuevo*
+
+Abajo a la izquierda, **Comisión del club por mes**. Con los meses de ejemplo
+cargados tiene que dar exactamente esto, y se puede controlar con la
+calculadora:
+
+| Mes | Importe | Parte |
+|---|---|---|
+| Marzo de 2026 | $ 300.000 | 10 % |
+| Abril de 2026 | $ 450.000 | 15 % |
+| Mayo de 2026 | $ 600.000 | 20 % |
+| Junio de 2026 | $ 750.000 | 25 % |
+| Julio de 2026 | $ 900.000 | 30 % |
+
+En el centro de la torta, el total: **$ 3.000.000**. Los porcentajes suman 100.
+
+El color va del verde más claro (marzo, el más viejo) al más oscuro (julio, el
+más nuevo): la rampa muestra el orden de los meses.
+
+**3. Lo que la torta NO muestra**
+
+La tarjeta **Comisión del club** de arriba dice **$ 564.000** —agosto, el mes en
+curso— y ese número **no** está en la torta ni en el total de $ 3.000.000. Es a
+propósito y está escrito en la tarjeta: agosto está en borrador y se sigue
+moviendo con cada padrón que entre, así que mostrarlo lo dejaría más chico de lo
+que va a terminar siendo.
+
+Para comprobarlo: **Comisiones → Comisión del agente**, cerrar agosto, volver al
+dashboard. Ahora la torta tiene seis gajos y el total pasa a **$ 3.564.000**.
+Conviene reabrirlo después para no dejar el mes cerrado.
+
+**4. Las barras de producción** — *esto es lo nuevo*
+
+Abajo a la derecha, **Títulos nuevos en los últimos 5 padrones**. Con los 7
+padrones importados, la ventana cae sobre los últimos cinco (agosto a diciembre)
+y tiene que verse: una sola barra azul de **1** en septiembre —la renovación
+`PT-0006` de la Fase 2— y el resto en cero.
+
+Está bien que esté casi vacío: en el escenario de prueba sólo hubo movimiento en
+julio y septiembre. Que un padrón no traiga títulos nuevos es información, no un
+error.
+
+**5. Las tres formas de la barra**
+
+Para verlas todas juntas hay que mirar el dashboard **cuando van importados
+cinco padrones**, que es cuando la ventana cubre del 01 al 05. Desde
+**Laboratorio** → **Vaciar el padrón de SALTA** → **Crear los vendedores de
+prueba** → **Cargar escala de ejemplo**, importar del 01 al 05 y abrir el
+dashboard:
+
+- **junio**: barra **gris** de 6 con la etiqueta *base*. Es el primer padrón de
+  la zona: no hay con qué comparar, así que no se sabe cuáles títulos eran
+  ventas. Es el punto importante del gráfico — pintarla en cero estaría diciendo
+  que ese mes no se vendió nada.
+- **julio**: barra **roja** de 2. Ventas nuevas.
+- **septiembre**: barra **azul** de 1. Una renovación.
+- agosto: en cero.
+
+Después se importan el 06 y el 07 para dejar la base como estaba.
+
+**6. Rojo y azul, no rojo y verde**
+
+Vale la pena saber por qué: rojo y verde era lo natural para "ventas nuevas" y
+"renovaciones", y el chequeo de daltonismo lo rechazó —para una persona con
+deuteranopia son el mismo color—. Por eso las renovaciones van en azul.
+
+**Borrar los datos de prueba**
+
+Los meses de ejemplo son períodos de comisión cerrados. Se sacan desde
+**Comisiones → Comisión del agente**, navegando a cada mes y apretando
+**Reabrir**; o se vuelven a pisar apretando otra vez **Cerrar meses de ejemplo**.
+
 ---
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Lisandro validó la Fase 3 el 27/08/2026. La Fase 4 (caídas de
-clientes) está construida y verificada contra la base local y contra el padrón
-real; falta que la valide siguiendo la guía de arriba. Si da OK, sigue la
-**Fase 5** (gráficos del dashboard), que ya tiene sus dos fuentes listas:
-`ComisionAgentePeriodo` de la Fase 3 y `PadronImport.titulosNuevosVenta` /
-`titulosNuevosRenovacion` de la Fase 2.
+**Dónde retomar:** Lisandro validó la Fase 4 el 27/08/2026. La Fase 5 (gráficos
+del dashboard) está construida y revisada en pantalla; falta que la valide
+siguiendo la guía de arriba. Después queda sólo la **Fase 6** (formulario de
+venta), que sigue **bloqueada** esperando la lista de campos de Balta: sin eso no
+se puede empezar.
 
 **Cosas que conviene saber:**
 
@@ -1041,6 +1186,24 @@ real; falta que la valide siguiendo la guía de arriba. Si da OK, sigue la
   calculadas (`PT-0007` caído, `PT-0009` sin datos suficientes) y sin ningún
   período de comisión del agente guardado. Para empezar de cero, vaciar desde
   `/admin/laboratorio`.
+- **Los colores de los gráficos se validan, no se eligen a ojo.** La Fase 5 dejó
+  la regla asentada en `CLAUDE.md`: rojo (`--chart-1`) y verde (`--chart-2`) no
+  se pueden usar juntos en un mismo gráfico porque bajo deuteranopia son
+  indistinguibles. El par que sí pasa es `--chart-1` con `--chart-4`.
+- **Los gráficos no usan Recharts.** Está en `package.json` pero no lo importa
+  nadie: los tres gráficos del dashboard son SVG y divs renderizados en el
+  servidor. Si alguna vez hace falta interacción de verdad, ahí sí conviene
+  evaluarla; mientras tanto, sumarla obligaría a volver componentes de cliente
+  pantallas que hoy no lo son.
+- **La base de desarrollo tiene 5 meses de comisión del agente cerrados** en
+  Salta (marzo a julio de 2026, $3.000.000 en total), sembrados desde
+  **Laboratorio → Cerrar meses de ejemplo** para poder ver la torta. No salen de
+  ningún cálculo: son importes de ejemplo elegidos para que las partes den 10,
+  15, 20, 25 y 30 %.
+- **El modo oscuro no tiene interruptor.** Los tokens `.dark` existen y los
+  gráficos están validados contra el fondo oscuro, pero ninguna pantalla pone la
+  clase, así que hoy no se puede llegar desde la aplicación.
+
 - **El escenario de prueba tiene 9 títulos y 8 clientes desde la Fase 4.** Si se
   regeneran los padrones con una copia vieja del script, `PT-0009` no va a estar
   y la guía de la Fase 4 no va a coincidir.

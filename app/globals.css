@@ -21,6 +21,12 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  --color-serie-1: var(--serie-1);
+  --color-serie-2: var(--serie-2);
+  --color-serie-3: var(--serie-3);
+  --color-serie-4: var(--serie-4);
+  --color-serie-5: var(--serie-5);
+  --color-serie-6: var(--serie-6);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -114,11 +120,28 @@
   --input: oklch(0.9 0.005 20);
   --ring: oklch(0.501 0.201 20);
 
+  /* Colores de serie de los graficos. Se validaron con el chequeo de daltonismo
+     antes de usarlos, y ahi salto que chart-1 (rojo) y chart-2 (verde) no se
+     pueden usar juntos: bajo deuteranopia quedan a un delta E de 4,9 y se
+     confunden. El par que usan las barras del dashboard es chart-1 + chart-4.
+     El croma de chart-4 y chart-5 subio de 0.09 a 0.11 porque por debajo de 0.1
+     un color deja de leerse como color y pasa por gris. */
   --chart-1: oklch(0.501 0.201 20);
   --chart-2: oklch(0.51 0.119 158);
   --chart-3: oklch(0.63 0.13 60);
-  --chart-4: oklch(0.55 0.09 235);
-  --chart-5: oklch(0.52 0.09 330);
+  --chart-4: oklch(0.55 0.11 235);
+  --chart-5: oklch(0.52 0.11 330);
+
+  /* Rampa ordinal de un solo tono, del mes mas viejo al mas nuevo. Es de un
+     tono y no de seis porque los meses tienen orden: el color tiene que
+     mostrarlo. Pasos de luminosidad parejos (delta L >= 0.06) para que se
+     distingan, y el extremo claro llega al 2:1 contra la superficie. */
+  --serie-1: oklch(0.76 0.11 158);
+  --serie-2: oklch(0.694 0.125 158);
+  --serie-3: oklch(0.628 0.13 158);
+  --serie-4: oklch(0.562 0.13 158);
+  --serie-5: oklch(0.496 0.115 158);
+  --serie-6: oklch(0.43 0.1 158);
 
   --radius: 0.875rem;
 
@@ -176,6 +199,16 @@
   --chart-3: oklch(0.74 0.13 60);
   --chart-4: oklch(0.66 0.1 235);
   --chart-5: oklch(0.66 0.1 330);
+
+  /* La rampa se invierte en oscuro: no es el mismo verde dado vuelta, son sus
+     propios pasos medidos contra el fondo oscuro. El mes mas nuevo queda igual
+     de destacado, pero ahora por ser el mas brillante. */
+  --serie-1: oklch(0.44 0.1 158);
+  --serie-2: oklch(0.506 0.115 158);
+  --serie-3: oklch(0.572 0.13 158);
+  --serie-4: oklch(0.638 0.13 158);
+  --serie-5: oklch(0.704 0.125 158);
+  --serie-6: oklch(0.77 0.11 158);
 
   /* El panel lateral mantiene el mismo negro en los dos modos. */
   --sidebar: oklch(0.16 0.005 20);

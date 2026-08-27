@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { periodoActual } from "@/lib/comisiones/periodo";
 import { recalcularCaidas } from "@/lib/padron/recalcularCaidas";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
@@ -234,5 +235,58 @@ export async function recalcularCaidasDeLaZona(): Promise<ResultadoVaciado> {
     mensaje:
       `${resumen.titulosRevisados} títulos revisados: ${resumen.caidos} caídos, ` +
       `${resumen.sinDatos} sin datos suficientes.`,
+  };
+}
+
+/**
+ * Cierra unos meses de comision del agente con importes de ejemplo, para poder
+ * ver la torta del dashboard con datos.
+ *
+ * Hace falta un boton porque estos periodos no se pueden fabricar de otra
+ * manera: un mes cerrado es el resultado de haber liquidado ese mes, y en la
+ * base de desarrollo recien se importaron todos los padrones el mismo dia.
+ *
+ * Los importes estan elegidos para poder auditarlos de memoria: suman
+ * $3.000.000 y las partes son 10, 15, 20, 25 y 30 %. El mes en curso NO se
+ * toca, asi se ve que la torta solo cuenta los meses cerrados.
+ */
+export async function cerrarMesesDeEjemplo(): Promise<ResultadoVaciado> {
+  soloEnDesarrollo();
+  await requireAdmin();
+  const zonaId = await requireZonaActivaId();
+
+  const MESES = [
+    { periodo: "2026-03", total: 300_000 },
+    { periodo: "2026-04", total: 450_000 },
+    { periodo: "2026-05", total: 600_000 },
+    { periodo: "2026-06", total: 750_000 },
+    { periodo: "2026-07", total: 900_000 },
+  ];
+
+  const actual = periodoActual();
+  const aCerrar = MESES.filter((mes) => mes.periodo !== actual);
+
+  for (const mes of aCerrar) {
+    await db.comisionAgentePeriodo.upsert({
+      where: { zonaId_periodo: { zonaId, periodo: mes.periodo } },
+      update: { totalComision: mes.total, estado: "CERRADO", fechaCierre: new Date() },
+      create: {
+        zonaId,
+        periodo: mes.periodo,
+        totalComision: mes.total,
+        estado: "CERRADO",
+        fechaCierre: new Date(),
+      },
+    });
+  }
+
+  revalidatePath("/admin/laboratorio");
+  revalidatePath("/admin/dashboard");
+  revalidatePath("/admin/comisiones/agente");
+
+  const suma = aCerrar.reduce((total, mes) => total + mes.total, 0);
+  return {
+    ok: true,
+    mensaje: `${aCerrar.length} meses cerrados, $${suma.toLocaleString("es-AR")} en total.`,
   };
 }

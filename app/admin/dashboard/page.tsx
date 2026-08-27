@@ -1,7 +1,6 @@
 import Link from "next/link";
 import {
   BadgeDollarSign,
-  ClipboardList,
   Coins,
   FileSpreadsheet,
   Landmark,
@@ -9,10 +8,11 @@ import {
   ScrollText,
   TrendingUp,
   UserSquare,
-  Users,
 } from "lucide-react";
 import { CobranzaPorMes, type MesCobranza } from "@/components/dashboard/cobranza-por-mes";
+import { ComisionesPorMes } from "@/components/dashboard/comisiones-por-mes";
 import { FiltroCuota } from "@/components/dashboard/filtro-cuota";
+import { ProduccionPorPadron } from "@/components/dashboard/produccion-por-padron";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatCard } from "@/components/layout/stat-card";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,11 @@ import { CUOTAS_COMISIONABLES } from "@/lib/comisiones/constantes";
 import { obtenerLiquidacion, obtenerLiquidacionVendedor } from "@/lib/comisiones/liquidacion";
 import { obtenerLiquidacionAgente } from "@/lib/comisiones/liquidacionAgente";
 import { etiquetaPeriodo, periodoActual } from "@/lib/comisiones/periodo";
+import {
+  comisionesCerradas,
+  produccionPorPadron,
+  PADRONES_EN_LAS_BARRAS,
+} from "@/lib/dashboard/graficos";
 import { db } from "@/lib/db";
 import { pesos } from "@/lib/formato";
 import { getVendedorDelAdmin, requireAdmin, requireZonaActivaId } from "@/lib/sesion";
@@ -36,8 +41,10 @@ export default async function AdminDashboardPage({
   const parametros = await searchParams;
   const pedida = Number(parametros.cuota);
   const cuota = (CUOTAS_COMISIONABLES as readonly number[]).includes(pedida) ? pedida : null;
-  // El filtro por numero de cuota afecta a la cobranza y al promedio, no a los
-  // leads ni a las ventas cargadas: esas no tienen numero de cuota.
+  // El filtro por numero de cuota afecta a la cobranza y al promedio, no a las
+  // ventas cargadas ni a los graficos de abajo: esos no tienen numero de cuota.
+  // Las tarjetas y el grafico que si lo respetan lo dicen en su titulo, para que
+  // se vea cual es el alcance del filtro sin tener que adivinarlo.
   const filtroCuota = cuota === null ? {} : { numeroCuota: cuota };
 
   const periodo = periodoActual();
@@ -47,10 +54,6 @@ export default async function AdminDashboardPage({
   inicioDeMes.setUTCHours(0, 0, 0, 0);
 
   const [
-    leadsPendientes,
-    leadsSinAsignar,
-    clientes,
-    titulos,
     vendedores,
     ventasDelMes,
     ultimoPadron,
@@ -60,11 +63,9 @@ export default async function AdminDashboardPage({
     liquidacion,
     comisionAgente,
     fichaPropia,
+    mesesCerrados,
+    padrones,
   ] = await Promise.all([
-    db.lead.count({ where: { zonaId, estado: "PENDIENTE" } }),
-    db.lead.count({ where: { zonaId, vendedorAsignadoId: null } }),
-    db.cliente.count({ where: { zonaId } }),
-    db.titulo.count({ where: { zonaId, activo: true } }),
     db.vendedor.count({ where: { zonaId, activo: true } }),
     db.venta.count({ where: { zonaId, estado: "ACTIVA", fechaVenta: { gte: inicioDeMes } } }),
     db.padronImport.findFirst({
@@ -94,6 +95,8 @@ export default async function AdminDashboardPage({
     obtenerLiquidacion({ zonaId, periodo }),
     obtenerLiquidacionAgente({ zonaId, periodo }),
     getVendedorDelAdmin(),
+    comisionesCerradas(zonaId),
+    produccionPorPadron(zonaId),
   ]);
 
   // Lo que el club le paga a la agencia menos lo que la agencia le paga a su
@@ -169,14 +172,6 @@ export default async function AdminDashboardPage({
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
-          etiqueta="Leads sin asignar"
-          valor={leadsSinAsignar}
-          detalle={`${leadsPendientes} pendientes de trabajar`}
-          icono={ClipboardList}
-          tono={leadsSinAsignar > 0 ? "atencion" : "neutro"}
-          href="/admin/leads?asignacion=sin"
-        />
-        <StatCard
           etiqueta={cuota ? `Cobranza de la cuota ${cuota}` : "Cobranza acumulada"}
           valor={`${porcentajeCobrado}%`}
           detalle={`${totalPagas.toLocaleString("es-AR")} de ${totalCuotas.toLocaleString("es-AR")} cuotas emitidas`}
@@ -238,13 +233,6 @@ export default async function AdminDashboardPage({
           icono={Scale}
           tono={margenAgencia >= 0 ? "marca" : "atencion"}
           href="/admin/comisiones/agente"
-        />
-        <StatCard
-          etiqueta="Clientes en padrón"
-          valor={clientes}
-          detalle={`${titulos.toLocaleString("es-AR")} títulos activos`}
-          icono={Users}
-          href="/admin/clientes"
         />
       </div>
 
@@ -348,6 +336,35 @@ export default async function AdminDashboardPage({
             </CardContent>
           </Card>
         </div>
+      </div>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Comisión del club por mes</CardTitle>
+            <CardDescription>
+              Sólo los meses cerrados: uno en borrador se sigue moviendo con cada padrón
+              que entra, así que se mostraría más chico de lo que va a terminar siendo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ComisionesPorMes meses={mesesCerrados} />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Títulos nuevos en los últimos {PADRONES_EN_LAS_BARRAS} padrones
+            </CardTitle>
+            <CardDescription>
+              Cuánto entró con cada archivo y de dónde vino: venta del mes o renovación.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ProduccionPorPadron padrones={padrones} />
+          </CardContent>
+        </Card>
       </div>
     </>
   );
