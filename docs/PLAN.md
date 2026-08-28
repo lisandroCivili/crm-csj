@@ -74,7 +74,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 7 | Que el CRM funcione desde el celular | ✅ commit `84db215` |
 | 8 | Tres arreglos chicos (toast · editar plan · código de agente) | ✅ commit `24e8013` |
 | 9 | Padrón: varios archivos y selector nuevo | ✅ commit `96f7c45` |
-| 10 | Clientes: corregir datos y ver la documentación | 🔨 commit `PENDIENTE` |
+| 10 | Clientes: corregir datos y ver la documentación | 🔨 commit `351e633` |
 | 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ⬜ |
 | 12 | Actividad: leads + ventas, filtrable por vendedor | ⬜ |
 
@@ -943,68 +943,95 @@ se pide una vez para los dos archivos que la necesitaban, y Cancelar borra los
 dos temporales que había creado. Lint, 134 tests y build pasan; ninguna pantalla
 se sale por el costado en el teléfono.
 
-### ⬜ Fase 10 — Clientes: corregir los datos y ver la documentación
+### 🔨 Fase 10 — Clientes: corregir los datos y ver la documentación
+
+Commit `351e633`. Migración `20260828231830_campos_manuales_cliente`.
 
 #### 10.1 Editar los datos personales — sólo admin
 
-Hoy la ficha (`app/admin/clientes/[id]/page.tsx`) es de sólo lectura y no existe
-ninguna server action de cliente: el único que escribe es el importador.
+La ficha del cliente era de sólo lectura y no existía ninguna server action de
+cliente: el único que escribía era el importador.
 
-**El problema de fondo**: `lib/padron/importarPadron.ts` compara los seis campos
-personales (`nombre`, `domicilio`, `telefono`, `codPos`, `localidad`, `email`) y,
-si **cualquiera** difiere, empuja **los seis** juntos. Un `null` del padrón pisa un
-valor cargado a mano, y si falta la columna entera en el Excel —ninguna de las
-cinco opcionales está en `COLUMNAS_REQUERIDAS`— el campo se borra en toda la zona.
-Sin resolver eso, editar un teléfono no sirve para nada.
+**El problema de fondo no era la falta de un formulario.**
+`lib/padron/importarPadron.ts` comparaba los seis campos personales (`nombre`,
+`domicilio`, `telefono`, `codPos`, `localidad`, `email`) y, si **cualquiera**
+difería, empujaba **los seis** juntos. Con eso, un teléfono corregido a mano
+duraba hasta el padrón siguiente. Y había un segundo agujero, peor: ninguna de
+las cinco columnas opcionales está en `COLUMNAS_REQUERIDAS`, así que un Excel
+sin la columna `Email` se importaba igual y **borraba el email de toda la
+zona** — `parsePadron` devolvía `null` tanto para "la celda está vacía" como
+para "la columna no existe".
 
 Definición de Lisandro: **manda el dato corregido**.
 
-- Migración: `Cliente.camposManuales String[] @default([])`, más `editadoPorUserId`
-  y `editadoAt` (que además alimentan la Actividad de la Fase 12). Un array y no
-  seis booleanos, para no tener que migrar cada vez que aparezca un campo nuevo.
-- **La importación respeta los campos marcados**: el `findMany` de clientes
-  existentes trae `camposManuales`, y esos campos se sacan tanto de la comparación
-  como del `data` del `update`. Es el mismo criterio que ya se aplica a
-  `Titulo.origen` y `Titulo.cuotaInicial`, que se sellan al crear y no se
-  recalculan nunca.
-- **Arreglo de paso**: distinguir *"la celda está vacía"* de *"la columna no vino
-  en el archivo"*. `parsePadron` ya calcula el índice de cada columna opcional y
-  devuelve `null` en los dos casos; pasa a informar cuáles encontró, e
-  `importarPadron` no manda los campos cuya columna faltaba. Sin esto, un Excel al
-  que le falte una columna sigue vaciando ese dato en toda la zona, aun con la
-  protección de arriba —que sólo cubre los campos ya corregidos a mano—.
-- `lib/validations/cliente.ts` nuevo. **El DNI no se edita**: es la clave
-  `@@unique([zonaId, dni])` y es con lo que el padrón encuentra al cliente;
-  cambiarlo a mano haría que la próxima importación cree un cliente duplicado. Se
-  dice en la pantalla.
-- `app/admin/clientes/actions.ts` nuevo con `editarCliente`: `requireAdmin()`,
-  scope por zona, y al guardar suma a `camposManuales` los campos que efectivamente
-  cambiaron.
-- **UI**: botón **Editar** en el `PageHeader` de la ficha —la prop `acciones` ya
-  existe y se usa así en la ficha del vendedor—, pantalla
-  `app/admin/clientes/[id]/editar/page.tsx` y
-  `components/clientes/cliente-form.tsx` con el molde de `vendedor-form.tsx`. En la
-  card "Datos de contacto", badge **"corregido a mano"** en cada campo marcado, el
-  pie *"Corregido por X el …"*, y un botón **"Volver a tomar todo del padrón"** que
-  vacía `camposManuales`.
+- **`lib/padron/camposCliente.ts` (nuevo)** decide qué campos toca el padrón.
+  Es función pura y tiene 15 tests, por la misma razón que el motor de
+  comisiones: acá un bug no rompe la pantalla, borra el domicilio de miles de
+  clientes sin que nadie se entere.
+- **`Cliente.camposManuales String[]`**, más `editadoPorUserId` y `editadoAt`
+  (que además alimentan la Actividad de la Fase 12). Un array y no seis
+  booleanos, para no migrar cada vez que aparezca un campo nuevo.
+- **`parsePadron` informa qué columnas personales encontró**
+  (`columnasPersonales`) e `importarPadron` recibe esa lista y no escribe los
+  campos que no vinieron. La opción es opcional y por omisión asume que
+  estaban todas, que es como se comportaba antes.
+- **Se marcan sólo los campos que efectivamente cambiaron.** Abrir el
+  formulario y guardar sin tocar nada no blinda los seis contra el padrón.
+- **El DNI no se edita** y se dice en la pantalla: es la clave
+  `@@unique([zonaId, dni])` y es con lo que el padrón encuentra al cliente.
+  Cambiarlo a mano crearía un cliente duplicado en la importación siguiente.
+- **El teléfono va como texto libre**, no como dígitos —al revés que en el
+  formulario de venta—: este campo lo llena el padrón, que trae cosas como
+  `4231234 / 155-667788`. Normalizarlo dejaría un valor que el club nunca
+  escribió.
+- **UI**: botón **Corregir datos** en la ficha, pantalla
+  `/admin/clientes/[id]/editar`, badge **"corregido a mano"** en cada campo
+  marcado, el pie *"Un dato corregido por X el …"* y un botón **"Volver a
+  tomar todo del padrón"**. Ese botón **saca las marcas, no revierte los
+  valores**: el padrón es el que manda el dato, así que la próxima importación
+  que traiga a ese cliente los va a pisar sola.
 
 #### 10.2 La documentación en la ficha del cliente
 
 No hay FK de `Venta` a `Cliente`: la venta duplica `nombreCliente` y `dni` como
 texto, y `Venta.tituloId` existe en el schema pero **no lo escribe nadie**. El
-único camino real es `Cliente.dni + zonaId` → `Venta` (que tiene `@@index([dni])`
-y `zonaId`) → `Venta.adjuntos`.
+único camino real es `Cliente.dni + zonaId` → `Venta` → `Venta.adjuntos`, y la
+card lo dice en pantalla para que nadie suponga que faltan adjuntos cuando lo
+que falta es la venta cargada con ese DNI.
 
-- Card **Documentación** entre los datos de contacto y la lista de títulos: los
-  adjuntos de todas las ventas de ese DNI en la zona, con tipo (DNI / Contrato),
-  fecha, quién lo subió y a qué venta pertenece.
-- Se sirven por `/api/uploads/[id]`, que **ya autoriza a un ADMIN por zona activa**:
-  no hace falta tocar permisos ni abrir nada.
-- Miniatura para las imágenes y link para los PDF, con `next/image` y
-  `unoptimized`, que la ruta es dinámica y autenticada.
-- Si no hay nada: *"No hay documentación cargada. Los adjuntos entran con la venta
-  que carga el vendedor."* Y se aclara en la card que el vínculo es **por DNI**, no
-  por título.
+- Card **Documentación** entre los datos de contacto y la lista de títulos, con
+  miniatura para las imágenes, ícono para los PDF, fecha, quién lo subió y de
+  qué venta salió.
+- Se sirven por `/api/uploads/[id]`, que **ya autorizaba a un ADMIN por zona
+  activa**: no hubo que tocar permisos. Verificado que sin sesión responde
+  **401**.
+- Las miniaturas van con `unoptimized`: el optimizador de Next no puede leer
+  una ruta autenticada.
+- El identificador de la venta **no linkea**. La ficha de una venta hoy es sólo
+  del vendedor (`/vendedor/ventas/[id]`) y un admin que entre ahí se va
+  rebotado al dashboard; el link se agrega en la Fase 11, que crea
+  `/admin/ventas/[id]`.
+
+**Archivos**: `lib/padron/camposCliente.ts` y `lib/padron/camposCliente.test.ts`
+(nuevos), `lib/validations/cliente.ts` (nuevo), `app/admin/clientes/actions.ts`
+(nuevo), `app/admin/clientes/[id]/editar/page.tsx` (nueva),
+`components/clientes/cliente-form.tsx` y
+`components/clientes/documentacion-cliente.tsx` (nuevos),
+`app/admin/clientes/[id]/page.tsx`, `lib/excel/parsePadron.ts`,
+`lib/padron/importarPadron.ts`, `app/admin/padron/actions.ts`,
+`scripts/verificar-padron.ts`, `prisma/schema.prisma`.
+
+Verificado contra la base de desarrollo: un teléfono corregido a mano sobrevive
+a reimportar el padrón mientras el domicilio divergente sí vuelve al valor del
+club; un archivo **sin** la columna `Email` no borra el email, y uno **con** la
+columna vacía sí lo vacía (que es lo correcto). Por pantalla: la card de
+documentación muestra el adjunto de una venta cargada con ese DNI, la miniatura
+se sirve **200** con sesión y **401** sin ella, el DNI está deshabilitado en el
+formulario, el badge y el pie aparecen al corregir y desaparecen con "Volver a
+tomar todo del padrón". Después se vació Salta y se reimportaron los 7 padrones:
+comisiones **$105.000 / $38.000**, agente **$564.000** con margen **$421.000**,
+1 caído y 1 renovación — los mismos números de siempre. Lint, **149 tests** y
+build pasan; ninguna de las dos pantallas se sale por el costado en el teléfono.
 
 ### ⬜ Fase 11 — Ventas: confirmar, editar desde admin, foto con la cámara
 
@@ -2171,7 +2198,96 @@ repetir el paso 3. Los archivos temporales viejos de `uploads/tmp` —74 en la
 base de desarrollo, restos de importaciones abandonadas de antes de este
 cambio— se pueden borrar a mano; nada los referencia.
 
-### Fases 10 a 12 — qué va a tener que demostrar cada una
+### Fase 10 — Clientes: corregir los datos y ver la documentación
+
+Con la aplicación levantada (`npm run dev`), entrando como `balta@crm-csj.local`
+en la zona **Salta**, con los 7 padrones de prueba ya importados (que es como
+quedó la base).
+
+> Esta prueba **carga una venta y corrige un cliente de prueba**. Los dos se
+> borran al final; los pasos están abajo.
+
+**1. La ficha del cliente, como estaba**
+
+**Clientes**, buscar `99990001` y entrar a **ANA PRUEBA**. Arriba a la derecha
+hay un botón nuevo, **Corregir datos**. En "Datos de contacto" el teléfono dice
+`3870000000` y no hay ningún badge.
+
+Debajo, una card nueva: **Documentación**. Todavía dice *"No hay documentación
+cargada"*, porque este DNI no tiene ninguna venta.
+
+**2. Corregir el teléfono**
+
+**Corregir datos**. El **DNI aparece deshabilitado**, con la explicación de por
+qué (es con lo que el padrón reconoce al cliente). Cambiar el teléfono a
+`3875550001` y **Guardar cambios**.
+
+Vuelve a la ficha y ahora:
+
+- al lado de **TELÉFONO** hay un badge **"corregido a mano"**, y en ningún otro
+  campo;
+- al pie de la card dice *"Un dato corregido por Baltazar Ignacio Toledo Perez
+  el …. El padrón ya no lo toca."*;
+- la bajada de la card cambió a *"Vienen del último padrón importado, salvo los
+  corregidos a mano"*.
+
+**3. Que el padrón no lo pise — que es de lo que se trata la fase**
+
+**Padrón → Importar padrón**, subir de nuevo **`padron-prueba-07-2026-12.xlsx`**
+y confirmar. Volver a la ficha de ANA PRUEBA:
+
+| Qué mirar | Qué tiene que pasar |
+|---|---|
+| Teléfono | sigue en **`3875550001`**, con su badge |
+| Domicilio, localidad, código postal | siguen siendo los del padrón |
+| El resto del sistema | sin cambios: el archivo no traía novedades |
+
+Sin este cambio, esa reimportación devolvía el teléfono a `3870000000`.
+
+**4. Volver a tomar todo del padrón**
+
+En el pie de la card, **Volver a tomar todo del padrón**. El badge desaparece y
+la bajada vuelve a la de antes. **El valor corregido queda**: el botón saca la
+marca, no revierte el dato — el padrón lo va a pisar solo la próxima vez que
+traiga a este cliente. Para comprobarlo, volver a importar
+`padron-prueba-07-2026-12.xlsx`: ahí sí el teléfono vuelve a `3870000000`.
+
+**5. La documentación**
+
+**Ventas → Nueva venta**: vendedor `PRUEBA VENDEDOR UNO`, cualquier plan, DNI
+`99990001`, nombre `ANA PRUEBA`, teléfono `3870000000`, calle `CALLE FALSA 001`,
+Nro Suscripción `99001`, observación cualquiera, y **una foto cualquiera como
+foto del DNI**. Cargar.
+
+Volver a la ficha de ANA PRUEBA. La card **Documentación** ahora muestra la
+miniatura, **Foto del DNI**, la fecha, quién la subió y abajo *"Venta suscripción
+99001"*. Al hacer click se abre el archivo.
+
+El identificador de la venta **no es un link**: la ficha de una venta hoy es sólo
+del vendedor, y un admin que entre ahí se va rebotado al dashboard. El link llega
+con la Fase 11.
+
+**6. Que el adjunto no tenga URL pública**
+
+Copiar la dirección de la imagen (botón derecho → *Copiar dirección de imagen*;
+es algo como `/api/uploads/…`) y abrirla en una **ventana de incógnito**. Tiene
+que responder **401 No autorizado**, no la foto.
+
+**7. Desde el teléfono**
+
+Las mismas dos pantallas en el celular: la ficha y el formulario de corrección.
+Nada se sale por el costado y la miniatura de la documentación no desarma la
+tarjeta.
+
+**Cómo borrar los datos de prueba**
+
+La venta se borra desde su ficha (o queda: es una venta de prueba con DNI
+`9999…`, de las que borra `npx tsx scripts/datos-prueba.ts borrar`). El cliente
+vuelve solo con **Volver a tomar todo del padrón** más una reimportación de
+`padron-prueba-07-2026-12.xlsx`. Si algo quedó raro: **Laboratorio → Vaciar el
+padrón de SALTA** y volver a subir los 7.
+
+### Fases 11 y 12 — qué va a tener que demostrar cada una
 
 La guía completa de cada fase se escribe **cuando la fase se termina**, como
 siempre. Lo que sigue son los criterios de aceptación, anotados ahora para que no
@@ -2180,10 +2296,6 @@ se negocien después.
 Escenario base para todas: los 7 padrones de `docs/padrones-prueba/` importados en
 Salta desde `/admin/laboratorio`, que es como quedó la base de desarrollo.
 
-- **Fase 10** — corregir el teléfono de un cliente de prueba, reimportar el padrón
-  que lo trae, y ver que la corrección sobrevive **y que el resto de sus campos sí
-  se actualizó**. Cargar una venta con foto de DNI para ese mismo DNI y ver el
-  adjunto en la ficha del cliente.
 - **Fase 11** — apretar "Cargar venta" y ver el resumen **antes** de que se guarde
   nada; cancelar y comprobar que no se creó. Editar una venta desde
   `/admin/ventas/[id]`. Anularla y verla atenuada en los dos listados. Desde el
@@ -2217,6 +2329,21 @@ viewport de iPhone resolviendo el dominio contra `127.0.0.1`. Ese armado es
 reproducible en media hora si hace falta volver, pero no quedó en el repositorio:
 para dejarlo había que versionar la clave privada de un certificado autofirmado.
 La receta está en la guía de prueba de la fase.
+
+De la Fase 10, tres cosas que valen para lo que viene:
+
+- **El padrón ya no escribe los seis campos personales juntos.** Los que el
+  admin corrigió (`Cliente.camposManuales`) y los cuya **columna no vino en el
+  Excel** quedan afuera. La regla es pura y está en `lib/padron/camposCliente.ts`
+  con tests; `parsePadron` devuelve `columnasPersonales` para que la
+  importación pueda distinguir "vacío" de "no informado".
+- **`Cliente.editadoPorUserId` y `editadoAt` ya existen**, y son lo que la
+  Fase 12 necesita para registrar `CLIENTE_EDICION` en la Actividad.
+- **La documentación del cliente se busca por DNI.** `Venta` no tiene FK a
+  `Cliente` y `Venta.tituloId` no lo escribe nadie. En la card, el
+  identificador de la venta **no linkea** porque `/admin/ventas/[id]` todavía
+  no existe: cuando la Fase 11 la cree, hay que agregar el link en
+  `components/clientes/documentacion-cliente.tsx`.
 
 De la Fase 9, tres cosas que valen para lo que viene:
 
