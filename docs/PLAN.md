@@ -72,7 +72,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 5 | Gráficos del dashboard | ✅ commit `816628f` |
 | 6 | Formulario de venta | ✅ commit `4bd1ab9` |
 | 7 | Que el CRM funcione desde el celular | ✅ commit `84db215` |
-| 8 | Tres arreglos chicos (toast · editar plan · código de agente) | 🔨 commit `24e8013` |
+| 8 | Tres arreglos chicos (toast · editar plan · código de agente) | ✅ commit `24e8013` |
 | 9 | Padrón: varios archivos y selector nuevo | ⬜ |
 | 10 | Clientes: corregir datos y ver la documentación | ⬜ |
 | 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ⬜ |
@@ -714,9 +714,10 @@ la que ya se está—, el desplegable de perfil abre, el login entra, y no queda
 un error en consola ni una request fallida. Las diez pantallas no se salen por el
 costado. Lint, 117 tests y build pasan.
 
-### 🔨 Fase 8 — Tres arreglos chicos
+### ✅ Fase 8 — Tres arreglos chicos
 
-Commit `24e8013`. Migración `20260828135455_codigo_agente`. Sin relación entre
+Commit `24e8013`. Validada por Lisandro el 28/08/2026. Migración
+`20260828135455_codigo_agente`. Sin relación entre
 sí, pero los tres son de pocas líneas y no justifican una fase cada uno. Salieron
 cuatro: probando el primero apareció uno más de fondo.
 
@@ -2045,9 +2046,8 @@ en la base de desarrollo.
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Lisandro validó las fases 6 y 7 el 28/08/2026. Las fases 0
-a 7 están cerradas. La **Fase 8 está construida** y espera validación; la
-próxima sesión arranca por la **Fase 9**.
+**Dónde retomar:** Lisandro validó las fases 6, 7 y 8 el 28/08/2026. Las fases
+0 a 8 están cerradas. La sesión en curso arranca por la **Fase 9**.
 
 **El plan ya no termina en la Fase 6.** El 27/08/2026 Lisandro trajo una segunda
 tanda de pedidos y quedaron planificadas las **fases 7 a 12**.
