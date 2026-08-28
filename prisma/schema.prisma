@@ -116,6 +116,11 @@ model User {
   /// Solo para admins: el telefono de un vendedor vive en su ficha (`Vendedor`),
   /// que es la que mira Balta.
   telefono     String?
+  /// Codigo con el que el club identifica al agente. Es de la persona, no de la
+  /// zona: Balta es el mismo agente en Salta y en Tucuman. No confundir con
+  /// `Vendedor.codigo`, que si es por zona y es el codigo del vendedor.
+  /// Texto y no entero: es un identificador, no una cantidad.
+  codigoAgente String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

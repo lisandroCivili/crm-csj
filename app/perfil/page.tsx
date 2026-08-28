@@ -45,7 +45,7 @@ export default async function PerfilPage() {
     getZonaActiva(),
     db.user.findUniqueOrThrow({
       where: { id: usuario.id },
-      select: { telefono: true },
+      select: { telefono: true, codigoAgente: true },
     }),
     usuario.vendedorId
       ? db.vendedor.findUnique({
@@ -87,6 +87,7 @@ export default async function PerfilPage() {
               valores={{
                 nombre: usuario.nombre,
                 telefono: esAdmin ? cuenta.telefono : (vendedor?.telefono ?? null),
+                codigoAgente: cuenta.codigoAgente,
                 email: vendedor?.email ?? null,
                 direccion: vendedor?.direccion ?? null,
               }}
@@ -110,6 +111,19 @@ export default async function PerfilPage() {
                 etiqueta="Zona"
                 valor={zona ? (ETIQUETA_ZONA[zona.nombre] ?? zona.nombre) : null}
               />
+              {/* El codigo de agente es de la persona, no de la zona: por eso
+                  va en "Tu cuenta" y no en la ficha de vendedor, que si es por
+                  zona y tiene su propio codigo. */}
+              {esAdmin ? (
+                <Dato
+                  etiqueta="Código de agente"
+                  valor={
+                    cuenta.codigoAgente ? (
+                      <span className="font-mono">{cuenta.codigoAgente}</span>
+                    ) : null
+                  }
+                />
+              ) : null}
             </dl>
 
             <Separator className="my-5" />

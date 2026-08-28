@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Package, Upload } from "lucide-react";
+import { Package, Pencil, Upload } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,7 +41,7 @@ export default async function PlanesPage() {
     <>
       <PageHeader
         titulo="Planes"
-        descripcion="Catálogo de productos y su lista de precios. Los planes no dependen de la zona."
+        descripcion="Catálogo de productos y su lista de precios. Los planes no dependen de la zona: el archivo trae los precios y el nombre y el estado se corrigen acá."
         acciones={
           <Button asChild>
             <Link href="/admin/planes/importar">
@@ -82,6 +82,9 @@ export default async function PlanesPage() {
                 <TableHead>Desde</TableHead>
                 <TableHead className="text-right">Precio anterior</TableHead>
                 <TableHead className="text-right">Ventas</TableHead>
+                <TableHead className="w-24 text-right">
+                  <span className="sr-only">Acciones</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -114,6 +117,14 @@ export default async function PlanesPage() {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {plan._count.ventas}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button asChild variant="ghost" size="sm">
+                        <Link href={`/admin/planes/${plan.id}/editar`}>
+                          <Pencil className="size-3.5" />
+                          Editar
+                        </Link>
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );

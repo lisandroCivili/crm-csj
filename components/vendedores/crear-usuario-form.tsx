@@ -1,8 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState } from "react";
 import { useFormStatus } from "react-dom";
-import { toast } from "sonner";
 import { AlertCircle } from "lucide-react";
 import {
   crearUsuarioVendedor,
@@ -22,6 +21,24 @@ function BotonCrear() {
   );
 }
 
+/**
+ * Alta de la cuenta con la que el vendedor entra al sistema.
+ *
+ * No avisa con un toast, y no es un olvido. Habia uno, y salia mal en los dos
+ * sentidos: aparecia al montar el componente --o sea cada vez que se abria la
+ * ficha de un vendedor sin cuenta, sin que nadie hubiera creado nada-- porque
+ * daba por exito cualquier estado sin errores, incluido el inicial `{}`; y no
+ * aparecia nunca cuando la cuenta se creaba de verdad.
+ *
+ * Lo segundo no se arregla con un `ok`: `crearUsuarioVendedor` revalida la
+ * ficha, que al volver ya no dibuja este formulario sino la cuenta recién
+ * creada. El componente se desmonta en el mismo commit en que llega el estado
+ * nuevo, asi que el `useEffect` que mostraria el toast no llega a correr.
+ *
+ * Tampoco hace falta: donde estaba el formulario aparece la cuenta con su
+ * email. El toast que si funciona --el de `form-contacto.tsx`-- vive en un
+ * formulario que sigue en pantalla despues de guardar.
+ */
 export function CrearUsuarioForm({
   vendedorId,
   emailSugerido,
@@ -33,22 +50,9 @@ export function CrearUsuarioForm({
     crearUsuarioVendedor,
     {}
   );
-  const formRef = useRef<HTMLFormElement>(null);
-  const yaAvisado = useRef(false);
-
-  // Estado vacio (sin error ni errores de campo) = se creo bien.
-  const exito = Boolean(estado) && !estado.error && !estado.errores;
-
-  useEffect(() => {
-    if (exito && !yaAvisado.current) {
-      yaAvisado.current = true;
-      toast.success("Cuenta creada. Ya puede ingresar al sistema.");
-      formRef.current?.reset();
-    }
-  }, [exito]);
 
   return (
-    <form ref={formRef} action={accion} className="space-y-4">
+    <form action={accion} className="space-y-4">
       <input type="hidden" name="vendedorId" value={vendedorId} />
 
       {estado.error ? (

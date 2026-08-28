@@ -27,6 +27,7 @@ export function FormContacto({
   valores: {
     nombre: string;
     telefono: string | null;
+    codigoAgente: string | null;
     email: string | null;
     direccion: string | null;
   };
@@ -70,6 +71,21 @@ export function FormContacto({
             defaultValue={valores.telefono ?? ""}
           />
         </Campo>
+
+        {esAdmin ? (
+          <Campo
+            nombre="codigoAgente"
+            etiqueta="Código de agente"
+            errores={errores.codigoAgente}
+            ayuda="El que te dio el club. No es el código de vendedor."
+          >
+            <Input
+              id="codigoAgente"
+              name="codigoAgente"
+              defaultValue={valores.codigoAgente ?? ""}
+            />
+          </Campo>
+        ) : null}
 
         {!esAdmin ? (
           <>

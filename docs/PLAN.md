@@ -72,7 +72,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 5 | Gráficos del dashboard | ✅ commit `816628f` |
 | 6 | Formulario de venta | ✅ commit `4bd1ab9` |
 | 7 | Que el CRM funcione desde el celular | ✅ commit `84db215` |
-| 8 | Tres arreglos chicos (toast · editar plan · código de agente) | ⬜ |
+| 8 | Tres arreglos chicos (toast · editar plan · código de agente) | 🔨 commit `PENDIENTE` |
 | 9 | Padrón: varios archivos y selector nuevo | ⬜ |
 | 10 | Clientes: corregir datos y ver la documentación | ⬜ |
 | 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ⬜ |
@@ -88,7 +88,7 @@ Fase 4  Caídas          (independiente, necesita padrones cargados)
 Fase 6  Formulario      (bloqueada por definición de Balta)
 
 Fase 7  Móvil    ──> habilita probar todas las demás desde el celular
-Fase 8  Chicos       (independiente)
+Fase 8  Chicos       (independiente, hecha)
 Fase 9  Padrón       (independiente)
 Fase 10 Clientes ──┐
 Fase 11 Ventas   ──┴──> Fase 12  Actividad
@@ -714,69 +714,116 @@ la que ya se está—, el desplegable de perfil abre, el login entra, y no queda
 un error en consola ni una request fallida. Las diez pantallas no se salen por el
 costado. Lint, 117 tests y build pasan.
 
-### ⬜ Fase 8 — Tres arreglos chicos
+### 🔨 Fase 8 — Tres arreglos chicos
 
-Sin relación entre sí, pero los tres son de pocas líneas y no justifican una fase
-cada uno.
+Commit `PENDIENTE`. Migración `20260828135455_codigo_agente`. Sin relación entre
+sí, pero los tres son de pocas líneas y no justifican una fase cada uno. Salieron
+cuatro: probando el primero apareció uno más de fondo.
 
 #### 8.1 El toast que miente
 
-`components/vendedores/crear-usuario-form.tsx` calcula
-`const exito = Boolean(estado) && !estado.error && !estado.errores`. El estado
-inicial del `useActionState` es `{}`, que es *truthy* y no tiene ni `error` ni
-`errores`: `exito` da `true` en el primer render y el `useEffect` dispara el
-toast al montar. El `useRef` que hay al lado sólo evita el toast **duplicado**, no
-el **prematuro**. Se ve cada vez que se abre la ficha de un vendedor sin cuenta,
-que es donde se monta el componente.
+Salía un aviso de *"Cuenta creada"* al abrir la ficha de un vendedor sin cuenta,
+sin que nadie hubiera creado nada. `crear-usuario-form.tsx` daba por exitoso
+cualquier estado sin errores:
 
-El resto del proyecto ya usa el campo correcto (`estado.ok`, ver
-`components/perfil/form-contacto.tsx`) y el tipo `EstadoFormulario` lo declara en
-`app/admin/vendedores/actions.ts`. Este componente quedó de antes de que ese campo
-existiera y nunca se actualizó.
+```ts
+const exito = Boolean(estado) && !estado.error && !estado.errores;
+```
 
-Dos cambios acoplados: `crearUsuarioVendedor` devuelve `{ ok: true }` en vez de
-`{}`, y el componente pasa a `const exito = Boolean(estado.ok)`.
+El estado inicial del `useActionState` es `{}`, que no tiene ni `error` ni
+`errores` y además es *truthy*: `exito` daba `true` en el primer render y el
+`useEffect` disparaba el toast al montar. El `useRef` de al lado evitaba el toast
+**repetido**, no el **prematuro**.
+
+Lo esperable era cambiarlo por `estado.ok`, que es el campo que usa el resto del
+proyecto y que el tipo `EstadoFormulario` ya declara. Se hizo, y **el toast
+seguía sin aparecer nunca**, ahora en el otro sentido: `crearUsuarioVendedor`
+revalida la ficha, que al volver ya no dibuja el formulario sino la cuenta recién
+creada. El componente se desmonta en el mismo commit en que llega el estado
+nuevo, así que el `useEffect` que mostraría el toast no llega a correr.
+
+O sea que el toast prematuro venía tapando que el toast de éxito no existía.
+Se sacó, y quedó dicho en el componente por qué no está. No hace falta: donde
+estaba el formulario aparece la cuenta con su email, que es un cambio bastante
+más visible que un aviso de cuatro segundos. El toast que sí funciona —el de
+`form-contacto.tsx`— vive en un formulario que sigue en pantalla después de
+guardar.
+
+`crearUsuarioVendedor` devuelve igual `{ ok: true }` en vez de `{}`: es el
+contrato del tipo y lo que devuelven todas las demás acciones.
 
 #### 8.2 Editar un plan
 
-Hoy los planes sólo entran por el Excel de precios
-(`app/admin/planes/actions.ts`, único export `pasoImportacionPrecios`): no hay
-alta manual, ni edición, ni baja.
+Los planes sólo entraban por el Excel de precios: no había alta manual, ni
+edición, ni baja.
 
-- `lib/validations/plan.ts` nuevo: `nombre`, `duracionMeses` opcional, `activo`.
-  **`codigoProducto` no se edita**: es la clave con la que el Excel encuentra el
-  plan.
-- `editarPlan` en `app/admin/planes/actions.ts`, más
-  `components/planes/plan-form.tsx` y `app/admin/planes/[id]/editar/page.tsx`,
-  calcados de `components/vendedores/vendedor-form.tsx` y
-  `app/admin/vendedores/[id]/editar/page.tsx`, que es el único par alta/edición
-  que hay en el repo.
-- **El upsert de la importación deja de pisar el catálogo.** Hoy fuerza `nombre` y
-  `activo: true` en cada import: desactivar un plan a mano no duraría hasta el
-  Excel siguiente, y el nombre corregido tampoco. Ese archivo es de **precios**, no
-  de catálogo: el `update` del upsert queda sin `nombre` ni `activo`, y el `create`
-  sigue igual, así que un plan nuevo entra con lo que diga el Excel y de ahí en más
-  manda lo que edite Balta. Es la misma regla que se aplica al cliente en la Fase
-  10.
-- **No se agrega alta manual ni borrado**: no se pidieron, y borrar un plan con
-  ventas falla igual (`Venta.planId` es FK sin cascade). Dar de baja se hace con
-  `activo`.
+- `lib/validations/plan.ts` nuevo: `nombre`, `duracionMeses` opcional y `activo`.
+  **`codigoProducto` no se edita** —se muestra deshabilitado y se dice por qué—:
+  es la clave con la que el Excel encuentra al plan, y cambiarlo a mano haría que
+  la lista siguiente cree un plan nuevo en vez de actualizar éste.
+- `editarPlan` en `app/admin/planes/actions.ts`, `components/planes/plan-form.tsx`
+  y `app/admin/planes/[id]/editar/page.tsx`, con el molde del par alta/edición de
+  vendedores. El listado gana una columna con el botón **Editar**.
+- El campo **Nombre** va primero aunque ocupe las dos columnas: en el teléfono la
+  grilla se apila y ése es el único orden que se ve, así que dejarlo tercero
+  —detrás del código, que ni siquiera se edita— era esconder lo que se viene a
+  cambiar.
+- **El upsert de la importación dejó de pisar el catálogo.** Forzaba `nombre` y
+  `activo: true` en cada archivo, así que dar de baja un plan a mano o corregirle
+  el nombre no sobrevivía a la lista siguiente. Ese archivo es de **precios**, no
+  de catálogo: el `update` del upsert quedó vacío y el `create` sigue igual, así
+  que un plan nuevo entra con lo que diga el Excel y de ahí en más manda lo que
+  edite Balta.
+- No se agregó alta manual ni borrado: no se pidieron, y borrar un plan con
+  ventas falla igual (`Venta.planId` es FK sin cascade). Dar de baja es `activo`.
 
 #### 8.3 Código de agente en el perfil del admin
 
-`User` no tiene ningún campo de código. `Vendedor.codigo` es otra cosa: es el
-código del vendedor dentro de la zona.
+- Migración `codigo_agente`: `User.codigoAgente String?`. Es de la persona y no
+  de la zona (supuesto anotado en Pendientes); no confundir con `Vendedor.codigo`,
+  que sí es por zona y es el código del **vendedor**.
+- `contactoAdminSchema` lo suma como opcional, **texto y no entero**: es un
+  identificador, no una cantidad, y como número se rompería uno que empiece con
+  cero (regla de la Fase 6).
+- El input va en el bloque de admin de `form-contacto.tsx` y el valor se muestra
+  en la card "Tu cuenta" de `/perfil`.
 
-- Migración: `User.codigoAgente String?`.
-- `contactoAdminSchema` (`lib/validations/perfil.ts`) lo suma como opcional.
-  **Texto, no entero**: es un identificador del club, igual que el DNI o el número
-  de suscripción (regla de la Fase 6).
-- El input va en `components/perfil/form-contacto.tsx`, dentro del bloque
-  `{esAdmin ? … }` que ya existe, y el valor se muestra en la card "Tu cuenta" de
-  `app/perfil/page.tsx`.
-- **Supuesto a confirmar con Balta**: uno por persona, no uno por zona. Si
-  resultara ser por zona, el lugar natural sería `Vendedor.codigo`, que ya es por
-  zona.
+#### 8.4 Ningún error de duplicado decía cuál (encontrado de paso)
+
+Probando 8.1 con un email ya usado, el formulario contestaba **"Datos
+duplicados."** en vez de *"Ya hay una cuenta con ese email."*, aunque el mensaje
+existe en `lib/errores-prisma.ts` desde siempre.
+
+La causa no es de esta pantalla: `camposDuplicados` leía `error.meta.target`, que
+es donde Prisma ponía la columna que chocó. **Con un driver adapter —este
+proyecto usa `@prisma/adapter-pg`— ese campo ya no se completa**; el detalle
+viene del driver, en `meta.driverAdapterError.cause.constraint.fields`. Como
+`target` era `undefined`, la función devolvía `[""]`, ninguna comparación daba y
+`erroresPorDuplicado` terminaba siempre en `null`.
+
+Afectaba a todo el proyecto, no sólo al alta de cuenta: el DNI repetido de un
+vendedor y el código repetido en la zona tampoco marcaban su campo. Ahora se
+miran las dos formas —la del driver y el `target` clásico— y cuando no se puede
+saber se devuelve una lista vacía, que es distinto de `[""]`. Tiene tests
+(`lib/errores-prisma.test.ts`) con capturas textuales de las dos formas del
+error, porque esto es exactamente lo que se rompe en silencio al subir de versión.
+
+**Archivos**: `app/admin/vendedores/actions.ts`,
+`components/vendedores/crear-usuario-form.tsx`, `app/admin/planes/actions.ts`,
+`app/admin/planes/page.tsx`, `app/admin/planes/[id]/editar/page.tsx`,
+`components/planes/plan-form.tsx`, `lib/validations/plan.ts`,
+`lib/validations/perfil.ts`, `components/perfil/form-contacto.tsx`,
+`app/perfil/page.tsx`, `lib/errores-prisma.ts`, `lib/errores-prisma.test.ts`,
+`prisma/schema.prisma`. Migración `20260828135455_codigo_agente`.
+
+Verificado con la aplicación levantada sobre el build: abrir la ficha de un
+vendedor sin cuenta no muestra ningún aviso; crear la cuenta reemplaza el
+formulario por la cuenta con su email; repetir un email marca el campo con el
+mensaje correcto y deja el formulario en pantalla; el plan editado conserva
+nombre y estado después de reimportar la lista de precios, que sí actualiza el
+precio; el plan dado de baja desaparece del formulario de venta; el código de
+agente se guarda y se ve en "Tu cuenta". Ninguna pantalla se sale por el costado
+en el teléfono. Lint, 126 tests y build pasan.
 
 ### ⬜ Fase 9 — Padrón: varios archivos y un selector que se entienda
 
@@ -1886,7 +1933,81 @@ barra con la zona y el perfil tiene que quedarse arriba.
 
 No hay nada que borrar: esta fase no carga datos.
 
-### Fases 8 a 12 — qué va a tener que demostrar cada una
+### Fase 8 — Tres arreglos chicos
+
+Todo desde el escritorio, con la aplicación levantada (`npm run dev`) y entrando
+como `balta@crm-csj.local`.
+
+**1. El aviso que salía solo** — *el que se veía cada vez que abrías una ficha*
+
+Entrar a **Vendedores** y abrir uno que **no tenga cuenta de ingreso** —en la
+base de desarrollo sirven `PRUEBA VENDEDOR UNO`, `PRUEBA VENDEDOR DOS` o
+`PEREZ ANA (prueba)`—. Al abrir la ficha **no tiene que aparecer ningún aviso**.
+Antes salía un *"Cuenta creada. Ya puede ingresar al sistema."* de la nada.
+
+Ahora crear la cuenta ahí mismo, abajo de todo, en **Cuenta de ingreso**: poner
+un email (`prueba-fase8@crm-csj.local` sirve) y una contraseña de 8 caracteres o
+más. Al guardar, **el formulario se reemplaza por la cuenta creada**, con su
+email y los botones de cambiar contraseña, cambiar email y suspender el acceso.
+
+> Ese cambio en pantalla **es** el aviso, y por eso no hay toast: la ficha se
+> vuelve a dibujar y el formulario deja de existir, así que un toast lanzado
+> desde ahí no llegaría a verse nunca (está explicado en el archivo).
+
+Probar también el error: en **otro** vendedor sin cuenta, poner un email que ya
+exista (`balta@crm-csj.local`). Tiene que decir **"Ya hay una cuenta con ese
+email."** justo debajo del campo. Antes decía *"Datos duplicados."*, que no
+dice cuál — y lo mismo pasaba con el DNI y el código repetidos al cargar un
+vendedor.
+
+**2. Editar un plan** — *esto no existía*
+
+Ir a **Planes**. Cada fila tiene ahora un botón **Editar** a la derecha. Entrar a
+`Plan Auto 330` y:
+
+- Ver que **Código de producto** está gris y no se deja escribir, con la razón
+  abajo: es con lo que la lista de precios encuentra el plan.
+- Cambiarle el nombre a `Plan Auto 330 (editado)` y poner **Estado: Inactivo**.
+- Guardar. Vuelve al listado y la fila queda atenuada, con el nombre nuevo y el
+  cartelito **inactivo**.
+
+Ahora comprobar que el archivo de precios no lo pisa, que es el punto del
+cambio. Con un editor de texto, guardar esto como `precios.csv`:
+
+```
+Codigo,Descripcion,Precio,Meses
+045,NOMBRE QUE VIENE DEL EXCEL,123456,330
+```
+
+Subirlo por **Planes → Cargar precios** y confirmar. Al volver al listado:
+
+- el nombre sigue siendo **el editado** y el plan sigue **inactivo** — antes cada
+  importación devolvía el nombre del archivo y volvía a activar el plan;
+- el **precio sí cambió** a `$ 123.456`, que es lo que el archivo tiene que
+  hacer.
+
+Y como el plan quedó inactivo, en **Ventas → Cargar venta** ya no aparece en la
+lista de planes.
+
+**3. El código de agente** — *esto no existía*
+
+Ir a **Mi perfil** (desde el menú de arriba a la derecha). En *Datos de contacto*
+hay un campo nuevo, **Código de agente**, sólo para las cuentas de
+administración. Escribir el código del club, guardar —sale *"Datos
+actualizados."*— y verlo en la tarjeta **Tu cuenta**, abajo de la zona.
+
+> Está guardado en la cuenta, no en la zona: es el mismo en Salta y en Tucumán.
+> Si en realidad el club le da un código distinto por zona, avisá, porque
+> entonces el lugar es otro (ver Pendientes).
+
+**Borrar los datos de prueba**
+
+Volver a poner el nombre y el estado del plan como estaban (`Plan Auto 330`,
+Activo) desde la misma pantalla de edición, y borrar la cuenta de prueba desde
+la ficha del vendedor. El precio de `123456` queda como una fila más del
+histórico del mes; si molesta, `npx prisma studio` → `plan_precios`.
+
+### Fases 9 a 12 — qué va a tener que demostrar cada una
 
 La guía completa de cada fase se escribe **cuando la fase se termina**, como
 siempre. Lo que sigue son los criterios de aceptación, anotados ahora para que no
@@ -1895,10 +2016,6 @@ se negocien después.
 Escenario base para todas: los 7 padrones de `docs/padrones-prueba/` importados en
 Salta desde `/admin/laboratorio`, que es como quedó la base de desarrollo.
 
-- **Fase 8** — abrir la ficha de un vendedor **sin cuenta**: no tiene que aparecer
-  ningún toast. Crear la cuenta ahí mismo: el toast aparece **una sola vez**.
-  Editar el nombre de un plan, reimportar el Excel de precios y ver que el nombre
-  editado sigue. Cargar un código de agente en `/perfil` y verlo en "Tu cuenta".
 - **Fase 9** — vaciar Salta y subir **los 7 padrones de una sola vez**. Los números
   finales tienen que dar **exactamente los mismos que hoy**: `PRUEBA VENDEDOR UNO`
   $105.000, `DOS` $38.000, comisión del agente $564.000 sobre 54 cuotas, `PT-0006`
@@ -1929,7 +2046,8 @@ en la base de desarrollo.
 ## Contexto para la próxima sesión
 
 **Dónde retomar:** Lisandro validó las fases 6 y 7 el 28/08/2026. Las fases 0
-a 7 están cerradas.
+a 7 están cerradas. La **Fase 8 está construida** y espera validación; la
+próxima sesión arranca por la **Fase 9**.
 
 **El plan ya no termina en la Fase 6.** El 27/08/2026 Lisandro trajo una segunda
 tanda de pedidos y quedaron planificadas las **fases 7 a 12**.
@@ -1940,6 +2058,19 @@ viewport de iPhone resolviendo el dominio contra `127.0.0.1`. Ese armado es
 reproducible en media hora si hace falta volver, pero no quedó en el repositorio:
 para dejarlo había que versionar la clave privada de un certificado autofirmado.
 La receta está en la guía de prueba de la fase.
+
+De la Fase 8, dos cosas que valen para lo que viene:
+
+- **Un toast lanzado desde un `useEffect` no se ve si el formulario desaparece
+  al revalidar.** Es lo que pasaba en el alta de cuenta del vendedor: la acción
+  revalida la ficha, la ficha ya no dibuja el formulario, el componente se
+  desmonta en el mismo commit y el efecto no llega a correr. Sirve tenerlo
+  presente en las fases 10 y 11, que agregan varias acciones parecidas.
+- **Los errores de duplicado de Prisma cambiaron de forma.** Con
+  `@prisma/adapter-pg`, `error.meta.target` ya no se completa: las columnas que
+  chocaron vienen en `meta.driverAdapterError.cause.constraint.fields`. Estaba
+  haciendo que ningún formulario dijera qué dato estaba repetido. Arreglado y
+  con tests en `lib/errores-prisma.test.ts`.
 
 Lo que queda abierto después de las fases 6 y 7:
 

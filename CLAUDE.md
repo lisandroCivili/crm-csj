@@ -61,6 +61,12 @@ Vocabulario del dominio (aparece tal cual en el padrón y en el código):
   vendedores**; lo que el club les paga **como agentes** —sobre toda la producción, con la escala
   del contrato de agencia— es otro número, y se calcula aparte (ver
   [Comisión del agente](#comisión-del-agente)).
+- **El Excel de precios es de precios, no de catálogo.** La importación crea el plan que no
+  existe, pero **no pisa** el `nombre` ni el `activo` de los que ya están: eso lo edita Balta
+  desde `/admin/planes/[id]/editar` y tiene que sobrevivir a la lista siguiente. Lo único que
+  cada archivo agrega es una fila de `PlanPrecio` con su vigencia. Dar de baja un plan es
+  `activo: false`, no borrarlo: `Venta.planId` es una FK sin cascade y las ventas viejas lo
+  siguen apuntando.
 - **La zona filtra todo.** El admin elige Salta o Tucumán después de loguearse y esa elección
   define qué ve y qué carga. Los vendedores tienen zona fija. Toda query debe estar scopeada.
 
@@ -224,6 +230,27 @@ endpoint y se puede mandar sin pasar por el navegador.
   calle. Se sube después editando la venta.
 - Localidad, provincia y débito automático salieron del formulario, pero **las
   columnas siguen**: las ventas viejas las tienen cargadas.
+
+## Formularios y avisos
+
+Dos trampas que ya costaron un rato cada una y no se ven leyendo el código.
+
+- **Un toast lanzado desde un `useEffect` no se ve si el formulario desaparece al
+  guardar.** La server action revalida, la pantalla vuelve sin ese formulario y el
+  componente se desmonta en el mismo commit en que llega el estado nuevo: el
+  efecto no llega a correr. Es lo que pasaba en `crear-usuario-form.tsx`, donde el
+  toast no está por eso y no por olvido. El toast sirve cuando el formulario sigue
+  en pantalla después de guardar (`form-contacto.tsx`).
+- **El éxito de una acción se marca con `estado.ok`, nunca con "no hay errores".**
+  El estado inicial de `useActionState` es `{}`: es *truthy* y no tiene errores,
+  así que "no hay errores" da verdadero antes de que nadie haya enviado nada.
+- **Los errores de duplicado ya no traen `meta.target`.** Con `@prisma/adapter-pg`
+  el detalle del P2002 lo pone el driver, en
+  `meta.driverAdapterError.cause.constraint.fields`. Para eso está
+  `camposDuplicados()` en `lib/errores-prisma.ts`, que mira las dos formas y tiene
+  tests: si vuelve a cambiar, sin eso los formularios dejan de decir **qué** dato
+  está repetido y contestan un "Datos duplicados." inútil, sin que se rompa nada
+  visible.
 
 ## Gráficos
 

@@ -17,6 +17,12 @@ export const contactoAdminSchema = z.object({
     .min(3, "Ingresá tu nombre completo.")
     .max(120, "No puede superar los 120 caracteres."),
   telefono: textoOpcional(40),
+  /**
+   * Codigo con el que el club identifica al agente. Va como texto y no como
+   * entero, igual que el DNI o el numero de suscripcion: es un identificador,
+   * no una cantidad, y como numero se romperia uno que empiece con cero.
+   */
+  codigoAgente: textoOpcional(20),
 });
 
 export const contactoVendedorSchema = z.object({

@@ -1,10 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { z } from "zod";
 import { borrarTemporal, guardarTemporal, leerTemporal } from "@/lib/archivos";
 import { db } from "@/lib/db";
 import { parsePrecios, type ErrorFilaPrecio } from "@/lib/excel/parsePrecios";
 import { requireAdmin } from "@/lib/sesion";
+import { planSchema } from "@/lib/validations/plan";
 
 const EXTENSIONES = [".xls", ".xlsx", ".csv"];
 
@@ -153,13 +156,15 @@ export async function pasoImportacionPrecios(
 
   await db.$transaction(async (tx) => {
     for (const { fila, cambio } of detalle) {
+      // El `update` va vacio a proposito: este archivo es de PRECIOS, no de
+      // catalogo. Antes forzaba `nombre` y `activo: true` en cada importacion,
+      // asi que dar de baja un plan a mano o corregirle el nombre no sobrevivia
+      // a la lista siguiente. Un plan que todavia no existe si entra con lo que
+      // diga el Excel (`create`); de ahi en mas manda lo que edite Balta desde
+      // /admin/planes.
       const plan = await tx.plan.upsert({
         where: { codigoProducto: fila.codigoProducto },
-        update: {
-          nombre: fila.nombre,
-          ...(fila.duracionMeses ? { duracionMeses: fila.duracionMeses } : {}),
-          activo: true,
-        },
+        update: {},
         create: {
           codigoProducto: fila.codigoProducto,
           nombre: fila.nombre,
@@ -184,4 +189,47 @@ export async function pasoImportacionPrecios(
   revalidatePath("/admin/planes");
 
   return { paso: "importado", resumen };
+}
+
+// ---------------------------------------------------------------------------
+// Catalogo
+//
+// Los planes no dependen de la zona: son los productos del club y se ven igual
+// en Salta y en Tucuman. Por eso aca no hay scope por zona, a diferencia de
+// vendedores, clientes o ventas.
+// ---------------------------------------------------------------------------
+
+export type EstadoPlan = {
+  ok?: boolean;
+  error?: string;
+  errores?: Record<string, string[] | undefined>;
+};
+
+/**
+ * Corrige el nombre, la duracion y el estado de un plan. No hay alta manual ni
+ * borrado: los planes entran con el Excel de precios, y borrar uno con ventas
+ * falla igual porque `Venta.planId` es una FK sin cascade. Dar de baja es poner
+ * `activo` en false.
+ */
+export async function editarPlan(
+  _previo: EstadoPlan,
+  formData: FormData
+): Promise<EstadoPlan> {
+  await requireAdmin();
+
+  const id = String(formData.get("id") ?? "");
+  const parsed = planSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { errores: z.flattenError(parsed.error).fieldErrors };
+  }
+
+  const { count } = await db.plan.updateMany({ where: { id }, data: parsed.data });
+  if (count === 0) return { error: "No se encontró el plan." };
+
+  revalidatePath("/admin/planes");
+  // El formulario de venta lista los planes activos: si se dio uno de baja, la
+  // pantalla del vendedor tiene que dejar de ofrecerlo.
+  revalidatePath("/vendedor/ventas/nueva");
+  revalidatePath("/admin/ventas/nueva");
+  redirect("/admin/planes");
 }

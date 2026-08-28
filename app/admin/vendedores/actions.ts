@@ -148,7 +148,7 @@ export async function crearUsuarioVendedor(
   }
 
   revalidatePath(`/admin/vendedores/${id}`);
-  return {};
+  return { ok: true };
 }
 
 // ---------------------------------------------------------------------------

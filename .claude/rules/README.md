@@ -34,6 +34,13 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
   un `next/link` en el `Close` de un primitivo de Radix: `Link` llama a `preventDefault()` y el
   cierre se saltea. `overflow-x: clip` en html/body, nunca `hidden`, que rompe el header sticky
   —y es una red de contención, no un reemplazo de arreglar lo que se desborda—.
+- **Catálogo de planes**: el Excel de precios crea planes nuevos pero no pisa el `nombre` ni
+  el `activo` de los que ya existen; eso lo edita el admin y manda sobre el archivo. El
+  `codigoProducto` no se edita: es la clave del upsert. Dar de baja es `activo: false`.
+- **Formularios**: el éxito de una server action se marca con `estado.ok`, nunca con "no hay
+  errores" (el estado inicial `{}` no tiene errores). Un toast en un `useEffect` no se ve si
+  el formulario desaparece al revalidar. Los duplicados de Prisma se leen con
+  `camposDuplicados()`, que ya contempla que `meta.target` no venga con el driver adapter.
 - **Datos sensibles**: padrones reales y fotos de DNI no se versionan ni se sirven por URL pública.
 - **Sesión**: el rol, el estado de la cuenta y los permisos se leen de la base en cada request
   (`getUsuarioActual`), nunca de los claims del JWT. Sacar a alguien del sistema se hace por
