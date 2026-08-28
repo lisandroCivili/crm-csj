@@ -232,6 +232,21 @@
     @apply font-sans;
   }
 
+  /* Red de contencion para el celular: si algo se pasa de ancho, se recorta en
+     vez de correr toda la pagina en horizontal.
+
+     `clip` y no `hidden` a proposito: `overflow-x: hidden` en html/body crea un
+     contenedor de scroll y el header sticky de `app-shell` deja de pegarse
+     arriba. `clip` recorta sin crear ese contenedor.
+
+     No reemplaza arreglar lo que se desborda —el chequeo de
+     `scripts/capturas.mjs` lo apaga antes de medir, justamente para poder verlo
+     igual—, evita que un descuido futuro vuelva a romper el telefono. */
+  html,
+  body {
+    overflow-x: clip;
+  }
+
   /* Las tarjetas se despegan del lienzo con una sombra suave en vez de un
      borde duro: es lo que separa una interfaz actual de una de hace diez
      anios, donde todo era una caja con marco. */

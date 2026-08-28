@@ -71,7 +71,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 4 | Caídas de clientes | ✅ commit `23d97fe` |
 | 5 | Gráficos del dashboard | ✅ commit `816628f` |
 | 6 | Formulario de venta | ✅ commit `4bd1ab9` |
-| 7 | Que el CRM funcione desde el celular | ⬜ |
+| 7 | Que el CRM funcione desde el celular | 🔨 en curso |
 | 8 | Tres arreglos chicos (toast · editar plan · código de agente) | ⬜ |
 | 9 | Padrón: varios archivos y selector nuevo | ⬜ |
 | 10 | Clientes: corregir datos y ver la documentación | ⬜ |
@@ -585,92 +585,122 @@ donde corresponde, la venta se guarda con el teléfono `03874151234` (cero
 adelante, sin símbolos) y la ficha muestra los campos nuevos. Lint, 117 tests y
 build pasan.
 
-### ⬜ Fase 7 — Que el CRM funcione desde el celular
+### 🔨 Fase 7 — Que el CRM funcione desde el celular
 
 Bloquea a las demás: sin esto no se puede validar ninguna fase desde el teléfono,
 y el sistema se usa mucho desde el teléfono.
 
-#### 7.1 Los botones muertos por ngrok — diagnóstico antes que parche
+#### 7.1 Los botones muertos por ngrok
 
-El hamburguesa (`components/layout/menu-movil.tsx`) y el desplegable de perfil
-(`components/layout/user-menu.tsx`) son las **dos únicas cosas del header que
-necesitan JavaScript**. Que fallen las dos y los links no, apunta a que el árbol
-no hidrata, no a un bug de cada componente. Además `scripts/capturas.mjs` con
-`CAPTURA_MOVIL=1` abre el hamburguesa con Playwright en viewport de iPhone y
-funciona: en localhost el componente está bien.
+**Se reprodujo sin el celular y sin ngrok**, que era lo que hacía falta para no
+arreglar a ciegas: se levantó un proxy HTTPS local que hace de túnel —termina el
+TLS afuera, manda `Host: prueba.ngrok-free.app` y las cabeceras `X-Forwarded-*`
+que pone ngrok— y se entró con Playwright en viewport de iPhone, resolviendo ese
+dominio contra `127.0.0.1`. El resultado fue exactamente el síntoma que contó
+Lisandro, y con la causa a la vista.
 
-Por eso primero se diagnostica, en este orden:
+**La causa: `next dev` devuelve 403 a los `/_next/static/chunks/*.js` que pide
+cualquier host que no sea localhost.** Lo hace `blockCrossSiteDEV`, que protege
+los recursos de desarrollo y cuya lista de permitidos es
+`['**.localhost', 'localhost', hostname]`. Cayeron dos chunks, y uno era el de
+`node_modules` —el que trae React y Radix—, así que **la página nunca hidrata**.
 
-1. **Sonda de hidratación temporal**: un componente cliente de tres líneas en el
-   header que escriba "js ok" desde un `useEffect`. Si en el celular no aparece,
-   el bundle no corre y el problema es de carga, no de Radix.
-2. **Consola del servidor**: buscar `Blocked cross-origin request to Next.js dev
-   resource`. Lo emite `blockCrossSiteDEV`
-   (`node_modules/next/dist/esm/server/lib/router-utils/block-cross-site-dev.js`),
-   que bloquea todo lo que pase por `/_next` o `/__nextjs` cuando el `Origin` no
-   está en la lista. Con `next dev` esa lista es
-   `['**.localhost', 'localhost', hostname]`, así que el host de ngrok queda
-   afuera y como mínimo se cae el websocket de HMR.
-3. **Probar contra el build**: `npm run build && npm start` por el mismo túnel. Si
-   ahí anda, era el bloqueo de desarrollo y no hay bug de aplicación.
+Por qué se ve como se ve: el HTML lo arma el servidor, así que la pantalla se
+dibuja entera y los links navegan igual (son `<a>`). Lo único que muere es lo que
+necesita JavaScript, que en el header son justo dos cosas: el hamburguesa y el
+desplegable de perfil. No hay ningún error en pantalla que lo explique.
 
-Arreglos que van igual, salga lo que salga del diagnóstico:
+El arreglo es `allowedDevOrigins` en `next.config.ts`, con los dominios de ngrok
+y una variable `ORIGENES_DEV` para agregar lo que haga falta —la IP de la máquina
+en la red de casa, otro túnel— sin tocar código.
 
-- **`next.config.ts`** —hoy tiene sólo `bodySizeLimit`— suma `allowedDevOrigins`
-  con los dominios de ngrok y `experimental.serverActions.allowedOrigins` con los
-  mismos. El primero desbloquea los recursos de desarrollo; el segundo es el
-  seguro para que el proxy no aborte cada server action con *"Invalid Server
-  Actions request"* si reescribe el `Host` (`action-handler.js` compara el
-  `origin` contra el `x-forwarded-host`). Sin eso, el login y "Cargar venta"
-  mueren aunque los links naveguen bien.
-- **`components/layout/menu-movil.tsx` pasa a `"use client"`** con su propio
-  `open` en `useState`. Hoy es un Server Component que envuelve los links en
-  `<SheetClose asChild><div>`: el cierre queda colgado de un `<div>` y depende del
-  burbujeo del click desde el `<a>`. Es la parte más frágil del árbol y el cambio
-  es barato.
-- **`export const viewport`** explícito en `app/layout.tsx`. Hoy no hay ninguno;
-  Next inyecta el default, pero conviene que esté escrito.
+Va además `experimental.serverActions.allowedOrigins`, **sólo en desarrollo**.
+Las server actions comparan el `Origin` contra el `Host`, y si el túnel reescribe
+el Host (`ngrok --host-header=rewrite`) dejan de coincidir y muere toda acción:
+login, cargar venta, importar padrón. En producción no hay ningún túnel, y esa
+lista relaja la protección CSRF: dejarla puesta sería abrirle la puerta a
+cualquier `*.ngrok-free.app`.
 
-#### 7.2 Desplazamiento horizontal
+#### 7.2 El menú que navegaba sin cerrarse
 
-Primero medir, después arreglar. `scripts/capturas.mjs` ya recorre las diez
-pantallas de admin logueado en viewport de iPhone 14: se le agrega un chequeo que
-compare `document.documentElement.scrollWidth` contra `clientWidth` y liste las
-que se pasan. Eso da los culpables exactos en vez de adivinarlos.
+Segundo bug, independiente del anterior y encontrado al probar el primero: **el
+panel del celular no se cerraba al tocar un link**. Se navegaba a la pantalla
+nueva con el menú tapándola, y para salir había que tocar afuera.
 
-Sospechoso ya identificado: `app/admin/dashboard/page.tsx` tiene el único
-`grid grid-cols-2` sin prefijo responsive del repo. Las tablas están bien
-(`components/ui/table.tsx` las envuelve en `overflow-x-auto`) y los `min-w-[38rem]`
-de los editores de escala ya viven dentro de un contenedor scrolleable.
+El componente decía en un comentario que el panel "se cierra solo porque los
+links van envueltos en `SheetClose`". No era cierto y no lo fue nunca:
+`next/link` llama a `preventDefault()` para navegar del lado del cliente, y Radix
+compone sus handlers con `checkForDefaultPrevented`, así que cuando el evento
+llega al `Close` ya viene con `defaultPrevented` y el cierre **se saltea**.
 
-Red de contención en el `@layer base` de `app/globals.css`:
+`MenuMovil` pasa a ser componente cliente con su propio `abierto` y cierra en el
+click. Cerrar en el click y no al cambiar de ruta es a propósito: cubre el caso
+de tocar el link de la pantalla en la que ya se está parado, donde `usePathname`
+no cambia. Y `SheetClose` **deja de exportarse** desde `components/ui/sheet.tsx`,
+con la trampa anotada ahí mismo para que nadie la vuelva a pisar.
+
+Se agregó también un `export const viewport` explícito en `app/layout.tsx`. Next
+inyecta el mismo por defecto; conviene que esté escrito. Sin `maximumScale` ni
+`userScalable`: apagar el zoom es cómodo para el que diseña y un problema para el
+que necesita agrandar la letra.
+
+#### 7.3 Desplazamiento horizontal
+
+Primero medir. `scripts/capturas.mjs` recorre las diez pantallas de admin en
+viewport de iPhone 14; ahora además compara `scrollWidth` contra `clientWidth` y
+**nombra al elemento que se sale**, con su etiqueta, sus clases y hasta qué píxel
+llega. Ignora lo que vive dentro de un contenedor que scrollea solo: una tabla
+ancha metida en un `overflow-x: auto` está bien resuelta, no es un desborde.
+
+Culpable único, y no era el que se sospechaba: **`/admin/comisiones`**, con 68px
+de más sobre un viewport de 390. El sospechoso anotado al planificar —el
+`grid grid-cols-2` del dashboard— no desborda.
+
+El desborde salía de `components/layout/page-header.tsx`, que es de todas las
+pantallas: el bloque de acciones era `flex shrink-0 gap-2` y en Comisiones son
+tres botones que suman 458px. Con `shrink-0` la caja no cedía y corría la página
+entera. Pasa a `flex flex-wrap gap-2`: los botones bajan de renglón en vez de
+empujar. Se arregla ahí y no en Comisiones porque el problema es del molde.
+
+Red de contención en `app/globals.css`:
 
 ```css
 html, body { overflow-x: clip; }
 ```
 
-**`clip` y no `hidden`**: `overflow-x: hidden` en `html`/`body` crea un contenedor
-de scroll y rompe el `position: sticky` del header. La red no reemplaza arreglar
-lo que se desborda; evita que un descuido futuro vuelva a romper el celular.
+**`clip` y no `hidden`**: `overflow-x: hidden` en html/body crea un contenedor de
+scroll y el header sticky de `app-shell` deja de pegarse arriba. Verificado
+scrolleando 600px en dos pantallas: el header se queda en `top: 0`.
 
-#### 7.3 El logo de la barra lateral
+La red taparía el problema siguiente y dejaría el chequeo ciego, así que **el
+chequeo la apaga antes de medir** y la vuelve a poner. La red es para que un
+descuido no rompa el teléfono, no para no enterarse.
 
-Hoy `components/layout/marca.tsx` dibuja un cuadro con las letras "CSJ" y una
-franja verde abajo. No hay ninguna imagen en el proyecto: `next/image` no se usa
-en ningún archivo y `public/` sólo tiene los SVG del scaffold de Next.
+#### 7.4 El logo de la barra lateral
 
-- **Lisandro copia el archivo a `public/logo-csj.png`** (mejor `.svg` si lo tiene
-  vectorial). Sin ese archivo la fase no se puede terminar.
-- `Marca` reemplaza el cuadro de letras por un import estático y `next/image`,
-  dentro de una caja blanca redondeada: el sidebar es oscuro (`bg-sidebar`) y el
-  logo viene sobre fondo blanco. Si el archivo trae transparencia, va directo.
-- Se mantiene el texto al costado. **Ojo**: el logo que pasó Lisandro dice
-  *Agencia Mercantil*, no *Club San Jorge* — hay que confirmar si el texto del
-  costado cambia también (ver Pendientes).
+El archivo que pasó Lisandro venía de 1024×1024 con la marca ocupando el 10% del
+lienzo y por encima del centro: a 40px se habría visto minúscula y torcida. Se
+recortó al cuadrado de la marca (413×413) y se llevó a blanco puro el ruido de
+compresión del fondo, que venía en 252-254 y se notaba contra el recuadro.
+
+`Marca` reemplaza el monograma "CSJ" por el archivo con `next/image`, dentro del
+mismo recuadro redondeado que había. El `alt` va vacío a propósito: el nombre
+está escrito al lado y un lector de pantalla lo diría dos veces.
+
+> **Para hablar con Balta.** El logo dice *Agencia Mercantil* y el texto que
+> quedó al lado dice *Club San Jorge*. Está así porque es lo que decía antes; si
+> tiene que cambiar, es una línea (ver Pendientes).
 
 **Archivos**: `next.config.ts`, `app/layout.tsx`, `app/globals.css`,
 `components/layout/menu-movil.tsx`, `components/layout/marca.tsx`,
-`scripts/capturas.mjs`, y `public/logo-csj.png` que aporta Lisandro.
+`components/layout/page-header.tsx`, `components/ui/sheet.tsx`,
+`scripts/capturas.mjs`, `public/logo-csj.png`. Sin migración.
+
+Verificado por el túnel simulado con la aplicación levantada: React hidrata, el
+hamburguesa abre, el panel cierra al tocar un link —también el de la pantalla en
+la que ya se está—, el desplegable de perfil abre, el login entra, y no queda ni
+un error en consola ni una request fallida. Las diez pantallas no se salen por el
+costado. Lint, 117 tests y build pasan.
 
 ### ⬜ Fase 8 — Tres arreglos chicos
 
@@ -1768,7 +1798,82 @@ pendiente, no un error. Se sube después con **Editar**.
 La venta quedó con DNI `99999999`. Se anula o se borra desde el listado de
 ventas; si quedaron varias, pedime que las borre por script.
 
-### Fases 7 a 12 — qué va a tener que demostrar cada una
+### Fase 7 — Que el CRM funcione desde el celular
+
+**Preparación**
+
+```bash
+npm run dev
+ngrok http 3000        # en otra terminal
+```
+
+ngrok imprime una URL `https://algo.ngrok-free.app`. Esa es la que se abre en el
+teléfono. Si el túnel no es ngrok —o se entra por la IP de la máquina en la red
+de casa—, hay que nombrar ese host antes de levantar el server:
+
+```bash
+ORIGENES_DEV=192.168.0.15 npm run dev
+```
+
+**1. El logo** — *esto es lo nuevo*
+
+En el escritorio, arriba de todo en la barra lateral oscura: la "S" roja y verde
+sobre un círculo blanco, con **Club San Jorge / Administración** al lado. Donde
+antes decía `CSJ` sobre un círculo rojo. Tiene que verse también en `/login`.
+
+**2. El hamburguesa y el perfil, desde el celular** — *esto es lo que estaba roto*
+
+Abrir la URL de ngrok en el teléfono y entrar con
+`balta@crm-csj.local` / `CambiarEstePassword123`.
+
+- Tocar el **botón hamburguesa** (arriba a la izquierda): tiene que abrirse el
+  panel oscuro con el logo y la lista de secciones. Antes no pasaba nada.
+- Tocar **Clientes** en ese panel: tiene que navegar **y cerrarse el panel**. Es
+  el segundo bug que apareció probando el primero: antes navegaba con el menú
+  tapando la pantalla.
+- Volver a abrir el panel y tocar **Clientes otra vez**, estando ya en Clientes:
+  tiene que cerrarse igual, aunque la ruta no cambie.
+- Tocar el **desplegable de perfil** (arriba a la derecha): tiene que abrirse el
+  menú con "Mi perfil", "Cambiar de zona" y "Cerrar sesión".
+- **Cerrar sesión y volver a entrar.** Esto ejercita una server action, que es el
+  otro camino que un túnel puede romper y que no se nota mirando la pantalla.
+
+Si algo de esto sigue muerto, el dato que sirve está en la terminal del server:
+buscar `Blocked cross-origin request` y ver qué host nombra. Ese host va en
+`ORIGENES_DEV`.
+
+**3. Que no se corra para el costado** — *esto es lo nuevo*
+
+Desde el celular, recorrer las pantallas e intentar arrastrar la página hacia los
+lados. No se tiene que mover. La que estaba rota era **Comisiones**: tres botones
+en el encabezado que sumaban 458px sobre una pantalla de 390. Ahora bajan de
+renglón.
+
+**4. El chequeo automático**
+
+```bash
+CAPTURA_MOVIL=1 npm run capturas
+```
+
+Al final tiene que decir **"Ninguna pantalla se sale por el costado"**. Si alguna
+se sale, lo dice con la ruta, cuántos píxeles sobran y qué elemento lo causa.
+
+El chequeo apaga el `overflow-x: clip` de `globals.css` antes de medir, a
+propósito: esa regla existe para que un desborde no arrastre la página, pero
+dejaría el chequeo ciego. La red tapa el problema en pantalla; el chequeo lo
+muestra igual.
+
+**5. Que el header siga pegado arriba**
+
+Es lo único que `overflow-x: clip` podría haber roto (con `hidden` se rompe
+seguro). En cualquier pantalla larga —Clientes sirve—, bajar scrolleando: la
+barra con la zona y el perfil tiene que quedarse arriba.
+
+**Borrar los datos de prueba**
+
+No hay nada que borrar: esta fase no carga datos.
+
+### Fases 8 a 12 — qué va a tener que demostrar cada una
 
 La guía completa de cada fase se escribe **cuando la fase se termina**, como
 siempre. Lo que sigue son los criterios de aceptación, anotados ahora para que no
@@ -1777,12 +1882,6 @@ se negocien después.
 Escenario base para todas: los 7 padrones de `docs/padrones-prueba/` importados en
 Salta desde `/admin/laboratorio`, que es como quedó la base de desarrollo.
 
-- **Fase 7** — ngrok apuntando a `localhost:3000` y entrar desde el celular: abrir
-  el hamburguesa, abrir el desplegable de perfil, cerrar sesión y volver a entrar
-  (eso último ejercita una server action, que es el otro camino que el proxy puede
-  romper). Recorrer las diez pantallas buscando desplazamiento horizontal, y correr
-  `CAPTURA_MOVIL=1 npm run capturas` para que el chequeo nuevo confirme que ninguna
-  se desborda. El logo, en el sidebar de escritorio **y** en el panel del celular.
 - **Fase 8** — abrir la ficha de un vendedor **sin cuenta**: no tiene que aparecer
   ningún toast. Crear la cuenta ahí mismo: el toast aparece **una sola vez**.
   Editar el nombre de un plan, reimportar el Excel de precios y ver que el nombre
@@ -1820,19 +1919,23 @@ en la base de desarrollo.
 están cerradas.
 
 **El plan ya no termina en la Fase 6.** El 27/08/2026 Lisandro trajo una segunda
-tanda de pedidos y quedaron planificadas las **fases 7 a 12**. La Fase 7 se
-empezó el 28/08/2026; las 8 a 12 siguen en ⬜ y sin una sola línea de código.
+tanda de pedidos y quedaron planificadas las **fases 7 a 12**. La **Fase 7 está
+construida** y espera validación; las 8 a 12 siguen en ⬜ y sin una sola línea de
+código. La próxima sesión arranca por la **Fase 8**.
 
-Lo que la Fase 7 necesita para poder cerrarse:
+Lo que falta para cerrar la Fase 7: **entrar una vez desde el celular por el
+túnel**, siguiendo la guía. Todo lo demás quedó verificado, incluido el
+comportamiento por el túnel: se reprodujo con un proxy HTTPS local que hace de
+ngrok y Playwright en viewport de iPhone resolviendo el dominio contra
+`127.0.0.1`. Ese armado es reproducible en media hora si hace falta volver, pero
+no quedó en el repositorio: para dejarlo había que versionar una clave privada
+de un certificado autofirmado.
 
-- **Un túnel de ngrok levantado y el celular a mano**, porque el bug de los botones
-  no se reproduce en localhost: las capturas móviles con Playwright abren el
-  hamburguesa sin problema. Es lo único que puede confirmar que quedó arreglado.
-- El archivo del logo ya está en `public/logo-csj.png`; lo copió Lisandro el
-  28/08/2026.
+Lo que queda abierto después de las fases 6 y 7:
 
-Lo que queda abierto después de la Fase 6:
-
+- **El logo dice "Agencia Mercantil" y el texto de al lado dice "Club San
+  Jorge".** Quedó el texto que ya había; cambiarlo es una línea en
+  `components/layout/marca.tsx`, pero hay que saber cuál va.
 - **Confirmar con Balta que la observación sea obligatoria en casi toda venta
   nueva**, que es la consecuencia de las dos reglas como las definió (ver la
   Fase 6). Si no era la idea, se cambia en una línea.

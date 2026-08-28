@@ -11,7 +11,12 @@ import { cn } from "@/lib/utils";
  * las variantes `data-open` / `data-closed` que define shadcn/tailwind.css.
  *
  * Solo trae lo que usa el menu de navegacion en celular: sin cabecera propia ni
- * boton de cierre, porque el panel se cierra al tocar un link.
+ * boton de cierre, porque el panel lo cierra `MenuMovil` con su propio estado.
+ *
+ * **No se exporta `SheetClose` a proposito.** Envolver links de `next/link` en
+ * el `Close` de Radix no cierra nada: `Link` llama a `preventDefault()` y Radix
+ * compone sus handlers con `checkForDefaultPrevented`, asi que descarta el
+ * cierre. Ese fue el bug del menu en celular hasta la Fase 7.
  */
 
 function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
@@ -20,10 +25,6 @@ function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
 
 function SheetTrigger({ ...props }: React.ComponentProps<typeof SheetPrimitive.Trigger>) {
   return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />;
-}
-
-function SheetClose({ ...props }: React.ComponentProps<typeof SheetPrimitive.Close>) {
-  return <SheetPrimitive.Close data-slot="sheet-close" {...props} />;
 }
 
 function SheetTitle({ ...props }: React.ComponentProps<typeof SheetPrimitive.Title>) {
@@ -68,4 +69,4 @@ function SheetContent({
   );
 }
 
-export { Sheet, SheetClose, SheetContent, SheetTitle, SheetTrigger };
+export { Sheet, SheetContent, SheetTitle, SheetTrigger };

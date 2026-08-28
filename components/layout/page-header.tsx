@@ -21,7 +21,11 @@ export function PageHeader({
           </p>
         ) : null}
       </div>
-      {acciones ? <div className="flex shrink-0 gap-2">{acciones}</div> : null}
+      {/* `flex-wrap` y no `shrink-0`: en Comisiones son tres botones que suman
+          458px y en el telefono hay 390. Con `shrink-0` la caja no cedia y
+          corria toda la pagina en horizontal; asi los botones bajan de renglon
+          en vez de empujar. */}
+      {acciones ? <div className="flex flex-wrap gap-2">{acciones}</div> : null}
     </div>
   );
 }

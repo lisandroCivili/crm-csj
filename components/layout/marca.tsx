@@ -1,9 +1,17 @@
+import Image from "next/image";
+import logoCsj from "@/public/logo-csj.png";
 import { cn } from "@/lib/utils";
 
 /**
- * Monograma de Club San Jorge. Los cuatro colores de la marca aparecen juntos
- * aca: el cuadro negro, el rojo y el verde en la barra inferior, y el blanco
- * del texto.
+ * La marca de Club San Jorge: el isotipo mas el nombre.
+ *
+ * El archivo viene sobre fondo blanco (sin transparencia), asi que va dentro de
+ * un recuadro blanco redondeado. Eso ademas lo hace verse igual en los dos
+ * lugares donde aparece: el panel lateral, que es oscuro, y el login, que sigue
+ * el tema del sistema.
+ *
+ * El `alt` va vacio a proposito: el nombre esta escrito al lado y un lector de
+ * pantalla lo diria dos veces.
  */
 export function Marca({
   bajada,
@@ -17,9 +25,8 @@ export function Marca({
 }) {
   return (
     <div className={cn("flex items-center gap-3", className)}>
-      <span className="relative flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-primary text-[0.68rem] font-bold tracking-tight text-primary-foreground shadow-sm">
-        CSJ
-        <span className="absolute inset-x-0 bottom-0 h-[3px] bg-success" />
+      <span className="flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1 shadow-sm">
+        <Image src={logoCsj} alt="" className="size-full object-contain" priority />
       </span>
       <span className="min-w-0">
         <span

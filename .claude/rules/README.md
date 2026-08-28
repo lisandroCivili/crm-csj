@@ -29,6 +29,11 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
   antes de usarlos; **rojo y verde nunca juntos**. Una serie con orden (meses) lleva rampa
   de un solo tono, no colores distintos. El texto no lleva el color de la serie, y lo que
   no se sabe no se dibuja como cero.
+- **Móvil**: probar desde el teléfono necesita `allowedDevOrigins`; sin eso `next dev` responde
+  403 a los chunks de `/_next` y React no hidrata, aunque la pantalla se dibuje. Nunca envolver
+  un `next/link` en el `Close` de un primitivo de Radix: `Link` llama a `preventDefault()` y el
+  cierre se saltea. `overflow-x: clip` en html/body, nunca `hidden`, que rompe el header sticky
+  —y es una red de contención, no un reemplazo de arreglar lo que se desborda—.
 - **Datos sensibles**: padrones reales y fotos de DNI no se versionan ni se sirven por URL pública.
 - **Sesión**: el rol, el estado de la cuenta y los permisos se leen de la base en cada request
   (`getUsuarioActual`), nunca de los claims del JWT. Sacar a alguien del sistema se hace por

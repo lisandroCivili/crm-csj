@@ -93,6 +93,25 @@ reemplaza el menú del header (`components/layout/menu-movil.tsx`). Los listados
 porque en el escritorio Balta compara nueve columnas de un vistazo y en el teléfono el vendedor
 necesita tres datos y un botón grande. Se verifica con `CAPTURA_MOVIL=1 npm run capturas`.
 
+- **Probar desde el teléfono necesita `allowedDevOrigins`.** `next dev` responde **403** a los
+  `/_next/static/chunks/*.js` que pide cualquier host que no sea localhost, así que por un túnel
+  la página se dibuja y los links navegan —eso lo hace el servidor— pero **React no hidrata** y
+  todo lo que necesita JavaScript queda muerto, sin un solo error en pantalla. Los dominios de
+  ngrok están en `next.config.ts`; cualquier otro host va en `ORIGENES_DEV`. El dato para
+  diagnosticarlo está en la terminal del server: `Blocked cross-origin request`.
+- **`serverActions.allowedOrigins` va sólo en desarrollo.** Existe por si el túnel reescribe el
+  `Host` y las server actions dejan de validar el `Origin`. En producción no hay túnel y esa
+  lista relaja la protección CSRF.
+- **Nunca envolver un `next/link` en el `Close` de un primitivo de Radix.** `Link` llama a
+  `preventDefault()` y Radix compone sus handlers con `checkForDefaultPrevented`, así que
+  descarta el cierre: se navega con el panel tapando la pantalla. El menú del celular maneja su
+  propio estado y cierra en el click, no al cambiar de ruta, para cubrir el caso de tocar el link
+  de la pantalla en la que ya se está.
+- **`overflow-x: clip` en html/body, nunca `hidden`.** `hidden` crea un contenedor de scroll y
+  rompe el `position: sticky` del header. Es una red de contención, no un arreglo: lo que se sale
+  se arregla donde se sale, y por eso el chequeo de `scripts/capturas.mjs` **apaga la red antes
+  de medir** y nombra al elemento culpable.
+
 ## Cómo se liquida la comisión
 
 Confirmado por Balta el 2026-08-12. El motor vive en

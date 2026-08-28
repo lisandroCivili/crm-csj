@@ -7,7 +7,9 @@
  *   CAPTURA_MOVIL=1 node scripts/capturas.mjs .capturas-movil
  *
  * El modo movil usa el viewport de un iPhone 14 y abre el menu hamburguesa,
- * que es la unica forma de navegar por debajo de 768px.
+ * que es la unica forma de navegar por debajo de 768px. En las dos variantes
+ * mide el desplazamiento horizontal de cada pantalla y nombra al elemento que
+ * lo causa.
  *
  * Las imagenes van a .capturas/, que esta fuera del repositorio.
  */
@@ -84,13 +86,75 @@ await contexto.addCookies([
   { name: "zona_activa", value: String(zonaId), url: BASE, httpOnly: true, sameSite: "Lax" },
 ]);
 
+/**
+ * Busca lo que se sale por el costado. En el telefono un solo elemento ancho
+ * hace que toda la pagina se corra en horizontal, y desde afuera eso se ve como
+ * "el CRM esta roto en el celular", sin ninguna pista de quien lo causa.
+ *
+ * Apaga el `overflow-x: clip` de `globals.css` antes de medir: esa es la red de
+ * contencion que evita que el desborde se note, y con ella puesta `scrollWidth`
+ * no acusa nada nunca. La idea es ver justamente lo que la red tapa.
+ */
+const medirDesborde = () =>
+  pagina.evaluate(() => {
+    const raiz = document.documentElement;
+    const previo = [raiz.style.overflowX, document.body.style.overflowX];
+    raiz.style.overflowX = "visible";
+    document.body.style.overflowX = "visible";
+
+    const ancho = raiz.clientWidth;
+    const sobra = raiz.scrollWidth - ancho;
+    const culpables = [];
+
+    if (sobra > 0) {
+      // Lo que vive dentro de algo que scrollea solo no cuenta: la tabla ancha
+      // metida en un contenedor con `overflow-x: auto` esta bien resuelta.
+      const contenido = (el) => {
+        for (let p = el.parentElement; p && p !== document.body; p = p.parentElement) {
+          const ox = getComputedStyle(p).overflowX;
+          if (ox === "auto" || ox === "scroll" || ox === "hidden" || ox === "clip") return true;
+        }
+        return false;
+      };
+
+      const nodos = [];
+      for (const el of document.body.querySelectorAll("*")) {
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.right <= ancho + 1) continue;
+        if (contenido(el)) continue;
+        // Solo el mas externo de cada rama: si el padre ya se sale, listar a
+        // todos sus hijos no agrega informacion.
+        if (nodos.some((n) => n.contains(el))) continue;
+        nodos.push(el);
+      }
+
+      for (const el of nodos.slice(0, 5)) {
+        const clases =
+          typeof el.className === "string" ? el.className.trim().split(/\s+/).slice(0, 6) : [];
+        culpables.push(
+          `${el.tagName.toLowerCase()}${clases.length ? "." + clases.join(".") : ""}` +
+            ` (llega a ${Math.round(el.getBoundingClientRect().right)}px)`
+        );
+      }
+    }
+
+    raiz.style.overflowX = previo[0];
+    document.body.style.overflowX = previo[1];
+    return { ancho, sobra, culpables };
+  });
+
+const desbordes = [];
+
 for (const [indice, [nombre, ruta]] of PANTALLAS.entries()) {
   await pagina.goto(`${BASE}${ruta}`, { waitUntil: "networkidle" });
   await ocultarOverlay();
   await pagina.waitForTimeout(500);
   const numero = String(indice + 2).padStart(2, "0");
   await pagina.screenshot({ path: `${DESTINO}/${numero}-${nombre}.png` });
-  console.log(`${numero}-${nombre}`);
+
+  const { ancho, sobra, culpables } = await medirDesborde();
+  if (sobra > 0) desbordes.push({ nombre, ruta, ancho, sobra, culpables });
+  console.log(`${numero}-${nombre}${sobra > 0 ? `   ← se sale ${sobra}px` : ""}`);
 }
 
 // En movil la navegacion vive detras del boton: sin esta captura no se ve.
@@ -102,4 +166,15 @@ if (MOVIL) {
 }
 
 await navegador.close();
+
+if (desbordes.length) {
+  console.log(`\n⚠  ${desbordes.length} pantalla(s) se salen por el costado:\n`);
+  for (const d of desbordes) {
+    console.log(`  ${d.ruta}   (viewport ${d.ancho}px, sobran ${d.sobra}px)`);
+    for (const c of d.culpables) console.log(`      ${c}`);
+  }
+} else {
+  console.log("\nNinguna pantalla se sale por el costado.");
+}
+
 console.log(`\nlisto: ${DESTINO}/`);

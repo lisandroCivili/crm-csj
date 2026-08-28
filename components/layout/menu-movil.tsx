@@ -1,8 +1,11 @@
+"use client";
+
+import { useState } from "react";
 import { Menu } from "lucide-react";
 import { Marca } from "./marca";
 import { NavLinks } from "./nav-links";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetClose, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import type { Permisos } from "@/lib/sesion";
 import type { Role } from "@/lib/generated/prisma/client";
 
@@ -13,10 +16,15 @@ import type { Role } from "@/lib/generated/prisma/client";
  * Reutiliza `NavLinks` tal cual: usa tokens `sidebar-*`, los mismos que pinta
  * el panel de escritorio.
  *
- * El panel se cierra solo porque los links van envueltos en `SheetClose`: al
- * tocar cualquiera, Radix cierra. Asi no hace falta estado propio ni escuchar
- * la ruta, y sirve igual cuando se toca el link de la pagina en la que ya se
- * esta parado.
+ * **El panel maneja su propio `abierto` y cierra en el click, a proposito.**
+ * Antes los links iban envueltos en un `SheetClose asChild`, y no cerraba
+ * nunca: `next/link` llama a `preventDefault()` para navegar del lado del
+ * cliente, y Radix compone sus handlers con `checkForDefaultPrevented`, asi que
+ * al llegar el evento al `SheetClose` ya venia con `defaultPrevented` y el
+ * cierre se salteaba. Se navegaba con el menu tapando la pantalla.
+ *
+ * Cerrar en el click y no al cambiar de ruta cubre el caso de tocar el link de
+ * la pagina en la que ya se esta parado, donde `usePathname` no cambia.
  */
 export function MenuMovil({
   role,
@@ -27,8 +35,10 @@ export function MenuMovil({
   permisos: Permisos;
   bajada: string;
 }) {
+  const [abierto, setAbierto] = useState(false);
+
   return (
-    <Sheet>
+    <Sheet open={abierto} onOpenChange={setAbierto}>
       <SheetTrigger asChild>
         <Button variant="ghost" size="icon-lg" className="md:hidden" aria-label="Abrir menú">
           <Menu className="size-5" />
@@ -38,11 +48,11 @@ export function MenuMovil({
       <SheetContent titulo="Menú" className="py-5">
         <Marca invertido bajada={bajada} className="px-5 pb-6" />
 
-        <SheetClose asChild>
-          <div>
-            <NavLinks role={role} permisos={permisos} />
-          </div>
-        </SheetClose>
+        {/* El click sube desde el <a>; con Enter el navegador tambien dispara
+            un click, asi que no hace falta manejar el teclado aparte. */}
+        <div onClick={() => setAbierto(false)}>
+          <NavLinks role={role} permisos={permisos} />
+        </div>
 
         <p className="mt-auto px-5 pt-6 text-[0.68rem] leading-relaxed text-white/35">
           Capitalización y Ahorro
