@@ -72,7 +72,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 5 | Gráficos del dashboard | ✅ commit `816628f` |
 | 6 | Formulario de venta | ✅ commit `4bd1ab9` |
 | 7 | Que el CRM funcione desde el celular | ✅ commit `84db215` |
-| 8 | Tres arreglos chicos (toast · editar plan · código de agente) | 🔨 commit `PENDIENTE` |
+| 8 | Tres arreglos chicos (toast · editar plan · código de agente) | 🔨 commit `24e8013` |
 | 9 | Padrón: varios archivos y selector nuevo | ⬜ |
 | 10 | Clientes: corregir datos y ver la documentación | ⬜ |
 | 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ⬜ |
@@ -716,7 +716,7 @@ costado. Lint, 117 tests y build pasan.
 
 ### 🔨 Fase 8 — Tres arreglos chicos
 
-Commit `PENDIENTE`. Migración `20260828135455_codigo_agente`. Sin relación entre
+Commit `24e8013`. Migración `20260828135455_codigo_agente`. Sin relación entre
 sí, pero los tres son de pocas líneas y no justifican una fase cada uno. Salieron
 cuatro: probando el primero apareció uno más de fondo.
 
