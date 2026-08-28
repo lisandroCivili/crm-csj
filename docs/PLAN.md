@@ -3,6 +3,12 @@
 Documento vivo. Sale de `docs/cambios 24-8.txt` (las anotaciones de Lisandro) más
 las respuestas de Balta y la adenda del contrato de agencia.
 
+> **Segunda tanda (27/08/2026).** Las fases 7 a 12 salen de una lista nueva de
+> Lisandro, escrita después de usar el sistema: actividad que sólo muestra leads,
+> padrón de a un archivo, clientes que no se pueden corregir, un toast que miente,
+> ventas sin confirmación ni edición desde admin, planes que no se editan, y el CRM
+> roto cuando se entra desde el celular por ngrok.
+
 El contexto del negocio está en [`../CLAUDE.md`](../CLAUDE.md); el estado general
 del sistema, en [`PENDIENTE.md`](PENDIENTE.md). Acá va **sólo este plan y su
 avance**.
@@ -64,7 +70,13 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 3 | Comisión del agente (Balta y Pedro) | ✅ commit `f81e22e` |
 | 4 | Caídas de clientes | ✅ commit `23d97fe` |
 | 5 | Gráficos del dashboard | ✅ commit `816628f` |
-| 6 | Formulario de venta | 🔨 commit `4bd1ab9` |
+| 6 | Formulario de venta | ✅ commit `4bd1ab9` |
+| 7 | Que el CRM funcione desde el celular | ⬜ |
+| 8 | Tres arreglos chicos (toast · editar plan · código de agente) | ⬜ |
+| 9 | Padrón: varios archivos y selector nuevo | ⬜ |
+| 10 | Clientes: corregir datos y ver la documentación | ⬜ |
+| 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ⬜ |
+| 12 | Actividad: leads + ventas, filtrable por vendedor | ⬜ |
 
 Dependencias:
 
@@ -74,7 +86,19 @@ Fase 1  Escalas por vendedor ────┘                                  �
 Fase 2  Renovaciones + padrón ──────────────────────────────────────┘
 Fase 4  Caídas          (independiente, necesita padrones cargados)
 Fase 6  Formulario      (bloqueada por definición de Balta)
+
+Fase 7  Móvil    ──> habilita probar todas las demás desde el celular
+Fase 8  Chicos       (independiente)
+Fase 9  Padrón       (independiente)
+Fase 10 Clientes ──┐
+Fase 11 Ventas   ──┴──> Fase 12  Actividad
 ```
+
+**El orden de las fases 7 a 12 no es el del pedido, y es a propósito.** La 7 va
+primera porque hasta que el CRM no funcione desde el celular no se puede validar
+nada desde el celular. La Actividad —que Lisandro pidió primero— va última porque
+tiene que registrar cosas que todavía no existen (anulación de venta, edición de
+cliente, edición desde admin); hacerla antes obligaría a volver a tocarla.
 
 ---
 
@@ -115,6 +139,17 @@ a sus vendedores.
   un 50 % más.
 - Base: Ahorro + Sorteo + Carga Administrativa. Sin impuestos ni cuotas de
   suscripción. **Balta confirmó que el `Importe` del padrón ya es esa base.**
+
+### Definiciones de la segunda tanda (Lisandro, 27/08/2026)
+
+Las que hacían falta para poder planificar las fases 7 a 12.
+
+| Tema | Definición |
+|---|---|
+| Cliente corregido a mano vs. padrón | **Manda el dato corregido.** El campo editado queda marcado y el padrón deja de tocarlo. Sin esto, corregir un teléfono no sirve para nada: la próxima importación lo pisa. |
+| Qué registra la Actividad | Los leads que ya registra, **más alta, edición y anulación de venta**, **más la edición de datos del cliente**. |
+| Edición de venta | El vendedor **conserva todas** las opciones que ya tiene, y el admin recibe **las mismas**. No se acota nada: se agrega la puerta que falta. |
+| Logo del sidebar | Lo aporta Lisandro como archivo en `public/`. |
 
 ---
 
@@ -487,9 +522,10 @@ Verificado mirando la pantalla renderizada, en claro y en oscuro, además de lin
 barra no se dibujaba (un `height` en porcentaje contra un padre de alto
 automático da cero) y la leyenda decía "Marzo De 2026".
 
-### 🔨 Fase 6 — Formulario de venta
+### ✅ Fase 6 — Formulario de venta
 
-Commit `4bd1ab9`. Migración `20260827173116_campos_formulario_venta`. Los campos los definió Balta
+Commit `4bd1ab9`. Validada por Lisandro el 28/08/2026. Migración
+`20260827173116_campos_formulario_venta`. Los campos los definió Balta
 armándolos en el prototipo y los pasó por captura de pantalla el 27/08/2026.
 
 | # | Campo | Tipo | Obligatoriedad |
@@ -548,6 +584,432 @@ Verificado contra la aplicación levantada: las dos reglas rechazan y aceptan
 donde corresponde, la venta se guarda con el teléfono `03874151234` (cero
 adelante, sin símbolos) y la ficha muestra los campos nuevos. Lint, 117 tests y
 build pasan.
+
+### ⬜ Fase 7 — Que el CRM funcione desde el celular
+
+Bloquea a las demás: sin esto no se puede validar ninguna fase desde el teléfono,
+y el sistema se usa mucho desde el teléfono.
+
+#### 7.1 Los botones muertos por ngrok — diagnóstico antes que parche
+
+El hamburguesa (`components/layout/menu-movil.tsx`) y el desplegable de perfil
+(`components/layout/user-menu.tsx`) son las **dos únicas cosas del header que
+necesitan JavaScript**. Que fallen las dos y los links no, apunta a que el árbol
+no hidrata, no a un bug de cada componente. Además `scripts/capturas.mjs` con
+`CAPTURA_MOVIL=1` abre el hamburguesa con Playwright en viewport de iPhone y
+funciona: en localhost el componente está bien.
+
+Por eso primero se diagnostica, en este orden:
+
+1. **Sonda de hidratación temporal**: un componente cliente de tres líneas en el
+   header que escriba "js ok" desde un `useEffect`. Si en el celular no aparece,
+   el bundle no corre y el problema es de carga, no de Radix.
+2. **Consola del servidor**: buscar `Blocked cross-origin request to Next.js dev
+   resource`. Lo emite `blockCrossSiteDEV`
+   (`node_modules/next/dist/esm/server/lib/router-utils/block-cross-site-dev.js`),
+   que bloquea todo lo que pase por `/_next` o `/__nextjs` cuando el `Origin` no
+   está en la lista. Con `next dev` esa lista es
+   `['**.localhost', 'localhost', hostname]`, así que el host de ngrok queda
+   afuera y como mínimo se cae el websocket de HMR.
+3. **Probar contra el build**: `npm run build && npm start` por el mismo túnel. Si
+   ahí anda, era el bloqueo de desarrollo y no hay bug de aplicación.
+
+Arreglos que van igual, salga lo que salga del diagnóstico:
+
+- **`next.config.ts`** —hoy tiene sólo `bodySizeLimit`— suma `allowedDevOrigins`
+  con los dominios de ngrok y `experimental.serverActions.allowedOrigins` con los
+  mismos. El primero desbloquea los recursos de desarrollo; el segundo es el
+  seguro para que el proxy no aborte cada server action con *"Invalid Server
+  Actions request"* si reescribe el `Host` (`action-handler.js` compara el
+  `origin` contra el `x-forwarded-host`). Sin eso, el login y "Cargar venta"
+  mueren aunque los links naveguen bien.
+- **`components/layout/menu-movil.tsx` pasa a `"use client"`** con su propio
+  `open` en `useState`. Hoy es un Server Component que envuelve los links en
+  `<SheetClose asChild><div>`: el cierre queda colgado de un `<div>` y depende del
+  burbujeo del click desde el `<a>`. Es la parte más frágil del árbol y el cambio
+  es barato.
+- **`export const viewport`** explícito en `app/layout.tsx`. Hoy no hay ninguno;
+  Next inyecta el default, pero conviene que esté escrito.
+
+#### 7.2 Desplazamiento horizontal
+
+Primero medir, después arreglar. `scripts/capturas.mjs` ya recorre las diez
+pantallas de admin logueado en viewport de iPhone 14: se le agrega un chequeo que
+compare `document.documentElement.scrollWidth` contra `clientWidth` y liste las
+que se pasan. Eso da los culpables exactos en vez de adivinarlos.
+
+Sospechoso ya identificado: `app/admin/dashboard/page.tsx` tiene el único
+`grid grid-cols-2` sin prefijo responsive del repo. Las tablas están bien
+(`components/ui/table.tsx` las envuelve en `overflow-x-auto`) y los `min-w-[38rem]`
+de los editores de escala ya viven dentro de un contenedor scrolleable.
+
+Red de contención en el `@layer base` de `app/globals.css`:
+
+```css
+html, body { overflow-x: clip; }
+```
+
+**`clip` y no `hidden`**: `overflow-x: hidden` en `html`/`body` crea un contenedor
+de scroll y rompe el `position: sticky` del header. La red no reemplaza arreglar
+lo que se desborda; evita que un descuido futuro vuelva a romper el celular.
+
+#### 7.3 El logo de la barra lateral
+
+Hoy `components/layout/marca.tsx` dibuja un cuadro con las letras "CSJ" y una
+franja verde abajo. No hay ninguna imagen en el proyecto: `next/image` no se usa
+en ningún archivo y `public/` sólo tiene los SVG del scaffold de Next.
+
+- **Lisandro copia el archivo a `public/logo-csj.png`** (mejor `.svg` si lo tiene
+  vectorial). Sin ese archivo la fase no se puede terminar.
+- `Marca` reemplaza el cuadro de letras por un import estático y `next/image`,
+  dentro de una caja blanca redondeada: el sidebar es oscuro (`bg-sidebar`) y el
+  logo viene sobre fondo blanco. Si el archivo trae transparencia, va directo.
+- Se mantiene el texto al costado. **Ojo**: el logo que pasó Lisandro dice
+  *Agencia Mercantil*, no *Club San Jorge* — hay que confirmar si el texto del
+  costado cambia también (ver Pendientes).
+
+**Archivos**: `next.config.ts`, `app/layout.tsx`, `app/globals.css`,
+`components/layout/menu-movil.tsx`, `components/layout/marca.tsx`,
+`scripts/capturas.mjs`, y `public/logo-csj.png` que aporta Lisandro.
+
+### ⬜ Fase 8 — Tres arreglos chicos
+
+Sin relación entre sí, pero los tres son de pocas líneas y no justifican una fase
+cada uno.
+
+#### 8.1 El toast que miente
+
+`components/vendedores/crear-usuario-form.tsx` calcula
+`const exito = Boolean(estado) && !estado.error && !estado.errores`. El estado
+inicial del `useActionState` es `{}`, que es *truthy* y no tiene ni `error` ni
+`errores`: `exito` da `true` en el primer render y el `useEffect` dispara el
+toast al montar. El `useRef` que hay al lado sólo evita el toast **duplicado**, no
+el **prematuro**. Se ve cada vez que se abre la ficha de un vendedor sin cuenta,
+que es donde se monta el componente.
+
+El resto del proyecto ya usa el campo correcto (`estado.ok`, ver
+`components/perfil/form-contacto.tsx`) y el tipo `EstadoFormulario` lo declara en
+`app/admin/vendedores/actions.ts`. Este componente quedó de antes de que ese campo
+existiera y nunca se actualizó.
+
+Dos cambios acoplados: `crearUsuarioVendedor` devuelve `{ ok: true }` en vez de
+`{}`, y el componente pasa a `const exito = Boolean(estado.ok)`.
+
+#### 8.2 Editar un plan
+
+Hoy los planes sólo entran por el Excel de precios
+(`app/admin/planes/actions.ts`, único export `pasoImportacionPrecios`): no hay
+alta manual, ni edición, ni baja.
+
+- `lib/validations/plan.ts` nuevo: `nombre`, `duracionMeses` opcional, `activo`.
+  **`codigoProducto` no se edita**: es la clave con la que el Excel encuentra el
+  plan.
+- `editarPlan` en `app/admin/planes/actions.ts`, más
+  `components/planes/plan-form.tsx` y `app/admin/planes/[id]/editar/page.tsx`,
+  calcados de `components/vendedores/vendedor-form.tsx` y
+  `app/admin/vendedores/[id]/editar/page.tsx`, que es el único par alta/edición
+  que hay en el repo.
+- **El upsert de la importación deja de pisar el catálogo.** Hoy fuerza `nombre` y
+  `activo: true` en cada import: desactivar un plan a mano no duraría hasta el
+  Excel siguiente, y el nombre corregido tampoco. Ese archivo es de **precios**, no
+  de catálogo: el `update` del upsert queda sin `nombre` ni `activo`, y el `create`
+  sigue igual, así que un plan nuevo entra con lo que diga el Excel y de ahí en más
+  manda lo que edite Balta. Es la misma regla que se aplica al cliente en la Fase
+  10.
+- **No se agrega alta manual ni borrado**: no se pidieron, y borrar un plan con
+  ventas falla igual (`Venta.planId` es FK sin cascade). Dar de baja se hace con
+  `activo`.
+
+#### 8.3 Código de agente en el perfil del admin
+
+`User` no tiene ningún campo de código. `Vendedor.codigo` es otra cosa: es el
+código del vendedor dentro de la zona.
+
+- Migración: `User.codigoAgente String?`.
+- `contactoAdminSchema` (`lib/validations/perfil.ts`) lo suma como opcional.
+  **Texto, no entero**: es un identificador del club, igual que el DNI o el número
+  de suscripción (regla de la Fase 6).
+- El input va en `components/perfil/form-contacto.tsx`, dentro del bloque
+  `{esAdmin ? … }` que ya existe, y el valor se muestra en la card "Tu cuenta" de
+  `app/perfil/page.tsx`.
+- **Supuesto a confirmar con Balta**: uno por persona, no uno por zona. Si
+  resultara ser por zona, el lugar natural sería `Vendedor.codigo`, que ya es por
+  zona.
+
+### ⬜ Fase 9 — Padrón: varios archivos y un selector que se entienda
+
+#### 9.1 Varios archivos por vez
+
+**Un `PadronImport` por archivo, importados en orden, cada uno en su
+transacción.** No se mezclan las filas en una sola llamada a `importarPadron`,
+aunque la función lo aceptaría:
+
+- `origenDeTituloNuevo` decide venta nueva vs. renovación por la cuota más baja
+  **del conjunto de filas que recibe**. Mezclando meses, un título que entró con
+  cuota 5 en septiembre podría quedar como venta nueva porque otro archivo trae su
+  cuota 1.
+- `esLineaBase` se calcula una sola vez y sólo el primer archivo de la zona tiene
+  que serlo.
+- `PadronImport.archivoNombre` es un `String`, y tanto el histórico de
+  `/admin/padron` como las barras de producción del dashboard (Fase 5) cuentan una
+  fila por archivo.
+
+Flujo nuevo:
+
+1. **Paso 1** — el input acepta `multiple`. Se valida extensión y tamaño de cada
+   uno, se guardan N temporales con `guardarTemporal()` (que ya devuelve un token
+   por archivo) y se parsea cada uno para leer su período.
+2. **Paso 2** — preview. **Si es un solo archivo, la pantalla queda exactamente
+   como está hoy**, con el panel "Qué va a pasar si confirmás". Si son varios,
+   muestra la **lista ordenada** con nombre, período y filas, más la vinculación de
+   vendedores calculada sobre la **unión** de los `nomVenSinMapear` de todos.
+   No se muestran las cifras por archivo del 2º en adelante: se calcularían contra
+   una base que todavía no tiene importado el anterior, así que serían mentira. Se
+   dice en pantalla, en vez de mostrar números que no van a dar.
+3. **El orden se muestra antes de confirmar**, y sale de `periodoDesde` ascendente
+   (lo trae `parsePadron`), con el nombre como desempate. El orden decide qué es
+   venta nueva y qué es renovación, así que tiene que estar a la vista.
+4. **Paso 3** — se importan uno por uno y se muestra el `PanelResumenPadron`
+   **real** de cada uno. Si uno falla, los anteriores quedan importados —son
+   archivos independientes— y se avisa cuál se cortó y cuáles entraron.
+5. Tope explícito de archivos por tanda: el `bodySizeLimit` es de 25 MB para toda
+   la request y los padrones reales pesan cerca de 2 MB, así que con unos 10 se
+   llega al techo. Mensaje claro al pasarse.
+
+De paso: `descartarPadron` está exportada y no la llama nadie, así que el botón
+"Cancelar" —que hoy es un `<Link>`— deja los temporales huérfanos en
+`uploads/tmp`. Con N archivos el problema se multiplica, así que el Cancelar pasa
+a ser un `<form>` que llama a esa acción con todos los tokens.
+
+#### 9.2 El selector de archivos
+
+Hoy es un `<Input type="file">` pelado: no se lee como algo clickeable y, después
+de elegir un archivo, el texto sigue diciendo lo mismo.
+
+`components/padron/selector-archivos.tsx` nuevo, de cliente:
+
+- Zona grande con borde punteado, ícono y texto "Elegí los archivos o arrastralos
+  acá", clickeable entera; el `<input type="file">` real queda `sr-only` y se
+  dispara por `ref`.
+- Arrastrar y soltar.
+- **Cuando ya hay archivos, el texto desaparece y en su lugar va la lista** con
+  nombre, peso y período detectado, una X para sacar cada uno y un "Cambiar la
+  selección". Quitar de a uno se hace rearmando `input.files` con un
+  `DataTransfer`.
+- Se usa también en `components/leads/importar-leads.tsx` y
+  `components/planes/importar-precios.tsx`: es literalmente el mismo input con el
+  mismo problema, y dejarlos distintos sería peor que unificarlos.
+
+**Archivos**: `app/admin/padron/actions.ts`,
+`components/padron/importar-padron.tsx`, `components/padron/selector-archivos.tsx`
+(nuevo), `components/leads/importar-leads.tsx`,
+`components/planes/importar-precios.tsx`. **`lib/padron/importarPadron.ts` no se
+toca**: el motor ya hace lo que hay que hacer, lo que cambia es cuántas veces se
+lo llama.
+
+### ⬜ Fase 10 — Clientes: corregir los datos y ver la documentación
+
+#### 10.1 Editar los datos personales — sólo admin
+
+Hoy la ficha (`app/admin/clientes/[id]/page.tsx`) es de sólo lectura y no existe
+ninguna server action de cliente: el único que escribe es el importador.
+
+**El problema de fondo**: `lib/padron/importarPadron.ts` compara los seis campos
+personales (`nombre`, `domicilio`, `telefono`, `codPos`, `localidad`, `email`) y,
+si **cualquiera** difiere, empuja **los seis** juntos. Un `null` del padrón pisa un
+valor cargado a mano, y si falta la columna entera en el Excel —ninguna de las
+cinco opcionales está en `COLUMNAS_REQUERIDAS`— el campo se borra en toda la zona.
+Sin resolver eso, editar un teléfono no sirve para nada.
+
+Definición de Lisandro: **manda el dato corregido**.
+
+- Migración: `Cliente.camposManuales String[] @default([])`, más `editadoPorUserId`
+  y `editadoAt` (que además alimentan la Actividad de la Fase 12). Un array y no
+  seis booleanos, para no tener que migrar cada vez que aparezca un campo nuevo.
+- **La importación respeta los campos marcados**: el `findMany` de clientes
+  existentes trae `camposManuales`, y esos campos se sacan tanto de la comparación
+  como del `data` del `update`. Es el mismo criterio que ya se aplica a
+  `Titulo.origen` y `Titulo.cuotaInicial`, que se sellan al crear y no se
+  recalculan nunca.
+- **Arreglo de paso**: distinguir *"la celda está vacía"* de *"la columna no vino
+  en el archivo"*. `parsePadron` ya calcula el índice de cada columna opcional y
+  devuelve `null` en los dos casos; pasa a informar cuáles encontró, e
+  `importarPadron` no manda los campos cuya columna faltaba. Sin esto, un Excel al
+  que le falte una columna sigue vaciando ese dato en toda la zona, aun con la
+  protección de arriba —que sólo cubre los campos ya corregidos a mano—.
+- `lib/validations/cliente.ts` nuevo. **El DNI no se edita**: es la clave
+  `@@unique([zonaId, dni])` y es con lo que el padrón encuentra al cliente;
+  cambiarlo a mano haría que la próxima importación cree un cliente duplicado. Se
+  dice en la pantalla.
+- `app/admin/clientes/actions.ts` nuevo con `editarCliente`: `requireAdmin()`,
+  scope por zona, y al guardar suma a `camposManuales` los campos que efectivamente
+  cambiaron.
+- **UI**: botón **Editar** en el `PageHeader` de la ficha —la prop `acciones` ya
+  existe y se usa así en la ficha del vendedor—, pantalla
+  `app/admin/clientes/[id]/editar/page.tsx` y
+  `components/clientes/cliente-form.tsx` con el molde de `vendedor-form.tsx`. En la
+  card "Datos de contacto", badge **"corregido a mano"** en cada campo marcado, el
+  pie *"Corregido por X el …"*, y un botón **"Volver a tomar todo del padrón"** que
+  vacía `camposManuales`.
+
+#### 10.2 La documentación en la ficha del cliente
+
+No hay FK de `Venta` a `Cliente`: la venta duplica `nombreCliente` y `dni` como
+texto, y `Venta.tituloId` existe en el schema pero **no lo escribe nadie**. El
+único camino real es `Cliente.dni + zonaId` → `Venta` (que tiene `@@index([dni])`
+y `zonaId`) → `Venta.adjuntos`.
+
+- Card **Documentación** entre los datos de contacto y la lista de títulos: los
+  adjuntos de todas las ventas de ese DNI en la zona, con tipo (DNI / Contrato),
+  fecha, quién lo subió y a qué venta pertenece.
+- Se sirven por `/api/uploads/[id]`, que **ya autoriza a un ADMIN por zona activa**:
+  no hace falta tocar permisos ni abrir nada.
+- Miniatura para las imágenes y link para los PDF, con `next/image` y
+  `unoptimized`, que la ruta es dinámica y autenticada.
+- Si no hay nada: *"No hay documentación cargada. Los adjuntos entran con la venta
+  que carga el vendedor."* Y se aclara en la card que el vínculo es **por DNI**, no
+  por título.
+
+### ⬜ Fase 11 — Ventas: confirmar, editar desde admin, foto con la cámara
+
+#### 11.1 Confirmación al crear
+
+El botón "Cargar venta" (`components/ventas/venta-form.tsx`) pasa a ser
+`type="button"` y abre un `Dialog` con el resumen de lo que se va a guardar:
+vendedor, plan, nombre, DNI, suscripción o título, y si lleva adjuntos. Dos
+salidas: **Revisar** y **Confirmar y cargar**.
+
+Tres detalles que hay que hacer bien:
+
+- **Radix portalea el `DialogContent` al `<body>`**, así que un
+  `<button type="submit">` de adentro queda fuera del `<form>` en el DOM y no envía
+  nada. Se resuelve con `id` en el `<form>` y el atributo `form="…"` en el botón,
+  que sí cruza el portal.
+- **Antes de abrir el diálogo**, `formRef.current.reportValidity()`: no tiene
+  sentido mostrar el resumen de un formulario incompleto.
+- El resumen se arma con `new FormData(formRef.current)` en el `onClick`, para no
+  tener que volver controlados los campos que hoy usan `defaultValue`. Sólo
+  `planId`, `nroSuscripcion` y `numeroTitulo` tienen estado, y es a propósito:
+  mueven el asterisco mientras se escribe (Fase 6).
+
+Aplica al alta desde vendedor y desde admin. **En la edición no**: guardar cambios
+sobre algo que ya existe no es lo mismo que crear.
+
+#### 11.2 El admin gana ficha, edición y anulación
+
+Hoy `app/admin/ventas/` tiene sólo el listado y el alta: no existe `[id]`, y
+`editarVenta` exige `requirePermiso("cargarVentas")` —que obliga rol VENDEDOR— y
+scopea por `vendedorId`. O sea que Balta carga una venta y después no la puede ni
+ver ni corregir.
+
+Lisandro pidió que **el vendedor conserve todo lo que ya tiene y el admin reciba lo
+mismo**:
+
+- Extraer el cuerpo de `editarVenta` a un helper con contexto, igual que se hizo en
+  la Fase 0 con `registrarVenta()` para el alta. Quedan `editarVenta` (vendedor,
+  scope por `vendedorId`) y `editarVentaComoAdmin` (admin, scope por `zonaId`),
+  compartiendo validación de adjuntos, diff y transacción.
+- `app/admin/ventas/[id]/page.tsx` y `app/admin/ventas/[id]/editar/page.tsx`,
+  copiadas de las del vendedor con el scope cambiado, reutilizando `venta-form.tsx`
+  con `comoAdmin`. El listado `/admin/ventas` gana el link a la ficha.
+- De paso: la edición busca el plan **sin** `activo: true` mientras que el alta sí
+  lo filtra. Se unifica.
+- **Anular** —hace falta para la Fase 12—: botón en la ficha con `Dialog` de
+  confirmación y motivo. Migración chica: `anuladaAt`, `anuladaPorUserId`,
+  `motivoAnulacion`. El enum `VentaEstado.ANULADA` ya existe y el listado del
+  vendedor ya lo dibuja atenuado; falta la acción que lo escriba y el mismo
+  tratamiento en el listado de admin.
+- **Supuesto**: anular es sólo del admin. Es destructivo, y el pedido de "mismas
+  opciones" era sobre editar (ver Pendientes).
+
+#### 11.3 Foto del DNI: cámara o galería
+
+Hoy es un `<Input type="file">` con
+`accept="image/jpeg,image/png,image/webp,application/pdf"` y **sin `capture`** —el
+atributo no aparece en ningún archivo del proyecto—.
+
+`components/ventas/campo-foto.tsx` nuevo, de cliente:
+
+- **Dos botones**: *Sacar foto* y *Elegir archivo*. Un solo `<input type="file">`
+  en el DOM —dos con el mismo `name` harían que el vacío pise al lleno— al que se
+  le pone o se le saca `capture="environment"` con JS justo antes del `.click()`.
+- Vista previa con `URL.createObjectURL` y un *Sacar otra*. Es lo que hace que
+  sirva desde la calle: poder ver la foto antes de guardarla.
+- En escritorio `capture` se ignora y los dos botones abren el mismo selector. Se
+  muestran igual: detectar si hay cámara es frágil y el costo de equivocarse es
+  peor que el de un botón de más.
+- Se usa también para el contrato: es el mismo componente.
+- **Revisar `TIPOS_ADJUNTO_PERMITIDOS` en `lib/archivos.ts`**: las fotos que salen
+  de la galería de un iPhone pueden ser HEIC, y hoy el servidor las rechazaría con
+  un error que no explica nada.
+
+### ⬜ Fase 12 — Actividad: leads + ventas, filtrable por vendedor
+
+Va última porque tiene que registrar la anulación de venta (Fase 11) y la edición
+de cliente (Fase 10). Hacerla antes obligaría a volver a tocarla.
+
+#### El modelo
+
+`LeadActividad` tiene `leadId` obligatorio, no tiene `zonaId` —la zona la deriva
+del lead, y por eso el filtro de la pantalla es `{ lead: { zonaId } }`— y no tiene
+`vendedorId`. No sirve para una venta.
+
+Se convierte en **`Actividad`**, con una migración escrita a mano que renombra la
+tabla y rellena las columnas nuevas desde el lead, para no perder el histórico:
+
+- **`zonaId` propio**, con índice `[zonaId, createdAt]`: una actividad de venta no
+  tiene lead del cual derivar la zona.
+- **`vendedorId` opcional**, con índice `[vendedorId, createdAt]`. Es el eje del
+  filtro que pidió Lisandro. Para un lead, el vendedor asignado; para una venta,
+  `venta.vendedorId`; para un cliente, null.
+- **`actorUserId` sigue existiendo y es otra cosa**: quién apretó el botón. Cuando
+  Balta carga una venta a nombre de un vendedor, el filtro tiene que traerla por el
+  **vendedor** y la pantalla mostrar que la cargó **Balta**. Confundir los dos es el
+  error fácil de esta fase.
+- `leadId`, `ventaId` y `clienteId`, los tres opcionales y con `onDelete: Cascade`.
+- `cambios Json?` para los diffs, con el mismo formato que `VentaHistorial.cambios`.
+- `enum ActividadTipo`: `LEAD_ASIGNACION`, `LEAD_CAMBIO_ESTADO`, `VENTA_ALTA`,
+  `VENTA_EDICION`, `VENTA_ANULACION`, `CLIENTE_EDICION`.
+
+**`VentaHistorial` se conserva**: es el detalle que muestra la ficha de la venta.
+La `Actividad` guarda una copia del diff para que el feed no tenga que hacer joins
+distintos según el tipo. Es duplicación deliberada, escrita en la misma
+transacción.
+
+#### Dónde se escribe
+
+Helper `lib/actividad/registrar.ts` con `registrarActividad(tx, …)`, para no
+repetir el shape en seis lugares. Todas las escrituras van **dentro de la
+transacción que ya existe** en cada acción, y todas revalidan `/admin/actividad` —
+hoy el alta de venta escribe un `LeadActividad` y no revalida—.
+
+| Acción | Archivo | Tipo |
+|---|---|---|
+| Asignar leads | `app/admin/leads/actions.ts` | `LEAD_ASIGNACION` |
+| Cambiar estado de lead | `app/admin/leads/actions.ts` | `LEAD_CAMBIO_ESTADO` |
+| Alta de venta | `app/vendedor/ventas/actions.ts` (`registrarVenta`) | `VENTA_ALTA` |
+| Edición de venta | `editarVenta` / `editarVentaComoAdmin` (Fase 11) | `VENTA_EDICION` |
+| Anulación | `anularVenta` (Fase 11) | `VENTA_ANULACION` |
+| Edición de cliente | `app/admin/clientes/actions.ts` (Fase 10) | `CLIENTE_EDICION` |
+
+#### La pantalla
+
+`app/admin/actividad/page.tsx` es hoy la única página de listado sin helper
+`enlace()` y sin vista de tarjetas para el celular. Con seis tipos de evento eso no
+se sostiene:
+
+- **Filtro por vendedor**: `?vendedor=<id>`, con un `<select>` nativo dentro de un
+  `<form>` GET, validado contra los vendedores de la zona. El molde es
+  `app/admin/clientes/page.tsx`: mapa de filtros tipado más el helper `enlace()`
+  que preserva los demás parámetros. Los `<select>` de vendedor del repo son
+  nativos, no Radix.
+- **Chips por tipo** con contadores, como los de caída en Clientes.
+- **Tarjetas en móvil** con `components/layout/lista-tarjetas.tsx`, que es el
+  patrón del resto de los listados.
+- Para `VENTA_EDICION` y `CLIENTE_EDICION`, el renglón lista los cambios como
+  `components/ventas/historial-venta.tsx` (tachado → negrita). Ese render se extrae
+  a un componente compartido en vez de duplicarlo.
+- La descripción de la página deja de hablar sólo de leads.
 
 ---
 
@@ -1306,14 +1768,68 @@ pendiente, no un error. Se sube después con **Editar**.
 La venta quedó con DNI `99999999`. Se anula o se borra desde el listado de
 ventas; si quedaron varias, pedime que las borre por script.
 
+### Fases 7 a 12 — qué va a tener que demostrar cada una
+
+La guía completa de cada fase se escribe **cuando la fase se termina**, como
+siempre. Lo que sigue son los criterios de aceptación, anotados ahora para que no
+se negocien después.
+
+Escenario base para todas: los 7 padrones de `docs/padrones-prueba/` importados en
+Salta desde `/admin/laboratorio`, que es como quedó la base de desarrollo.
+
+- **Fase 7** — ngrok apuntando a `localhost:3000` y entrar desde el celular: abrir
+  el hamburguesa, abrir el desplegable de perfil, cerrar sesión y volver a entrar
+  (eso último ejercita una server action, que es el otro camino que el proxy puede
+  romper). Recorrer las diez pantallas buscando desplazamiento horizontal, y correr
+  `CAPTURA_MOVIL=1 npm run capturas` para que el chequeo nuevo confirme que ninguna
+  se desborda. El logo, en el sidebar de escritorio **y** en el panel del celular.
+- **Fase 8** — abrir la ficha de un vendedor **sin cuenta**: no tiene que aparecer
+  ningún toast. Crear la cuenta ahí mismo: el toast aparece **una sola vez**.
+  Editar el nombre de un plan, reimportar el Excel de precios y ver que el nombre
+  editado sigue. Cargar un código de agente en `/perfil` y verlo en "Tu cuenta".
+- **Fase 9** — vaciar Salta y subir **los 7 padrones de una sola vez**. Los números
+  finales tienen que dar **exactamente los mismos que hoy**: `PRUEBA VENDEDOR UNO`
+  $105.000, `DOS` $38.000, comisión del agente $564.000 sobre 54 cuotas, `PT-0006`
+  como renovación y `PT-0007` caído. Si algo de eso cambia, el orden de importación
+  se rompió. Volver a subirlos tiene que decir "no trae novedades".
+- **Fase 10** — corregir el teléfono de un cliente de prueba, reimportar el padrón
+  que lo trae, y ver que la corrección sobrevive **y que el resto de sus campos sí
+  se actualizó**. Cargar una venta con foto de DNI para ese mismo DNI y ver el
+  adjunto en la ficha del cliente.
+- **Fase 11** — apretar "Cargar venta" y ver el resumen **antes** de que se guarde
+  nada; cancelar y comprobar que no se creó. Editar una venta desde
+  `/admin/ventas/[id]`. Anularla y verla atenuada en los dos listados. Desde el
+  celular, sacar la foto del DNI con la cámara y ver la vista previa.
+- **Fase 12** — con todo lo anterior hecho, `/admin/actividad` muestra el alta, la
+  edición y la anulación de esa venta, más la corrección del cliente, además de los
+  movimientos de leads que ya había. Filtrar por el vendedor de prueba deja sólo
+  los suyos. Y **el histórico viejo de leads sigue estando** después de la
+  migración: eso es lo que hay que mirar primero.
+
+Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
+`npm run build`. Las fases 9 y 10 tocan la importación, así que suman
+`npx tsx scripts/verificar-padron.ts "docs/Padron-siscaho-tucu-167-010626.xls" --limpiar`
+y hay que vaciar la zona después: ese script mete datos reales de miles de clientes
+en la base de desarrollo.
+
 ---
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Lisandro validó la Fase 5 el 27/08/2026. La Fase 6
-(formulario de venta) está construida y verificada contra la aplicación
-levantada; falta que la valide siguiendo la guía de arriba. **Con eso el plan
-queda terminado.**
+**Dónde retomar:** Lisandro validó la Fase 6 el 28/08/2026. Las fases 0 a 6
+están cerradas.
+
+**El plan ya no termina en la Fase 6.** El 27/08/2026 Lisandro trajo una segunda
+tanda de pedidos y quedaron planificadas las **fases 7 a 12**. La Fase 7 se
+empezó el 28/08/2026; las 8 a 12 siguen en ⬜ y sin una sola línea de código.
+
+Lo que la Fase 7 necesita para poder cerrarse:
+
+- **Un túnel de ngrok levantado y el celular a mano**, porque el bug de los botones
+  no se reproduce en localhost: las capturas móviles con Playwright abren el
+  hamburguesa sin problema. Es lo único que puede confirmar que quedó arreglado.
+- El archivo del logo ya está en `public/logo-csj.png`; lo copió Lisandro el
+  28/08/2026.
 
 Lo que queda abierto después de la Fase 6:
 
@@ -1418,6 +1934,30 @@ Lo que queda abierto después de la Fase 6:
   `docs/cambios 24-8.txt` son de Lisandro y de la Fase 6: no commitearlos sin
   preguntar.
 
+**Lo que se descubrió al planificar las fases 7 a 12** (vale la pena tenerlo a
+mano, son cosas que no se ven leyendo el código de a un archivo):
+
+- **El padrón pisa los seis campos personales del cliente juntos**, y una celda
+  vacía borra lo que había. Peor: si al Excel le falta una columna opcional
+  —`Email`, `Telefono`, `Domicilio`, `CodPos` y `Localidad` no están en
+  `COLUMNAS_REQUERIDAS`— ese campo se vacía en **toda la zona**. Lo arregla la
+  Fase 10.
+- **El Excel de precios pisa el catálogo de planes**: fuerza `nombre` y
+  `activo: true` en cada import, así que dar de baja un plan a mano no sobrevive al
+  archivo siguiente. Lo arregla la Fase 8.
+- **`Venta` no tiene FK a `Cliente`.** Duplica `nombreCliente` y `dni` como texto,
+  y `Venta.tituloId` existe en el schema pero **no lo escribe ningún código**. El
+  único camino de un cliente a sus adjuntos es por DNI + zona.
+- **No hay auditoría del alta de una venta.** `VentaHistorial` sólo registra
+  ediciones; del alta queda `Venta.createdAt`, que dice cuándo pero no quién.
+- **El admin no puede ver ni editar una venta**: `app/admin/ventas/[id]` no existe
+  y `editarVenta` exige rol VENDEDOR y scopea por `vendedorId`.
+- **`descartarPadron` es código muerto** y `uploads/tmp` no se limpia nunca: cada
+  importación abandonada deja dos archivos huérfanos.
+- **`next.config.ts` no tiene `allowedDevOrigins` ni
+  `serverActions.allowedOrigins`**, que es lo primero que hay que mirar cuando algo
+  se rompe detrás de un proxy.
+
 ---
 
 ## Pendientes de Balta
@@ -1439,3 +1979,18 @@ el contrato de agencia es el mismo para Balta y para Pedro; la comisión del
 agente se calcula por zona y no se reparte entre ellos; los gastos de
 representación se cargan a mano y van aparte de la comisión; el objetivo de
 contratos es 50 en Tucumán y 100 en Salta, y las renovaciones cuentan.
+
+### De la segunda tanda (fases 7 a 12)
+
+Ninguno bloquea; los tres se pueden implementar con el supuesto anotado y
+corregir después si Balta dice otra cosa.
+
+5. **El texto de la marca en la barra lateral.** El logo que pasó Lisandro dice
+   *Agencia Mercantil*; hoy al costado dice *Club San Jorge*. Confirmar cuál va, o
+   si van los dos. — Fase 7.
+6. **El código de agente, ¿es uno por persona o uno por zona?** Se implementa como
+   uno por persona (`User.codigoAgente`). Si fuera por zona, el lugar natural sería
+   `Vendedor.codigo`, que ya lo es. — Fase 8.
+7. **¿Quién puede anular una venta?** Se implementa como acción sólo del admin,
+   porque es destructiva. El pedido de "las mismas opciones para los dos" era sobre
+   editar. — Fase 11.
