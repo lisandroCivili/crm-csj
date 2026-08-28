@@ -156,7 +156,12 @@ export async function analizarPadron(
     archivos,
     resumen:
       ordenados.length === 1
-        ? await importarPadron({ filas: ordenados[0].parseo.filas, zonaId, soloSimular: true })
+        ? await importarPadron({
+            filas: ordenados[0].parseo.filas,
+            zonaId,
+            soloSimular: true,
+            columnasPersonales: ordenados[0].parseo.columnasPersonales,
+          })
         : null,
     nomVenSinMapear: await nomVenSinVincular(
       ordenados.flatMap((l) => l.parseo.nomVenEncontrados),
@@ -201,6 +206,7 @@ async function importarTanda(
         filas: leido.parseo.filas,
         zonaId,
         soloSimular: false,
+        columnasPersonales: leido.parseo.columnasPersonales,
         lote: {
           archivoNombre: leido.nombre,
           importadoPorUserId,
@@ -292,7 +298,12 @@ export async function procesarPadron(
     archivos: ordenados.map((leido) => fichaDe(leido, leido.token)),
     resumen:
       ordenados.length === 1
-        ? await importarPadron({ filas: ordenados[0].parseo.filas, zonaId, soloSimular: true })
+        ? await importarPadron({
+            filas: ordenados[0].parseo.filas,
+            zonaId,
+            soloSimular: true,
+            columnasPersonales: ordenados[0].parseo.columnasPersonales,
+          })
         : null,
     nomVenSinMapear,
   };

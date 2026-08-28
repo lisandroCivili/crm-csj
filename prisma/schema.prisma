@@ -133,6 +133,7 @@ model User {
   leadActividades   LeadActividad[]
   adjuntosSubidos   VentaAdjunto[]
   historialesVentas VentaHistorial[]
+  clientesEditados  Cliente[]
 
   @@map("usuarios")
 }
@@ -278,6 +279,16 @@ model Cliente {
   codPos    String?
   localidad String?
   email     String?
+
+  /// Datos personales que el admin corrigio a mano. El padron deja de tocarlos:
+  /// si el club los tiene mal, el dato bueno es el corregido. Se guarda como
+  /// array y no como seis booleanos para no migrar cada vez que aparezca un
+  /// campo nuevo. Los valores validos estan en `lib/padron/camposCliente.ts`.
+  camposManuales String[] @default([])
+
+  editadoPorUserId String?
+  editadoPor       User?     @relation(fields: [editadoPorUserId], references: [id])
+  editadoAt        DateTime?
 
   zonaId Int
   zona   Zona @relation(fields: [zonaId], references: [id])

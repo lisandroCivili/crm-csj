@@ -1,6 +1,12 @@
 import type { FilaPadron } from "@/lib/excel/parsePadron";
 import type { TituloOrigen } from "@/lib/generated/prisma/client";
 import { db } from "@/lib/db";
+import {
+  CAMPOS_PERSONALES,
+  cambiosDelCliente,
+  datosDeClienteNuevo,
+  type CampoPersonal,
+} from "./camposCliente";
 import { cuotasInicialesDelArchivo, origenDeTituloNuevo } from "./origenTitulo";
 import { recalcularCaidas } from "./recalcularCaidas";
 
@@ -53,6 +59,15 @@ type OpcionesImportacion = {
   zonaId: number;
   /** Cuando es true no escribe nada: solo calcula el resumen para el preview. */
   soloSimular: boolean;
+  /**
+   * Cuales de los datos personales del cliente venian como columna en el
+   * archivo (`parsePadron` lo devuelve). Los que falten no se escriben: un
+   * `null` de una columna ausente no dice "esta vacio", dice "no vino", y sin
+   * esta distincion la importacion borraba el dato en toda la zona.
+   *
+   * Si no se pasa se asume que estaban todas, que es como se comportaba antes.
+   */
+  columnasPersonales?: readonly CampoPersonal[];
   /** Datos del lote. No hacen falta al simular. */
   lote?: {
     archivoNombre: string;
@@ -101,6 +116,7 @@ export async function importarPadron({
   filas,
   zonaId,
   soloSimular,
+  columnasPersonales,
   lote,
 }: OpcionesImportacion): Promise<ResumenImportacion> {
   const resumen: ResumenImportacion = {
@@ -148,6 +164,7 @@ export async function importarPadron({
   }
 
   // --- 2. Clientes ----------------------------------------------------------
+  const columnas = columnasPersonales ?? CAMPOS_PERSONALES;
   const clientesDelArchivo = ultimaPorClave(filas, (f) => f.dni);
   const dnis = [...clientesDelArchivo.keys()];
 
@@ -180,16 +197,22 @@ export async function importarPadron({
     const existente = clientePorDni.get(dni);
 
     if (!existente) {
-      clientesACrear.push({ dni, zonaId, ...datos });
+      clientesACrear.push({
+        dni,
+        zonaId,
+        ...datosDeClienteNuevo(datos, columnas),
+        // `nombre` es requerido y `parsePadron` ya descarto las filas sin el.
+        nombre: fila.nombre,
+      });
       resumen.clientesNuevos++;
       continue;
     }
 
-    const cambio = (Object.keys(datos) as (keyof typeof datos)[]).some(
-      (campo) => existente[campo] !== datos[campo]
-    );
-    if (cambio) {
-      clientesAActualizar.push({ id: existente.id, datos });
+    // Que campos toca el padron lo decide `camposCliente.ts`: no toca los que
+    // el admin corrigio a mano ni los que no vinieron como columna.
+    const cambios = cambiosDelCliente(existente, datos, columnas);
+    if (cambios) {
+      clientesAActualizar.push({ id: existente.id, datos: cambios });
       resumen.clientesActualizados++;
     }
   }

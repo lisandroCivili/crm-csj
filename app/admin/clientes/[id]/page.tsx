@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Info } from "lucide-react";
+import { ArrowLeft, Info, Pencil } from "lucide-react";
 import { BadgeCaidaTitulo } from "@/components/clientes/badge-caida";
+import {
+  DocumentacionCliente,
+  identificadorDeVenta,
+} from "@/components/clientes/documentacion-cliente";
+import { volverATomarDelPadron } from "@/app/admin/clientes/actions";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,6 +28,7 @@ import {
 import { db } from "@/lib/db";
 import type { TituloOrigen } from "@/lib/generated/prisma/client";
 import { contradiceAlClub } from "@/lib/padron/caidas";
+import { esCampoPersonal, type CampoPersonal } from "@/lib/padron/camposCliente";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
 const PESOS = new Intl.NumberFormat("es-AR", {
@@ -47,10 +53,25 @@ const ORIGEN: Record<TituloOrigen, string> = {
   BASE: "ya venía del padrón",
 };
 
-function Dato({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode }) {
+function Dato({
+  etiqueta,
+  valor,
+  corregido,
+}: {
+  etiqueta: string;
+  valor: React.ReactNode;
+  corregido?: boolean;
+}) {
   return (
     <div>
-      <dt className="text-xs uppercase tracking-wide text-muted-foreground">{etiqueta}</dt>
+      <dt className="flex flex-wrap items-center gap-1.5 text-xs uppercase tracking-wide text-muted-foreground">
+        {etiqueta}
+        {corregido ? (
+          <Badge variant="outline" className="text-[0.65rem] font-normal normal-case">
+            corregido a mano
+          </Badge>
+        ) : null}
+      </dt>
       <dd className="mt-0.5 text-sm">
         {valor || <span className="text-muted-foreground">—</span>}
       </dd>
@@ -68,6 +89,7 @@ export default async function FichaClientePage({
   const cliente = await db.cliente.findFirst({
     where: { id, zonaId },
     include: {
+      editadoPor: { select: { nombre: true } },
       titulos: {
         orderBy: { numTit: "asc" },
         include: {
@@ -80,6 +102,42 @@ export default async function FichaClientePage({
   });
 
   if (!cliente) notFound();
+
+  // La documentacion se busca POR DNI: `Venta` no tiene FK a `Cliente`, duplica
+  // el nombre y el DNI como texto. Es el unico camino que existe hoy.
+  const ventas = await db.venta.findMany({
+    where: { zonaId, dni: cliente.dni },
+    select: {
+      id: true,
+      numeroTitulo: true,
+      nroSuscripcion: true,
+      adjuntos: {
+        orderBy: { createdAt: "desc" },
+        select: {
+          id: true,
+          tipo: true,
+          mimeType: true,
+          createdAt: true,
+          subidoPor: { select: { nombre: true } },
+        },
+      },
+    },
+  });
+
+  const adjuntos = ventas.flatMap((venta) =>
+    venta.adjuntos.map((adjunto) => ({
+      id: adjunto.id,
+      tipo: adjunto.tipo,
+      mimeType: adjunto.mimeType,
+      createdAt: adjunto.createdAt,
+      subidoPor: adjunto.subidoPor.nombre,
+      venta: { id: venta.id, identificador: identificadorDeVenta(venta) },
+    }))
+  );
+
+  const manuales = new Set<CampoPersonal>(
+    cliente.camposManuales.filter(esCampoPersonal)
+  );
 
   return (
     <>
@@ -95,23 +153,72 @@ export default async function FichaClientePage({
         descripcion={`DNI ${cliente.dni} · ${cliente.titulos.length} título${
           cliente.titulos.length === 1 ? "" : "s"
         }`}
+        acciones={
+          <Button variant="outline" asChild>
+            <Link href={`/admin/clientes/${cliente.id}/editar`}>
+              <Pencil className="size-4" />
+              Corregir datos
+            </Link>
+          </Button>
+        }
       />
 
       <Card className="mb-4">
         <CardHeader>
           <CardTitle className="text-base">Datos de contacto</CardTitle>
-          <CardDescription>Vienen del último padrón importado.</CardDescription>
+          <CardDescription>
+            {manuales.size > 0
+              ? "Vienen del último padrón importado, salvo los corregidos a mano."
+              : "Vienen del último padrón importado."}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <dl className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Dato etiqueta="Domicilio" valor={cliente.domicilio} />
-            <Dato etiqueta="Localidad" valor={cliente.localidad} />
-            <Dato etiqueta="Código postal" valor={cliente.codPos} />
-            <Dato etiqueta="Teléfono" valor={cliente.telefono} />
-            <Dato etiqueta="Email" valor={cliente.email} />
+            <Dato
+              etiqueta="Domicilio"
+              valor={cliente.domicilio}
+              corregido={manuales.has("domicilio")}
+            />
+            <Dato
+              etiqueta="Localidad"
+              valor={cliente.localidad}
+              corregido={manuales.has("localidad")}
+            />
+            <Dato
+              etiqueta="Código postal"
+              valor={cliente.codPos}
+              corregido={manuales.has("codPos")}
+            />
+            <Dato
+              etiqueta="Teléfono"
+              valor={cliente.telefono}
+              corregido={manuales.has("telefono")}
+            />
+            <Dato etiqueta="Email" valor={cliente.email} corregido={manuales.has("email")} />
           </dl>
+
+          {manuales.size > 0 ? (
+            <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+              <p className="text-xs text-muted-foreground">
+                {manuales.size === 1 ? "Un dato corregido" : `${manuales.size} datos corregidos`}{" "}
+                {cliente.editadoPor ? `por ${cliente.editadoPor.nombre} ` : ""}
+                {cliente.editadoAt ? `el ${FECHA.format(cliente.editadoAt)}` : ""}. El padrón ya
+                no {manuales.size === 1 ? "lo toca" : "los toca"}.
+              </p>
+              {/* Saca las marcas, no revierte los valores: el proximo padron
+                  que traiga a este cliente los va a pisar solo. */}
+              <form action={volverATomarDelPadron}>
+                <input type="hidden" name="id" value={cliente.id} />
+                <Button type="submit" variant="ghost" size="sm">
+                  Volver a tomar todo del padrón
+                </Button>
+              </form>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
+
+      <DocumentacionCliente adjuntos={adjuntos} />
 
       {cliente.titulos.map((titulo) => {
         // El club manda cuantas cuotas lleva pagas; si ese numero llega hasta

@@ -111,6 +111,7 @@ async function main() {
     filas: parseo.filas,
     zonaId: zona.id,
     soloSimular: false,
+    columnasPersonales: parseo.columnasPersonales,
     lote,
   });
   console.table(primera);
@@ -155,6 +156,7 @@ async function main() {
     filas: parseo.filas,
     zonaId: zona.id,
     soloSimular: false,
+    columnasPersonales: parseo.columnasPersonales,
     lote,
   });
   console.table(segunda);
@@ -196,6 +198,7 @@ async function main() {
     filas: [...filasRepetidas, ...filasDelMesNuevo],
     zonaId: zona.id,
     soloSimular: false,
+    columnasPersonales: parseo.columnasPersonales,
     lote: { ...lote, archivoNombre: "simulado-mes-siguiente.xls" },
   });
   console.table(siguiente);
@@ -254,6 +257,7 @@ async function main() {
     filas: filasDeAlta,
     zonaId: zona.id,
     soloSimular: false,
+    columnasPersonales: parseo.columnasPersonales,
     lote: { ...lote, archivoNombre: "simulado-altas.xls" },
   });
   console.table(conAltas);

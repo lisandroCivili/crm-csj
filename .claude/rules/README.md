@@ -13,6 +13,11 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
   número que no se va a cumplir.
 - **Origen del título**: se decide al crearlo y no se recalcula. Primera importación de la zona =
   `BASE`; después, cuota mínima 1 = `VENTA_NUEVA`, mayor = `RENOVACION`.
+- **Datos del cliente**: lo corregido a mano le gana al padrón. El campo editado queda en
+  `Cliente.camposManuales` y la importación deja de escribirlo; el resto se sigue
+  actualizando. Un campo cuya **columna no vino** en el Excel tampoco se escribe: "vacío" y
+  "no informado" no son lo mismo y confundirlos borraba el dato en toda la zona. El DNI no se
+  edita: es la clave con la que el padrón encuentra al cliente.
 - **Vendedores**: agrupar por `VendedorAlias`, nunca por el texto crudo de `NomVen`.
 - **Comisiones**: los porcentajes salen de `EscalaComision`, nunca hardcodeados. El cálculo se
   hace desde el padrón (`TituloCuota`), nunca desde `Venta`, y se devenga por `detectadaPagaAt`,

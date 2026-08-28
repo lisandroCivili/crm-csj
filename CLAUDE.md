@@ -79,6 +79,20 @@ Vocabulario del dominio (aparece tal cual en el padrón y en el código):
   cada archivo agrega es una fila de `PlanPrecio` con su vigencia. Dar de baja un plan es
   `activo: false`, no borrarlo: `Venta.planId` es una FK sin cascade y las ventas viejas lo
   siguen apuntando.
+- **El dato del cliente corregido a mano le gana al padrón.** Los datos personales
+  (`nombre`, `domicilio`, `telefono`, `codPos`, `localidad`, `email`) los escribe la
+  importación, pero el campo que el admin edita desde `/admin/clientes/[id]/editar` queda
+  anotado en `Cliente.camposManuales` y el padrón **deja de tocarlo**; el resto se sigue
+  actualizando solo. Sin eso, corregir un teléfono duraba hasta el archivo siguiente. La regla
+  es pura y está testeada en `lib/padron/camposCliente.ts`.
+- **"La celda está vacía" y "la columna no vino" no son lo mismo.** Ninguna de las cinco
+  columnas personales opcionales está en `COLUMNAS_REQUERIDAS`, así que un padrón sin la
+  columna `Email` se importa igual, y antes **borraba el email de toda la zona** porque
+  `parsePadron` devolvía `null` en los dos casos. Ahora informa cuáles encontró
+  (`columnasPersonales`) e `importarPadron` no escribe los campos que no vinieron.
+- **El DNI del cliente no se edita.** Es la clave `@@unique([zonaId, dni])` y es con lo que el
+  padrón lo reconoce: cambiarlo a mano crearía un cliente duplicado en la importación
+  siguiente y dejaría los títulos colgando del viejo.
 - **La zona filtra todo.** El admin elige Salta o Tucumán después de loguearse y esa elección
   define qué ve y qué carga. Los vendedores tienen zona fija. Toda query debe estar scopeada.
 
@@ -238,6 +252,12 @@ endpoint y se puede mandar sin pasar por el navegador.
   título que el sistema encontró en el padrón.** No son lo mismo y la ficha los
   muestra por separado: al cargar la venta ese título todavía no existe en el
   sistema, porque llega recién con el padrón siguiente.
+- **La venta se ata al cliente por DNI, no por FK.** `Venta` no tiene relación
+  con `Cliente` —duplica `nombreCliente` y `dni` como texto— y `Venta.tituloId`
+  existe en el schema pero no lo escribe nadie. Por eso la documentación de la
+  ficha del cliente (`components/clientes/documentacion-cliente.tsx`) se busca
+  por `dni + zonaId`, y la pantalla lo dice: si la venta se cargó con otro DNI,
+  sus adjuntos no aparecen ahí.
 - **La foto del DNI es opcional**: frenaba el alta de ventas cargadas desde la
   calle. Se sube después editando la venta.
 - Localidad, provincia y débito automático salieron del formulario, pero **las

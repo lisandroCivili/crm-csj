@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { CAMPOS_PERSONALES, type CampoPersonal } from "@/lib/padron/camposCliente";
 
 /** Una fila del padron = una cuota de un titulo en un mes determinado. */
 export type FilaPadron = {
@@ -38,6 +39,17 @@ export type ResultadoParseo = {
   periodoHasta: Date | null;
   /** Valores distintos de NomVen, ya normalizados. */
   nomVenEncontrados: string[];
+  /**
+   * Cuales de los datos personales del cliente venian como columna en el
+   * archivo.
+   *
+   * Sin esto, "la celda esta vacia" y "la columna no existe" llegan iguales
+   * (`null` las dos) y la importacion borra el dato en toda la zona cuando el
+   * club manda un reporte sin esa columna. Ninguna de las cinco opcionales
+   * esta en `COLUMNAS_REQUERIDAS`, asi que puede pasar sin que el archivo se
+   * rechace. Ver `lib/padron/camposCliente.ts`.
+   */
+  columnasPersonales: CampoPersonal[];
 };
 
 const COLUMNAS_REQUERIDAS = [
@@ -159,6 +171,8 @@ export function parsePadron(buffer: Buffer): ResultadoParseo {
   const leer = (fila: unknown[], posicion: number): unknown =>
     posicion === -1 ? null : fila[posicion];
 
+  const columnasPersonales = CAMPOS_PERSONALES.filter((campo) => col[campo] !== -1);
+
   const filas: FilaPadron[] = [];
   const errores: ErrorFila[] = [];
   const nomVenEncontrados = new Set<string>();
@@ -241,5 +255,6 @@ export function parsePadron(buffer: Buffer): ResultadoParseo {
     periodoDesde,
     periodoHasta,
     nomVenEncontrados: [...nomVenEncontrados].sort(),
+    columnasPersonales,
   };
 }
