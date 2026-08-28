@@ -71,7 +71,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 4 | Caídas de clientes | ✅ commit `23d97fe` |
 | 5 | Gráficos del dashboard | ✅ commit `816628f` |
 | 6 | Formulario de venta | ✅ commit `4bd1ab9` |
-| 7 | Que el CRM funcione desde el celular | 🔨 commit `84db215` |
+| 7 | Que el CRM funcione desde el celular | ✅ commit `84db215` |
 | 8 | Tres arreglos chicos (toast · editar plan · código de agente) | ⬜ |
 | 9 | Padrón: varios archivos y selector nuevo | ⬜ |
 | 10 | Clientes: corregir datos y ver la documentación | ⬜ |
@@ -585,9 +585,9 @@ donde corresponde, la venta se guarda con el teléfono `03874151234` (cero
 adelante, sin símbolos) y la ficha muestra los campos nuevos. Lint, 117 tests y
 build pasan.
 
-### 🔨 Fase 7 — Que el CRM funcione desde el celular
+### ✅ Fase 7 — Que el CRM funcione desde el celular
 
-Commit `84db215`. Sin migración. Bloquea a las demás: sin esto no se puede validar ninguna fase desde el teléfono,
+Commit `84db215`. Sin migración. Validada por Lisandro el 28/08/2026. Bloquea a las demás: sin esto no se puede validar ninguna fase desde el teléfono,
 y el sistema se usa mucho desde el teléfono.
 
 #### 7.1 Los botones muertos por ngrok
@@ -687,9 +687,21 @@ compresión del fondo, que venía en 252-254 y se notaba contra el recuadro.
 mismo recuadro redondeado que había. El `alt` va vacío a propósito: el nombre
 está escrito al lado y un lector de pantalla lo diría dos veces.
 
-> **Para hablar con Balta.** El logo dice *Agencia Mercantil* y el texto que
-> quedó al lado dice *Club San Jorge*. Está así porque es lo que decía antes; si
-> tiene que cambiar, es una línea (ver Pendientes).
+#### 7.5 El texto de la marca
+
+El logo dice *Agencia Mercantil* y al lado seguía diciendo *Club San Jorge*, que
+era lo que había antes. Lisandro lo resolvió el 28/08/2026 sin tocar el nombre:
+la que cambia es **la bajada**, que decía *Administración* y ahora dice **Agente
+Mercantil**.
+
+Es un cambio de una línea en `components/layout/app-shell.tsx` y arregla algo que
+estaba mal planteado de antes: esa línea describe a quién tiene la sesión —abajo
+dice *Vendedor* cuando entra un vendedor—, y *Administración* nombraba a una
+sección del software en vez de a la persona. Balta y Pedro son agentes
+mercantiles del club, que es justamente el título que trae el logo.
+
+El badge de rol de `/perfil` sigue diciendo *Administración*: ahí sí se está
+nombrando el rol de la cuenta dentro del sistema, no a la persona.
 
 **Archivos**: `next.config.ts`, `app/layout.tsx`, `app/globals.css`,
 `components/layout/menu-movil.tsx`, `components/layout/marca.tsx`,
@@ -1818,8 +1830,9 @@ ORIGENES_DEV=192.168.0.15 npm run dev
 **1. El logo** — *esto es lo nuevo*
 
 En el escritorio, arriba de todo en la barra lateral oscura: la "S" roja y verde
-sobre un círculo blanco, con **Club San Jorge / Administración** al lado. Donde
-antes decía `CSJ` sobre un círculo rojo. Tiene que verse también en `/login`.
+sobre un círculo blanco, con **Club San Jorge / Agente Mercantil** al lado.
+Donde antes decía `CSJ` sobre un círculo rojo y *Administración*. Tiene que verse
+también en `/login`, y en el panel del celular.
 
 **2. El hamburguesa y el perfil, desde el celular** — *esto es lo que estaba roto*
 
@@ -1915,27 +1928,21 @@ en la base de desarrollo.
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Lisandro validó la Fase 6 el 28/08/2026. Las fases 0 a 6
-están cerradas.
+**Dónde retomar:** Lisandro validó las fases 6 y 7 el 28/08/2026. Las fases 0
+a 7 están cerradas.
 
 **El plan ya no termina en la Fase 6.** El 27/08/2026 Lisandro trajo una segunda
-tanda de pedidos y quedaron planificadas las **fases 7 a 12**. La **Fase 7 está
-construida** y espera validación; las 8 a 12 siguen en ⬜ y sin una sola línea de
-código. La próxima sesión arranca por la **Fase 8**.
+tanda de pedidos y quedaron planificadas las **fases 7 a 12**.
 
-Lo que falta para cerrar la Fase 7: **entrar una vez desde el celular por el
-túnel**, siguiendo la guía. Todo lo demás quedó verificado, incluido el
-comportamiento por el túnel: se reprodujo con un proxy HTTPS local que hace de
-ngrok y Playwright en viewport de iPhone resolviendo el dominio contra
-`127.0.0.1`. Ese armado es reproducible en media hora si hace falta volver, pero
-no quedó en el repositorio: para dejarlo había que versionar una clave privada
-de un certificado autofirmado.
+De la Fase 7 conviene recordar una sola cosa: **el bug de ngrok se reprodujo sin
+celular y sin túnel**, con un proxy HTTPS local que hace de ngrok y Playwright en
+viewport de iPhone resolviendo el dominio contra `127.0.0.1`. Ese armado es
+reproducible en media hora si hace falta volver, pero no quedó en el repositorio:
+para dejarlo había que versionar la clave privada de un certificado autofirmado.
+La receta está en la guía de prueba de la fase.
 
 Lo que queda abierto después de las fases 6 y 7:
 
-- **El logo dice "Agencia Mercantil" y el texto de al lado dice "Club San
-  Jorge".** Quedó el texto que ya había; cambiarlo es una línea en
-  `components/layout/marca.tsx`, pero hay que saber cuál va.
 - **Confirmar con Balta que la observación sea obligatoria en casi toda venta
   nueva**, que es la consecuencia de las dos reglas como las definió (ver la
   Fase 6). Si no era la idea, se cambia en una línea.
@@ -2088,9 +2095,9 @@ contratos es 50 en Tucumán y 100 en Salta, y las renovaciones cuentan.
 Ninguno bloquea; los tres se pueden implementar con el supuesto anotado y
 corregir después si Balta dice otra cosa.
 
-5. **El texto de la marca en la barra lateral.** El logo que pasó Lisandro dice
-   *Agencia Mercantil*; hoy al costado dice *Club San Jorge*. Confirmar cuál va, o
-   si van los dos. — Fase 7.
+5. ~~**El texto de la marca en la barra lateral.**~~ Resuelto el 28/08/2026: el
+   nombre queda como está y la bajada pasa de *Administración* a **Agente
+   Mercantil** (ver [Fase 7](#-fase-7--que-el-crm-funcione-desde-el-celular)).
 6. **El código de agente, ¿es uno por persona o uno por zona?** Se implementa como
    uno por persona (`User.codigoAgente`). Si fuera por zona, el lugar natural sería
    `Vendedor.codigo`, que ya lo es. — Fase 8.

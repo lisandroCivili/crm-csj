@@ -19,7 +19,10 @@ export async function AppShell({
   children: ReactNode;
 }) {
   const zona = await getZonaActiva();
-  const bajada = usuario.role === "ADMIN" ? "Administración" : "Vendedor";
+  // La bajada dice quien esta usando el sistema, no que seccion es. Balta y
+  // Pedro son agentes mercantiles del club --es el titulo que usa el logo-- y
+  // decia "Administracion", que nombraba al software en vez de a la persona.
+  const bajada = usuario.role === "ADMIN" ? "Agente Mercantil" : "Vendedor";
 
   return (
     <div className="flex min-h-full flex-1 bg-background">
