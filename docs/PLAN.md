@@ -73,8 +73,8 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 6 | Formulario de venta | ✅ commit `4bd1ab9` |
 | 7 | Que el CRM funcione desde el celular | ✅ commit `84db215` |
 | 8 | Tres arreglos chicos (toast · editar plan · código de agente) | ✅ commit `24e8013` |
-| 9 | Padrón: varios archivos y selector nuevo | 🔨 commit `96f7c45` |
-| 10 | Clientes: corregir datos y ver la documentación | ⬜ |
+| 9 | Padrón: varios archivos y selector nuevo | ✅ commit `96f7c45` |
+| 10 | Clientes: corregir datos y ver la documentación | 🔨 commit `PENDIENTE` |
 | 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ⬜ |
 | 12 | Actividad: leads + ventas, filtrable por vendedor | ⬜ |
 
@@ -826,7 +826,7 @@ precio; el plan dado de baja desaparece del formulario de venta; el código de
 agente se guarda y se ve en "Tu cuenta". Ninguna pantalla se sale por el costado
 en el teléfono. Lint, 126 tests y build pasan.
 
-### 🔨 Fase 9 — Padrón: varios archivos y un selector que se entienda
+### ✅ Fase 9 — Padrón: varios archivos y un selector que se entienda
 
 Commit `96f7c45`. Sin migración: el motor de importación no se tocó, lo que
 cambia es cuántas veces se lo llama y con qué pantalla.
@@ -2204,9 +2204,9 @@ en la base de desarrollo.
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Lisandro validó las fases 6, 7 y 8 el 28/08/2026. Las fases
-0 a 8 están cerradas. La **Fase 9 está construida** y espera validación; la
-próxima sesión arranca por la **Fase 10**.
+**Dónde retomar:** Lisandro validó las fases 6, 7, 8 y 9 el 28/08/2026. Las
+fases 0 a 9 están cerradas. La **Fase 10 está construida** y espera validación;
+la próxima sesión arranca por la **Fase 11**.
 
 **El plan ya no termina en la Fase 6.** El 27/08/2026 Lisandro trajo una segunda
 tanda de pedidos y quedaron planificadas las **fases 7 a 12**.
