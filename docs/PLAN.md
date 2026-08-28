@@ -73,7 +73,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 6 | Formulario de venta | ✅ commit `4bd1ab9` |
 | 7 | Que el CRM funcione desde el celular | ✅ commit `84db215` |
 | 8 | Tres arreglos chicos (toast · editar plan · código de agente) | ✅ commit `24e8013` |
-| 9 | Padrón: varios archivos y selector nuevo | 🔨 commit `PENDIENTE` |
+| 9 | Padrón: varios archivos y selector nuevo | 🔨 commit `96f7c45` |
 | 10 | Clientes: corregir datos y ver la documentación | ⬜ |
 | 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ⬜ |
 | 12 | Actividad: leads + ventas, filtrable por vendedor | ⬜ |
@@ -828,7 +828,7 @@ en el teléfono. Lint, 126 tests y build pasan.
 
 ### 🔨 Fase 9 — Padrón: varios archivos y un selector que se entienda
 
-Commit `PENDIENTE`. Sin migración: el motor de importación no se tocó, lo que
+Commit `96f7c45`. Sin migración: el motor de importación no se tocó, lo que
 cambia es cuántas veces se lo llama y con qué pantalla.
 
 #### 9.1 Varios archivos por vez
