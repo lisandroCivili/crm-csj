@@ -71,7 +71,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 4 | Caídas de clientes | ✅ commit `23d97fe` |
 | 5 | Gráficos del dashboard | ✅ commit `816628f` |
 | 6 | Formulario de venta | ✅ commit `4bd1ab9` |
-| 7 | Que el CRM funcione desde el celular | 🔨 en curso |
+| 7 | Que el CRM funcione desde el celular | 🔨 commit `84db215` |
 | 8 | Tres arreglos chicos (toast · editar plan · código de agente) | ⬜ |
 | 9 | Padrón: varios archivos y selector nuevo | ⬜ |
 | 10 | Clientes: corregir datos y ver la documentación | ⬜ |
@@ -587,7 +587,7 @@ build pasan.
 
 ### 🔨 Fase 7 — Que el CRM funcione desde el celular
 
-Bloquea a las demás: sin esto no se puede validar ninguna fase desde el teléfono,
+Commit `84db215`. Sin migración. Bloquea a las demás: sin esto no se puede validar ninguna fase desde el teléfono,
 y el sistema se usa mucho desde el teléfono.
 
 #### 7.1 Los botones muertos por ngrok
