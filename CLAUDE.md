@@ -38,6 +38,18 @@ Vocabulario del dominio (aparece tal cual en el padrón y en el código):
 - **Por eso la importación es un upsert idempotente con clave `(tituloId, numeroCuota)`**, nunca
   un append. Reimportar el mismo archivo no debe duplicar ni alterar nada. Esta es la regla más
   importante del sistema; ver `lib/padron/importarPadron.ts`.
+- **Varios padrones se importan de a uno y en orden de período, nunca mezclados.**
+  Cada archivo es su propio `PadronImport` y su propia transacción. Juntar las filas
+  de todos en una sola llamada a `importarPadron` haría que el origen del título se
+  decida por la cuota más baja del conjunto, y una renovación de septiembre quedaría
+  como venta nueva porque su cuota 1 llega en otro archivo. El orden lo decide
+  `periodoDesde`, no la selección del usuario ni el nombre del archivo (los del club
+  no lo dicen), y se muestra numerado antes de confirmar. La regla es pura y está
+  testeada en `lib/padron/tanda.ts`.
+- **Con varios archivos no se simula.** El preview de "qué va a pasar" sólo se puede
+  calcular para uno: el segundo se mediría contra una base que todavía no tiene
+  importado el primero. Se dice en pantalla en vez de mostrar números que no se van
+  a cumplir — la misma regla que las caídas y la línea base de los gráficos.
 - **`FchPago` vacío = cuota impaga.** Una cuota que pasa de vacía a tener fecha es una cuota
   recién cobrada, y es la materia prima del cálculo de comisiones.
 - **Una renovación es un título que no estaba en el padrón anterior y aparece con cuota > 1.**
@@ -244,6 +256,15 @@ Dos trampas que ya costaron un rato cada una y no se ven leyendo el código.
 - **El éxito de una acción se marca con `estado.ok`, nunca con "no hay errores".**
   El estado inicial de `useActionState` es `{}`: es *truthy* y no tiene errores,
   así que "no hay errores" da verdadero antes de que nadie haya enviado nada.
+- **Subir archivos: el input real nunca se esconde con `display: none`.** Un campo
+  `required` invisible impide que el navegador muestre su propio aviso de "completá
+  este campo". En `components/layout/selector-archivos.tsx` —el selector de las tres
+  importaciones— el input queda transparente y sin eventos encima de la zona.
+  Además, `input.files` es de sólo lectura salvo que se le asigne un `FileList`
+  fabricado con `DataTransfer`: es lo que permite sacar un archivo de la selección
+  sin volver a elegirlos todos. Y **no** hay que vaciar el input antes de abrir el
+  selector: si el usuario cancela el diálogo, `change` no dispara y se envía un
+  formulario vacío que en pantalla se ve lleno.
 - **Los errores de duplicado ya no traen `meta.target`.** Con `@prisma/adapter-pg`
   el detalle del P2002 lo pone el driver, en
   `meta.driverAdapterError.cause.constraint.fields`. Para eso está

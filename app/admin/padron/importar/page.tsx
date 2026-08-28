@@ -17,7 +17,7 @@ export default async function ImportarPadronPage() {
     <>
       <PageHeader
         titulo="Importar padrón"
-        descripcion="Se puede subir el mismo archivo dos veces sin problema: lo que ya está cargado no se duplica."
+        descripcion="Se pueden subir varios archivos de una vez, y el mismo archivo dos veces sin problema: lo que ya está cargado no se duplica."
       />
       <ImportarPadron vendedores={vendedores} />
     </>

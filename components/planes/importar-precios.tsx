@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { AlertCircle, CheckCircle2, TriangleAlert, Upload } from "lucide-react";
@@ -9,8 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { SelectorArchivos } from "@/components/layout/selector-archivos";
 
 const PESOS = new Intl.NumberFormat("es-AR", {
   style: "currency",
@@ -38,6 +37,7 @@ export function ImportarPrecios() {
   const [estado, accion] = useActionState<EstadoPrecios, FormData>(pasoImportacionPrecios, {
     paso: "inicial",
   });
+  const [archivos, setArchivos] = useState<File[]>([]);
 
   if (estado.paso === "importado") {
     return (
@@ -73,10 +73,13 @@ export function ImportarPrecios() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="archivo">Archivo</Label>
-              <Input id="archivo" name="archivo" type="file" accept=".xls,.xlsx,.csv" required />
-            </div>
+            <SelectorArchivos
+              name="archivo"
+              accept=".xls,.xlsx,.csv"
+              invitacion="Elegí la lista de precios o arrastrala acá"
+              ayuda="Un .xls, .xlsx o .csv del club"
+              onCambio={setArchivos}
+            />
 
             {estado.error ? (
               <Alert variant="destructive">
@@ -85,7 +88,7 @@ export function ImportarPrecios() {
               </Alert>
             ) : null}
 
-            <Boton type="submit">
+            <Boton type="submit" disabled={archivos.length === 0}>
               <Upload className="size-4" />
               Analizar archivo
             </Boton>

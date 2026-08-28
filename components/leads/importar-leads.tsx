@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { AlertCircle, CheckCircle2, TriangleAlert, Upload } from "lucide-react";
@@ -11,8 +11,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { SelectorArchivos } from "@/components/layout/selector-archivos";
 
 const NOMBRE_CAMPO: Record<string, string> = {
   nombre: "Nombre",
@@ -37,6 +36,7 @@ export function ImportarLeads() {
     pasoImportacionLeads,
     { paso: "inicial" }
   );
+  const [archivos, setArchivos] = useState<File[]>([]);
 
   if (estado.paso === "importado") {
     return (
@@ -72,16 +72,13 @@ export function ImportarLeads() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="archivo">Archivo</Label>
-              <Input
-                id="archivo"
-                name="archivo"
-                type="file"
-                accept=".xls,.xlsx,.csv"
-                required
-              />
-            </div>
+            <SelectorArchivos
+              name="archivo"
+              accept=".xls,.xlsx,.csv"
+              invitacion="Elegí el archivo o arrastralo acá"
+              ayuda="El export de Meta Ads, en .xls, .xlsx o .csv"
+              onCambio={setArchivos}
+            />
 
             <fieldset className="space-y-2">
               <legend className="mb-2 text-sm font-medium">¿De dónde vienen?</legend>
@@ -112,7 +109,7 @@ export function ImportarLeads() {
               </Alert>
             ) : null}
 
-            <Boton type="submit">
+            <Boton type="submit" disabled={archivos.length === 0}>
               <Upload className="size-4" />
               Analizar archivo
             </Boton>

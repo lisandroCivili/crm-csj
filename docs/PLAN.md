@@ -73,7 +73,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 6 | Formulario de venta | ✅ commit `4bd1ab9` |
 | 7 | Que el CRM funcione desde el celular | ✅ commit `84db215` |
 | 8 | Tres arreglos chicos (toast · editar plan · código de agente) | ✅ commit `24e8013` |
-| 9 | Padrón: varios archivos y selector nuevo | ⬜ |
+| 9 | Padrón: varios archivos y selector nuevo | 🔨 commit `PENDIENTE` |
 | 10 | Clientes: corregir datos y ver la documentación | ⬜ |
 | 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ⬜ |
 | 12 | Actividad: leads + ventas, filtrable por vendedor | ⬜ |
@@ -89,7 +89,7 @@ Fase 6  Formulario      (bloqueada por definición de Balta)
 
 Fase 7  Móvil    ──> habilita probar todas las demás desde el celular
 Fase 8  Chicos       (independiente, hecha)
-Fase 9  Padrón       (independiente)
+Fase 9  Padrón       (independiente, hecha)
 Fase 10 Clientes ──┐
 Fase 11 Ventas   ──┴──> Fase 12  Actividad
 ```
@@ -826,76 +826,122 @@ precio; el plan dado de baja desaparece del formulario de venta; el código de
 agente se guarda y se ve en "Tu cuenta". Ninguna pantalla se sale por el costado
 en el teléfono. Lint, 126 tests y build pasan.
 
-### ⬜ Fase 9 — Padrón: varios archivos y un selector que se entienda
+### 🔨 Fase 9 — Padrón: varios archivos y un selector que se entienda
+
+Commit `PENDIENTE`. Sin migración: el motor de importación no se tocó, lo que
+cambia es cuántas veces se lo llama y con qué pantalla.
 
 #### 9.1 Varios archivos por vez
 
 **Un `PadronImport` por archivo, importados en orden, cada uno en su
-transacción.** No se mezclan las filas en una sola llamada a `importarPadron`,
-aunque la función lo aceptaría:
+transacción.** No se juntan las filas de todos en una sola llamada a
+`importarPadron` aunque la función lo aceptaría: `origenDeTituloNuevo` decide
+venta nueva vs. renovación por la cuota más baja **del conjunto de filas que
+recibe**, así que mezclando meses un título que renovó en septiembre quedaría
+como venta nueva porque su cuota 1 llega en otro archivo. Además `esLineaBase`
+tiene que ser cierto para uno solo, y tanto el histórico de `/admin/padron`
+como las barras del dashboard cuentan una fila por archivo.
 
-- `origenDeTituloNuevo` decide venta nueva vs. renovación por la cuota más baja
-  **del conjunto de filas que recibe**. Mezclando meses, un título que entró con
-  cuota 5 en septiembre podría quedar como venta nueva porque otro archivo trae su
-  cuota 1.
-- `esLineaBase` se calcula una sola vez y sólo el primer archivo de la zona tiene
-  que serlo.
-- `PadronImport.archivoNombre` es un `String`, y tanto el histórico de
-  `/admin/padron` como las barras de producción del dashboard (Fase 5) cuentan una
-  fila por archivo.
+**El orden lo decide el período que trae el archivo, no la selección.** El
+explorador de Windows los entrega alfabéticamente, y el nombre que les pone el
+club (`Padron-siscaho-tucu-167-010626.xls`) no dice el mes en el lugar que
+haría falta. Como de ese orden salen las comisiones, la regla vive en
+`lib/padron/tanda.ts` —función pura, con tests— y **se muestra numerada en
+pantalla antes de confirmar**, con la explicación de por qué importa.
 
-Flujo nuevo:
+Lo que cambia en el flujo:
 
-1. **Paso 1** — el input acepta `multiple`. Se valida extensión y tamaño de cada
-   uno, se guardan N temporales con `guardarTemporal()` (que ya devuelve un token
-   por archivo) y se parsea cada uno para leer su período.
-2. **Paso 2** — preview. **Si es un solo archivo, la pantalla queda exactamente
-   como está hoy**, con el panel "Qué va a pasar si confirmás". Si son varios,
-   muestra la **lista ordenada** con nombre, período y filas, más la vinculación de
-   vendedores calculada sobre la **unión** de los `nomVenSinMapear` de todos.
-   No se muestran las cifras por archivo del 2º en adelante: se calcularían contra
-   una base que todavía no tiene importado el anterior, así que serían mentira. Se
-   dice en pantalla, en vez de mostrar números que no van a dar.
-3. **El orden se muestra antes de confirmar**, y sale de `periodoDesde` ascendente
-   (lo trae `parsePadron`), con el nombre como desempate. El orden decide qué es
-   venta nueva y qué es renovación, así que tiene que estar a la vista.
+1. **Paso 1** — el input acepta varios. Se valida extensión, tamaño y cantidad
+   de cada uno y se parsean **todos antes de guardar ningún temporal**: si el
+   tercero está roto, no tienen por qué quedar dos archivos huérfanos en
+   `uploads/tmp` de una tanda que nunca existió. El mensaje de error nombra al
+   archivo que falló.
+2. **Paso 2** — con un solo archivo la pantalla quedó **exactamente como
+   estaba**, con el panel "Qué va a pasar si confirmás". Con varios muestra la
+   lista ordenada (nombre, meses, filas) y dice que las cifras se ven al
+   terminar: la simulación del segundo correría contra una base que todavía no
+   tiene importado el primero, así que serían números que no se van a cumplir.
+   Mostrarlos igual sería peor que no mostrarlos.
+3. **La vinculación de vendedores se pide una sola vez**, sobre la unión de los
+   `NomVen` de todos los archivos, y sigue bloqueando la importación completa
+   hasta que no quede ninguno suelto. Imputarle cuotas al vendedor equivocado
+   rompe el cálculo de comisiones, y con siete archivos el error se multiplica.
 4. **Paso 3** — se importan uno por uno y se muestra el `PanelResumenPadron`
    **real** de cada uno. Si uno falla, los anteriores quedan importados —son
-   archivos independientes— y se avisa cuál se cortó y cuáles entraron.
-5. Tope explícito de archivos por tanda: el `bodySizeLimit` es de 25 MB para toda
-   la request y los padrones reales pesan cerca de 2 MB, así que con unos 10 se
-   llega al techo. Mensaje claro al pasarse.
+   archivos independientes y deshacerlos sería peor— y se dice cuál se cortó y
+   que no hay que volver a subir los que entraron.
+5. **Tope de 10 archivos por tanda**, que no es un número elegido por
+   prolijidad: el `bodySizeLimit` es de 25 MB para toda la request y un padrón
+   real pesa cerca de 2 MB. Pasado ese techo la subida falla **antes** de
+   llegar a la acción, o sea sin ningún mensaje que se entienda, así que el
+   aviso lo da el navegador con la cuenta hecha —y el servidor lo vuelve a
+   chequear igual, porque una server action es un endpoint—.
 
-De paso: `descartarPadron` está exportada y no la llama nadie, así que el botón
-"Cancelar" —que hoy es un `<Link>`— deja los temporales huérfanos en
-`uploads/tmp`. Con N archivos el problema se multiplica, así que el Cancelar pasa
-a ser un `<form>` que llama a esa acción con todos los tokens.
+**Y el "Cancelar" ahora cancela de verdad.** Era un `<Link>`, así que
+`descartarPadron` estaba exportada desde el principio y no la llamaba nadie:
+cada importación abandonada dejaba dos archivos por padrón en `uploads/tmp`,
+para siempre. Ahora es un submit del mismo formulario a esa acción —así se
+lleva los tokens—, que borra los temporales y vuelve al histórico.
+
+> En la base de desarrollo había **74 archivos** acumulados ahí. Se pueden
+> borrar a mano: son restos de importaciones abandonadas y nada los referencia.
 
 #### 9.2 El selector de archivos
 
-Hoy es un `<Input type="file">` pelado: no se lee como algo clickeable y, después
-de elegir un archivo, el texto sigue diciendo lo mismo.
+Era un `<input type="file">` pelado: no se leía como algo clickeable y, después
+de elegir, el texto seguía diciendo exactamente lo mismo. Ahora es
+`components/layout/selector-archivos.tsx`: zona con borde punteado, ícono,
+arrastrar y soltar, y **cuando ya hay archivos el texto desaparece y en su lugar
+va la lista** con nombre, peso y una X para sacar cada uno.
 
-`components/padron/selector-archivos.tsx` nuevo, de cliente:
+Vive en `layout/` y no en `padron/` porque lo usan las tres importaciones
+—padrón, leads y lista de precios—: era literalmente el mismo input con el mismo
+problema, y dejar dos distintos hubiera sido peor que unificarlos.
 
-- Zona grande con borde punteado, ícono y texto "Elegí los archivos o arrastralos
-  acá", clickeable entera; el `<input type="file">` real queda `sr-only` y se
-  dispara por `ref`.
-- Arrastrar y soltar.
-- **Cuando ya hay archivos, el texto desaparece y en su lugar va la lista** con
-  nombre, peso y período detectado, una X para sacar cada uno y un "Cambiar la
-  selección". Quitar de a uno se hace rearmando `input.files` con un
-  `DataTransfer`.
-- Se usa también en `components/leads/importar-leads.tsx` y
-  `components/planes/importar-precios.tsx`: es literalmente el mismo input con el
-  mismo problema, y dejarlos distintos sería peor que unificarlos.
+Tres cosas que no se ven leyendo el componente:
+
+- **`input.files` es de sólo lectura salvo que se le asigne un `FileList`, y la
+  única forma de fabricar uno a mano es con un `DataTransfer`.** Es lo que
+  permite sacar un archivo de la selección sin obligar a elegirlos todos de
+  nuevo, y lo que hace que la lista de la pantalla y lo que se envía sean lo
+  mismo.
+- **El input no se vacía antes de abrir el selector.** La primera versión lo
+  hacía —es el truco para que elegir dos veces el mismo archivo dispare
+  `change`—, y con eso, si el usuario cancelaba el cuadro de diálogo, el input
+  quedaba sin archivos mientras la lista los seguía mostrando: se enviaba un
+  formulario vacío sin que nada lo delatara.
+- **El input real sigue en el DOM, transparente y sin eventos, encima de la
+  zona.** No va en `display: none` porque un campo `required` escondido de
+  verdad hace que el navegador no pueda mostrar su propio aviso de "completá
+  este campo".
+
+**El nombre del archivo se parte en dos renglones en vez de cortarse con
+puntos suspensivos.** Los del club se llaman `Padron-siscaho-tucu-167-010626.xls`
+y lo único que los distingue son los últimos dígitos: truncar por el final es
+truncar justo la parte que hay que leer.
+
+El período de cada archivo aparece en el paso 2 y no en el selector: leerlo
+antes exigiría parsear el Excel en el navegador, o sea meter SheetJS en el
+bundle de cliente para adelantar un dato que la pantalla siguiente ya muestra.
 
 **Archivos**: `app/admin/padron/actions.ts`,
-`components/padron/importar-padron.tsx`, `components/padron/selector-archivos.tsx`
-(nuevo), `components/leads/importar-leads.tsx`,
-`components/planes/importar-precios.tsx`. **`lib/padron/importarPadron.ts` no se
-toca**: el motor ya hace lo que hay que hacer, lo que cambia es cuántas veces se
-lo llama.
+`app/admin/padron/importar/page.tsx`, `components/padron/importar-padron.tsx`,
+`components/layout/selector-archivos.tsx` (nuevo), `lib/padron/tanda.ts` y
+`lib/padron/tanda.test.ts` (nuevos), `components/leads/importar-leads.tsx`,
+`components/planes/importar-precios.tsx`, `scripts/capturas.mjs`.
+**`lib/padron/importarPadron.ts` no se tocó.**
+
+Verificado contra la aplicación levantada, vaciando Salta y subiendo **los 7
+padrones de prueba de una sola vez y en orden desordenado a propósito**: el
+sistema los ordenó por período y los números finales dieron **exactamente los
+mismos** que subiéndolos de a uno —`PRUEBA VENDEDOR UNO` $105.000, `DOS`
+$38.000, comisión del agente $564.000 sobre 54 cuotas, `PT-0006` renovación y
+`PT-0007` caído—, con 7 filas en el histórico y `esLineaBase` en una sola.
+Además: reimportar la tanda no trae novedades, un archivo que no es un padrón
+corta la tanda nombrándose y sin dejar temporales, la vinculación de vendedores
+se pide una vez para los dos archivos que la necesitaban, y Cancelar borra los
+dos temporales que había creado. Lint, 134 tests y build pasan; ninguna pantalla
+se sale por el costado en el teléfono.
 
 ### ⬜ Fase 10 — Clientes: corregir los datos y ver la documentación
 
@@ -2008,7 +2054,124 @@ Activo) desde la misma pantalla de edición, y borrar la cuenta de prueba desde
 la ficha del vendedor. El precio de `123456` queda como una fila más del
 histórico del mes; si molesta, `npx prisma studio` → `plan_precios`.
 
-### Fases 9 a 12 — qué va a tener que demostrar cada una
+### Fase 9 — Padrón: varios archivos y un selector que se entienda
+
+Con la aplicación levantada (`npm run dev`), entrando como `balta@crm-csj.local`
+en la zona **Salta**. Hacen falta los 7 archivos de `docs/padrones-prueba/`; si
+no están, se regeneran con `npx tsx scripts/generar-padrones-prueba.ts`.
+
+> Esta prueba **vacía el padrón de Salta y lo vuelve a cargar**. Es lo que hay
+> que hacer para que valga: la gracia del cambio es que subir los 7 de una vez
+> dé exactamente lo mismo que subirlos de a uno.
+
+**1. Cómo se ve ahora el selector**
+
+**Padrón → Importar padrón**. En vez del casillero gris de siempre hay un
+recuadro punteado que dice **"Elegí los padrones o arrastralos acá"**. Se puede
+clickear en cualquier parte y también arrastrar archivos encima. El botón de
+abajo está apagado hasta que haya algo elegido.
+
+Arrastrar (o elegir) **los 7 padrones de una vez**, y a propósito **en
+desorden**. Tienen que aparecer los 7 listados con su nombre y su peso, cada uno
+con una **X** para sacarlo, un **Agregar más archivos** debajo, y el botón
+principal ahora dice **Analizar 7 archivos**.
+
+Probar la X en uno cualquiera: desaparece de la lista y el botón pasa a decir
+**Analizar 6 archivos**. Volver a agregarlo con **Agregar más archivos** (no hace
+falta volver a elegir los otros seis, que es justamente lo que antes no se
+podía).
+
+**2. Vaciar Salta**
+
+Antes de importar: **Laboratorio → Vaciar el padrón de SALTA**, escribiendo
+`SALTA` para confirmar. Tiene que avisar que borró **8 clientes, 9 títulos, 69
+cuotas y 7 importaciones**.
+
+**3. El orden, antes de confirmar**
+
+Volver a **Padrón → Importar padrón**, elegir los 7 en desorden y apretar
+**Analizar 7 archivos**. La pantalla siguiente tiene que mostrar
+**"7 padrones, en este orden"** y la lista **numerada del 1 al 7**, ordenada por
+el mes de cada archivo y **no** por el orden en que se eligieron:
+
+| # | Archivo | Meses | Filas |
+|---|---|---|---|
+| 1 | padron-prueba-01-2026-06 | abril, mayo, junio de 2026 | 18 |
+| 2 | padron-prueba-02-2026-07 | mayo, junio, julio | 17 |
+| 3 | padron-prueba-03-2026-08 | junio, julio, agosto | 19 |
+| 4 | padron-prueba-04-2026-09 | julio, agosto, septiembre | 24 |
+| 5 | padron-prueba-05-2026-10 | agosto, septiembre, octubre | 24 |
+| 6 | padron-prueba-06-2026-11 | septiembre, octubre, noviembre | 24 |
+| 7 | padron-prueba-07-2026-12 | octubre, noviembre, diciembre | 27 |
+
+Debajo, el cartel **"Las cifras de cada archivo se ven al terminar"**. Es a
+propósito: no se pueden calcular antes sin mentir, porque el segundo padrón se
+mide contra una base que todavía no tiene importado el primero.
+
+**4. Importar y controlar los números**
+
+**Confirmar e importar los 7**. Al terminar tiene que decir **"7 de 7 padrones
+importados"** y mostrar el panel de cifras **de cada uno**, con el primero
+marcado como *"Fue el primer padrón de la zona"* y el aviso final de que hay
+**1 título caído**.
+
+Estos son los números que no pueden cambiar. Si alguno da distinto, el orden de
+importación se rompió:
+
+| Dónde | Qué tiene que dar |
+|---|---|
+| Padrón 2 | 2 ventas nuevas |
+| Padrón 4 | 1 renovación |
+| **Comisiones** | `PRUEBA VENDEDOR UNO` **$105.000**, `PRUEBA VENDEDOR DOS` **$38.000** |
+| **Comisiones → Comisión del agente** | **$564.000** sobre **54 cuotas**, margen **$421.000** |
+| Contratos del mes | 2 ventas nuevas + 1 renovación = **3 de 100** |
+| **Clientes** | 1 cliente en **caída parcial** (`PT-0007`) y 1 **sin datos suficientes** (`PT-0009`) |
+| **Padrón** (histórico) | **7 filas**, una por archivo |
+
+**5. Que subirlos dos veces no rompa nada**
+
+Volver a subir **los mismos 7**, sin vaciar. Tiene que decir otra vez "7 de 7" y
+todos los paneles tienen que quedar en **0**, salvo *"Cuotas ya cargadas"* y
+*"Títulos con cambios"*. Cero clientes nuevos, cero títulos nuevos, cero cuotas
+nuevas y cero recién cobradas: los números de comisión no se mueven.
+
+**6. Un archivo solo sigue igual que antes**
+
+Elegir **uno** cualquiera. El botón dice **Analizar archivo** (en singular) y la
+pantalla siguiente es la de siempre: el panel **"Qué va a pasar si confirmás"**
+con las diez cifras, y —porque ya está cargado— el cartel **"Este padrón no trae
+novedades"**.
+
+**7. Cancelar ahora cancela**
+
+Desde esa misma pantalla, apretar **Cancelar**. Vuelve al histórico, y además
+—esto no se ve— borra el archivo temporal que había quedado subido. Antes
+Cancelar era un simple link y cada importación abandonada dejaba dos archivos en
+`uploads/tmp` para siempre. Si querés verlo: contar los archivos de esa carpeta
+antes y después.
+
+**8. Un archivo que no es un padrón**
+
+Elegir uno de los padrones **junto con** cualquier otro Excel que no lo sea (por
+ejemplo una lista de precios). Tiene que rechazar la tanda entera nombrando al
+culpable: *"no-es-un-padron.xlsx: Al archivo le faltan columnas obligatorias…"*,
+y **no** guardar ningún temporal — ni siquiera del que sí estaba bien.
+
+**9. Desde el teléfono**
+
+La misma pantalla en el celular: el recuadro punteado ocupa el ancho, los
+nombres largos se parten en dos renglones en vez de cortarse (importa: los del
+club se distinguen por los últimos dígitos) y nada se sale por el costado.
+
+**Cómo dejar todo como estaba**
+
+La base queda con los 7 padrones cargados, que es su estado normal de
+desarrollo. Si algo salió raro: **Laboratorio → Vaciar el padrón de SALTA** y
+repetir el paso 3. Los archivos temporales viejos de `uploads/tmp` —74 en la
+base de desarrollo, restos de importaciones abandonadas de antes de este
+cambio— se pueden borrar a mano; nada los referencia.
+
+### Fases 10 a 12 — qué va a tener que demostrar cada una
 
 La guía completa de cada fase se escribe **cuando la fase se termina**, como
 siempre. Lo que sigue son los criterios de aceptación, anotados ahora para que no
@@ -2017,11 +2180,6 @@ se negocien después.
 Escenario base para todas: los 7 padrones de `docs/padrones-prueba/` importados en
 Salta desde `/admin/laboratorio`, que es como quedó la base de desarrollo.
 
-- **Fase 9** — vaciar Salta y subir **los 7 padrones de una sola vez**. Los números
-  finales tienen que dar **exactamente los mismos que hoy**: `PRUEBA VENDEDOR UNO`
-  $105.000, `DOS` $38.000, comisión del agente $564.000 sobre 54 cuotas, `PT-0006`
-  como renovación y `PT-0007` caído. Si algo de eso cambia, el orden de importación
-  se rompió. Volver a subirlos tiene que decir "no trae novedades".
 - **Fase 10** — corregir el teléfono de un cliente de prueba, reimportar el padrón
   que lo trae, y ver que la corrección sobrevive **y que el resto de sus campos sí
   se actualizó**. Cargar una venta con foto de DNI para ese mismo DNI y ver el
@@ -2037,7 +2195,7 @@ Salta desde `/admin/laboratorio`, que es como quedó la base de desarrollo.
   migración: eso es lo que hay que mirar primero.
 
 Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
-`npm run build`. Las fases 9 y 10 tocan la importación, así que suman
+`npm run build`. La fase 10 toca la importación, así que suma
 `npx tsx scripts/verificar-padron.ts "docs/Padron-siscaho-tucu-167-010626.xls" --limpiar`
 y hay que vaciar la zona después: ese script mete datos reales de miles de clientes
 en la base de desarrollo.
@@ -2047,7 +2205,8 @@ en la base de desarrollo.
 ## Contexto para la próxima sesión
 
 **Dónde retomar:** Lisandro validó las fases 6, 7 y 8 el 28/08/2026. Las fases
-0 a 8 están cerradas. La sesión en curso arranca por la **Fase 9**.
+0 a 8 están cerradas. La **Fase 9 está construida** y espera validación; la
+próxima sesión arranca por la **Fase 10**.
 
 **El plan ya no termina en la Fase 6.** El 27/08/2026 Lisandro trajo una segunda
 tanda de pedidos y quedaron planificadas las **fases 7 a 12**.
@@ -2058,6 +2217,22 @@ viewport de iPhone resolviendo el dominio contra `127.0.0.1`. Ese armado es
 reproducible en media hora si hace falta volver, pero no quedó en el repositorio:
 para dejarlo había que versionar la clave privada de un certificado autofirmado.
 La receta está en la guía de prueba de la fase.
+
+De la Fase 9, tres cosas que valen para lo que viene:
+
+- **El orden de una tanda de padrones lo decide el período del archivo, no el
+  usuario.** La regla vive en `lib/padron/tanda.ts` con tests, porque de ese
+  orden salen las comisiones: al revés, una renovación queda como venta nueva.
+- **`input.files` sólo se reescribe con un `DataTransfer`**, y no hay que
+  vaciar el input antes de abrir el selector: si el usuario cancela el cuadro
+  de diálogo, `change` no dispara y queda un formulario vacío que en pantalla
+  se ve lleno. Un `<input type="file">` `required` tampoco puede ir en
+  `display: none`, o el navegador no puede mostrar su aviso de "completá este
+  campo". Todo eso está resuelto en `components/layout/selector-archivos.tsx`,
+  que ahora usan las tres importaciones.
+- **`uploads/tmp` tenía 74 archivos huérfanos** de importaciones abandonadas
+  —el Cancelar era un link y no borraba nada—. Ya no se acumulan, pero los
+  viejos siguen ahí y se pueden borrar a mano.
 
 De la Fase 8, dos cosas que valen para lo que viene:
 
@@ -2083,7 +2258,8 @@ Lo que queda abierto después de las fases 6 y 7:
 
 **Cosas que conviene saber:**
 
-- **La base de desarrollo tiene los 7 padrones de prueba importados** en Salta,
+- **La base de desarrollo tiene los 7 padrones de prueba importados** en Salta
+  —desde la Fase 9, subidos en una sola tanda—,
   con los orígenes ya resueltos (`PT-0006` es la renovación), las caídas
   calculadas (`PT-0007` caído, `PT-0009` sin datos suficientes) y sin ningún
   período de comisión del agente guardado. Para empezar de cero, vaciar desde
@@ -2193,8 +2369,6 @@ mano, son cosas que no se ven leyendo el código de a un archivo):
   ediciones; del alta queda `Venta.createdAt`, que dice cuándo pero no quién.
 - **El admin no puede ver ni editar una venta**: `app/admin/ventas/[id]` no existe
   y `editarVenta` exige rol VENDEDOR y scopea por `vendedorId`.
-- **`descartarPadron` es código muerto** y `uploads/tmp` no se limpia nunca: cada
-  importación abandonada deja dos archivos huérfanos.
 - **`next.config.ts` no tiene `allowedDevOrigins` ni
   `serverActions.allowedOrigins`**, que es lo primero que hay que mirar cuando algo
   se rompe detrás de un proxy.

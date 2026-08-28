@@ -7,6 +7,10 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
 
 - **Scope de zona**: toda query que lea datos de negocio se filtra por la zona activa.
 - **Importación de padrón**: siempre upsert idempotente por `(tituloId, numeroCuota)`, nunca append.
+- **Tanda de padrones**: varios archivos se importan de a uno, cada uno con su
+  `PadronImport` y su transacción, y en orden de `periodoDesde` (nunca el de la
+  selección ni el del nombre). Con más de uno no se muestra simulación: sería un
+  número que no se va a cumplir.
 - **Origen del título**: se decide al crearlo y no se recalcula. Primera importación de la zona =
   `BASE`; después, cuota mínima 1 = `VENTA_NUEVA`, mayor = `RENOVACION`.
 - **Vendedores**: agrupar por `VendedorAlias`, nunca por el texto crudo de `NomVen`.
@@ -37,6 +41,10 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
 - **Catálogo de planes**: el Excel de precios crea planes nuevos pero no pisa el `nombre` ni
   el `activo` de los que ya existen; eso lo edita el admin y manda sobre el archivo. El
   `codigoProducto` no se edita: es la clave del upsert. Dar de baja es `activo: false`.
+- **Subir archivos**: se usa `components/layout/selector-archivos.tsx`, no un
+  `<input type="file">` suelto. El input real no se esconde con `display: none`
+  (rompe el aviso de campo requerido) ni se vacía antes de abrir el selector
+  (cancelar el diálogo dejaría el formulario vacío pareciendo lleno).
 - **Formularios**: el éxito de una server action se marca con `estado.ok`, nunca con "no hay
   errores" (el estado inicial `{}` no tiene errores). Un toast en un `useEffect` no se ve si
   el formulario desaparece al revalidar. Los duplicados de Prisma se leen con

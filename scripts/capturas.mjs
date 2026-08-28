@@ -30,6 +30,7 @@ const PANTALLAS = [
   ["leads", "/admin/leads"],
   ["clientes", "/admin/clientes"],
   ["padron", "/admin/padron"],
+  ["padron-importar", "/admin/padron/importar"],
   ["vendedores", "/admin/vendedores"],
   ["ventas", "/admin/ventas"],
   ["planes", "/admin/planes"],
