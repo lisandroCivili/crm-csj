@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useId, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 import Link from "next/link";
 import { AlertCircle } from "lucide-react";
@@ -8,11 +8,21 @@ import {
   crearVenta,
   crearVentaComoAdmin,
   editarVenta,
+  editarVentaComoAdmin,
   type EstadoVenta,
 } from "@/app/vendedor/ventas/actions";
+import { CampoFoto } from "@/components/ventas/campo-foto";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -40,6 +50,9 @@ type ValoresVenta = {
   numeroTitulo?: string | null;
   observacion?: string | null;
 };
+
+/** Lo que se muestra en el cuadro de confirmación, ya legible. */
+type Resumen = { etiqueta: string; valor: string }[];
 
 const PESOS = new Intl.NumberFormat("es-AR", {
   style: "currency",
@@ -77,11 +90,11 @@ function Campo({
   );
 }
 
-function BotonGuardar({ edicion }: { edicion: boolean }) {
+function BotonGuardar({ formId, etiqueta }: { formId: string; etiqueta: string }) {
   const { pending } = useFormStatus();
   return (
-    <Button type="submit" disabled={pending}>
-      {pending ? "Guardando…" : edicion ? "Guardar cambios" : "Cargar venta"}
+    <Button type="submit" form={formId} disabled={pending}>
+      {pending ? "Guardando…" : etiqueta}
     </Button>
   );
 }
@@ -93,20 +106,24 @@ export function VentaForm({
   tieneDni,
   vendedores,
   vendedorPorDefecto,
+  admin,
 }: {
   planes: PlanOpcion[];
   valores?: ValoresVenta;
   leadId?: string;
   tieneDni?: boolean;
   /**
-   * Solo en el alta desde /admin. Su presencia es la que cambia el modo del
-   * formulario: el vendedor carga siempre a su nombre y no elige nada.
+   * Solo en el alta desde /admin: el vendedor carga siempre a su nombre y no
+   * elige nada.
    */
   vendedores?: VendedorOpcion[];
   vendedorPorDefecto?: string | null;
+  /** Desde qué panel se está usando. Decide la acción y adónde se vuelve. */
+  admin?: boolean;
 }) {
   const edicion = Boolean(valores?.id);
-  const comoAdmin = vendedores !== undefined;
+  const eligeVendedor = vendedores !== undefined;
+  const base = admin ? "/admin/ventas" : "/vendedor/ventas";
 
   // Tres campos se miran entre si mientras se escribe, asi que su valor vive en
   // el estado y no solo en el DOM:
@@ -125,14 +142,88 @@ export function VentaForm({
   const planElegido = planes.find((plan) => plan.id === planId) ?? null;
   const suscripcionRequerida = numeroTitulo.trim() === "";
   const observacionRequerida = nroSuscripcion.trim() !== "";
+
   const [estado, accion] = useActionState<EstadoVenta, FormData>(
-    edicion ? editarVenta : comoAdmin ? crearVentaComoAdmin : crearVenta,
+    edicion
+      ? admin
+        ? editarVentaComoAdmin
+        : editarVenta
+      : admin
+        ? crearVentaComoAdmin
+        : crearVenta,
     {}
   );
   const errores = estado.errores ?? {};
 
+  // CONFIRMACIÓN ANTES DE CREAR
+  //
+  // Cargar una venta es escribir un dato que después hay que perseguir para
+  // corregir, así que el alta pasa por un resumen de lo que se va a guardar. En
+  // la edición no: guardar cambios sobre algo que ya existe —y que queda en el
+  // historial— no es lo mismo que crear.
+  const formId = useId();
+  const formRef = useRef<HTMLFormElement>(null);
+  const [resumen, setResumen] = useState<Resumen | null>(null);
+
+  // Si la acción vuelve con un error, el aviso está arriba del formulario y el
+  // diálogo lo estaría tapando. Se ajusta durante el render, que es como React
+  // pide reaccionar a un valor que cambió: en un `useEffect` sería un render
+  // encadenado de más, y acá no hay ningún sistema externo que sincronizar.
+  const [ultimoEstado, setUltimoEstado] = useState(estado);
+  if (estado !== ultimoEstado) {
+    setUltimoEstado(estado);
+    if (estado.error || estado.errores) setResumen(null);
+  }
+
+  function confirmar() {
+    const form = formRef.current;
+    // No tiene sentido mostrar el resumen de un formulario incompleto: primero
+    // que el navegador señale lo que falta.
+    if (!form || !form.reportValidity()) return;
+
+    // Se lee del DOM y no del estado para no tener que volver controlados los
+    // campos que hoy usan `defaultValue`.
+    const datos = new FormData(form);
+    const texto = (campo: string) => String(datos.get(campo) ?? "").trim();
+    const archivo = (campo: string) => {
+      const valor = datos.get(campo);
+      return valor instanceof File && valor.size > 0 ? valor.name : null;
+    };
+
+    const filas: Resumen = [];
+
+    if (eligeVendedor) {
+      const elegido = vendedores.find((vendedor) => vendedor.id === texto("vendedorId"));
+      filas.push({ etiqueta: "Vendedor", valor: elegido?.nombreCompleto ?? "—" });
+    }
+
+    filas.push({ etiqueta: "Plan", valor: planElegido?.nombre ?? "—" });
+    filas.push({ etiqueta: "Cliente", valor: texto("nombreCliente") });
+    filas.push({ etiqueta: "D.N.I", valor: texto("dni") });
+    filas.push({ etiqueta: "Teléfono", valor: texto("telefono") });
+
+    // El identificador de la venta es uno de los dos, y cuál es depende de si
+    // el club ya asignó el título. Mostrar el vacío no aporta nada.
+    if (texto("numeroTitulo")) {
+      filas.push({ etiqueta: "Título", valor: texto("numeroTitulo") });
+    } else {
+      filas.push({ etiqueta: "Nro Suscripción", valor: texto("nroSuscripcion") });
+    }
+
+    const adjuntos = [
+      archivo("adjuntoDni") ? "foto del DNI" : null,
+      archivo("adjuntoContrato") ? "contrato" : null,
+    ].filter(Boolean);
+    filas.push({
+      etiqueta: "Documentación",
+      valor: adjuntos.length > 0 ? adjuntos.join(" y ") : "sin adjuntos",
+    });
+
+    setResumen(filas);
+  }
+
   return (
-    <form action={accion} className="max-w-3xl space-y-4">
+    <form id={formId} ref={formRef} action={accion} className="max-w-3xl space-y-4">
       {edicion ? <input type="hidden" name="id" value={valores?.id} /> : null}
       {leadId ? <input type="hidden" name="leadId" value={leadId} /> : null}
 
@@ -143,7 +234,7 @@ export function VentaForm({
         </Alert>
       ) : null}
 
-      {comoAdmin ? (
+      {eligeVendedor ? (
         <Card>
           <CardHeader>
             <CardTitle className="text-base">Vendedor</CardTitle>
@@ -253,6 +344,7 @@ export function VentaForm({
               inputMode="numeric"
               value={nroSuscripcion}
               onChange={(evento) => setNroSuscripcion(evento.target.value)}
+              required={suscripcionRequerida}
             />
           </Campo>
         </CardContent>
@@ -356,6 +448,7 @@ export function VentaForm({
               name="observacion"
               rows={3}
               defaultValue={valores?.observacion ?? ""}
+              required={observacionRequerida}
               className="w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
             />
           </Campo>
@@ -370,23 +463,17 @@ export function VentaForm({
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
-          <Campo
-            nombre="adjuntoDni"
-            etiqueta="Foto del DNI"
-            errores={errores.adjuntoDni}
-            ayuda={
-              edicion
-                ? tieneDni
-                  ? "Ya hay una cargada. Subí otra solo si querés reemplazarla."
-                  : "Esta venta todavía no tiene el DNI cargado."
-                : "Opcional. Se puede subir después, editando la venta."
-            }
-          >
-            <Input
-              id="adjuntoDni"
-              name="adjuntoDni"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,application/pdf"
+          <Campo nombre="adjuntoDni" etiqueta="Foto del DNI" errores={errores.adjuntoDni}>
+            <CampoFoto
+              nombre="adjuntoDni"
+              etiquetaCamara="Sacar foto"
+              ayuda={
+                edicion
+                  ? tieneDni
+                    ? "Ya hay una cargada. Subí otra solo si querés reemplazarla."
+                    : "Esta venta todavía no tiene el DNI cargado."
+                  : "Opcional. Se puede subir después, editando la venta."
+              }
             />
           </Campo>
 
@@ -394,26 +481,63 @@ export function VentaForm({
             nombre="adjuntoContrato"
             etiqueta="Contrato"
             errores={errores.adjuntoContrato}
-            ayuda="Opcional."
           >
-            <Input
-              id="adjuntoContrato"
-              name="adjuntoContrato"
-              type="file"
-              accept="image/jpeg,image/png,image/webp,application/pdf"
+            <CampoFoto
+              nombre="adjuntoContrato"
+              etiquetaCamara="Fotografiar"
+              ayuda="Opcional."
             />
           </Campo>
         </CardContent>
       </Card>
 
       <div className="flex gap-2">
-        <BotonGuardar edicion={edicion} />
+        {edicion ? (
+          <BotonGuardar formId={formId} etiqueta="Guardar cambios" />
+        ) : (
+          <Button type="button" onClick={confirmar}>
+            Cargar venta
+          </Button>
+        )}
         <Button type="button" variant="ghost" asChild>
-          <Link href={edicion ? `/vendedor/ventas/${valores?.id}` : "/vendedor/ventas"}>
-            Cancelar
-          </Link>
+          <Link href={edicion ? `${base}/${valores?.id}` : base}>Cancelar</Link>
         </Button>
       </div>
+
+      {/* El diálogo se renderiza dentro del <form> aunque Radix lo lleve al
+          <body>: así el botón de confirmar sigue viendo el estado del envío por
+          contexto. En el DOM queda afuera, y por eso lo que lo ata al
+          formulario es el atributo `form`, que sí cruza el portal —un
+          <button type="submit"> a secas no enviaría nada—. */}
+      <Dialog open={resumen !== null} onOpenChange={(abierto) => !abierto && setResumen(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>¿Cargamos esta venta?</DialogTitle>
+            <DialogDescription>
+              Revisá los datos. Después se pueden corregir, pero la venta ya va a estar
+              cargada.
+            </DialogDescription>
+          </DialogHeader>
+
+          <dl className="divide-y text-sm">
+            {(resumen ?? []).map((fila) => (
+              <div key={fila.etiqueta} className="flex justify-between gap-4 py-1.5">
+                <dt className="text-muted-foreground">{fila.etiqueta}</dt>
+                <dd className="text-right font-medium">
+                  {fila.valor || <span className="font-normal text-muted-foreground">—</span>}
+                </dd>
+              </div>
+            ))}
+          </dl>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => setResumen(null)}>
+              Revisar
+            </Button>
+            <BotonGuardar formId={formId} etiqueta="Confirmar y cargar" />
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </form>
   );
 }

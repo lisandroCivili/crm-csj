@@ -134,6 +134,7 @@ model User {
   adjuntosSubidos   VentaAdjunto[]
   historialesVentas VentaHistorial[]
   clientesEditados  Cliente[]
+  ventasAnuladas    Venta[]          @relation("VentasAnuladas")
 
   @@map("usuarios")
 }
@@ -575,6 +576,14 @@ model Venta {
 
   estado     VentaEstado @default(ACTIVA)
   fechaVenta DateTime    @default(now())
+
+  /// Anulacion. La venta no se borra: se marca, se guarda quien la anulo y por
+  /// que, y se sigue viendo atenuada en los listados. Borrarla perderia el
+  /// historial y los adjuntos, y ademas nadie sabria que existio.
+  anuladaAt        DateTime?
+  anuladaPorUserId String?
+  anuladaPor       User?     @relation("VentasAnuladas", fields: [anuladaPorUserId], references: [id])
+  motivoAnulacion  String?
 
   tituloId String?
   titulo   Titulo? @relation(fields: [tituloId], references: [id])

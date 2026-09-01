@@ -260,8 +260,47 @@ endpoint y se puede mandar sin pasar por el navegador.
   sus adjuntos no aparecen ahí.
 - **La foto del DNI es opcional**: frenaba el alta de ventas cargadas desde la
   calle. Se sube después editando la venta.
+- **Cargar una venta pasa por un resumen; guardar cambios no.** El alta escribe
+  un dato que después hay que perseguir para corregir; la edición ya queda en el
+  historial. Dos trampas del cuadro: Radix **portalea el `DialogContent` al
+  `<body>`**, así que el botón de confirmar queda fuera del `<form>` en el DOM y
+  sólo lo alcanza el atributo `form="…"` —un `type="submit"` a secas no manda
+  nada—; y antes de abrirlo va `reportValidity()`, porque no tiene sentido
+  resumir un formulario incompleto. El diálogo se renderiza **dentro** del
+  `<form>` en el JSX aunque el DOM lo saque: así `useFormStatus` sigue viéndolo
+  por contexto.
+- **`capture` se pone y se saca con JS sobre un único input.** *Sacar foto* y
+  *Elegir archivo* comparten el mismo `<input type="file">`
+  (`components/ventas/campo-foto.tsx`): dos inputs con el mismo `name` harían
+  que el vacío pise al lleno al enviar. Y **HEIC no va en el `accept`** aunque
+  sea el formato del iPhone: mientras el `accept` no lo nombre, iOS transcodifica
+  a JPEG al elegir la foto, y agregarlo haría que mande el HEIC crudo, que
+  Chrome en Windows no puede mostrar. El arreglo es el mensaje de error, no la
+  lista de tipos.
 - Localidad, provincia y débito automático salieron del formulario, pero **las
   columnas siguen**: las ventas viejas las tienen cargadas.
+
+## Anular una venta
+
+- **Anular no borra: marca.** La venta sigue en los dos listados —atenuada—, con
+  sus adjuntos y su historial, y se puede **reactivar**. Borrar la fila perdería
+  la foto del DNI y hasta el hecho de que la venta existió.
+- **No toca ninguna comisión.** El cálculo sale del padrón (`TituloCuota`), no de
+  `Venta`; anular no le saca un peso a nadie. Se dice en el cuadro de
+  confirmación para que nadie lo suponga al revés.
+- **Pide un motivo escrito**, que es lo único que después explica por qué esa
+  venta está caída. Al reactivar se limpia de la ficha, así que el motivo se
+  guarda **además** en `VentaHistorial`: sin eso, una venta anulada y reactivada
+  no dejaría rastro.
+- **Una venta anulada no se edita** —hay que reactivarla—, y la pantalla de
+  edición rebota a la ficha en vez de mostrar un formulario que no va a guardar.
+- Anular y reactivar son **del admin**. El pedido de "las mismas opciones para
+  Balta" era sobre editar.
+- **El admin y el vendedor editan con el mismo motor.** `aplicarEdicion` es uno
+  solo y lo único que cambia es el alcance: el vendedor toca las suyas
+  (`vendedorId`), el admin las de la zona activa. Un plan dado de baja **no se
+  ofrece pero se conserva**: corregir un teléfono no tiene por qué obligar a
+  cambiarle el plan a una venta vieja.
 
 ## Formularios y avisos
 

@@ -30,6 +30,15 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
 - **Caídas**: 6 cuotas consecutivas impagas, contadas desde la cuota más alta hacia atrás y
   sólo sobre numeración contigua. Un hueco en el histórico **corta la racha**: el título queda
   como "sin datos suficientes", nunca como "al día". No afecta ninguna comisión.
+- **Anulación de venta**: anular marca, no borra, y se puede reactivar; pide un motivo, que
+  además queda en `VentaHistorial` porque al reactivar se limpia de la ficha. **No toca
+  ninguna comisión** —esas salen del padrón— y una venta anulada no se edita hasta
+  reactivarla. Anular y reactivar son sólo del admin; **editar** es igual para los dos y sale
+  del mismo `aplicarEdicion`, cambiando nada más el alcance.
+- **Confirmación y foto**: el alta de venta pasa por un resumen y la edición no. El botón del
+  diálogo se ata al formulario con `form="…"`, porque Radix lo portalea fuera del `<form>`.
+  La foto usa un solo `<input type="file">` al que se le pone `capture` con JS; **HEIC no va
+  en el `accept`** o iOS deja de convertir a JPEG y manda un archivo que no se puede ver.
 - **Formulario de venta**: "Nro Suscripción" es obligatorio salvo que haya "Título", y
   "Observación" lo es cuando hay suscripción. Las dos reglas se validan en el servidor
   (`ventaSchema`), no sólo en la pantalla. Los campos numéricos (DNI, teléfono, suscripción,

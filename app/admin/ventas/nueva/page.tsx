@@ -36,6 +36,7 @@ export default async function NuevaVentaAdminPage() {
         descripcion="Cargá los datos del cliente y el plan. Elegí a nombre de quién queda la venta."
       />
       <VentaForm
+        admin
         planes={planes.map((plan) => ({
           id: plan.id,
           codigoProducto: plan.codigoProducto,

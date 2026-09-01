@@ -11,7 +11,7 @@ import {
 } from "@/lib/archivos";
 import { db } from "@/lib/db";
 import { requireAdmin, requirePermiso, requireZonaActivaId } from "@/lib/sesion";
-import { CAMPOS_HISTORIAL, ventaSchema } from "@/lib/validations/venta";
+import { CAMPOS_HISTORIAL, anulacionSchema, ventaSchema } from "@/lib/validations/venta";
 import type { AdjuntoTipo } from "@/lib/generated/prisma/client";
 
 export type EstadoVenta = {
@@ -245,11 +245,45 @@ export async function crearVentaComoAdmin(
   );
 }
 
-export async function editarVenta(
-  _previo: EstadoVenta,
+/**
+ * Quien edita y hasta donde llega. El vendedor solo toca sus ventas; el admin,
+ * todas las de la zona activa. Todo lo demas —la validacion, el diff que va al
+ * historial, los adjuntos y la transaccion— es identico, y por eso vive una
+ * sola vez: Lisandro pidio que el admin tuviera exactamente las mismas
+ * opciones que el vendedor, no un subconjunto parecido.
+ */
+type ContextoEdicion = {
+  userId: string;
+  /** Lo que ademas del id tiene que cumplir la venta para poder editarse. */
+  alcance: { vendedorId: string } | { zonaId: number };
+  destino: (ventaId: string) => string;
+};
+
+/**
+ * Los valores del historial se normalizan a tipos JSON simples porque la
+ * columna es Json.
+ */
+type ValorHistorial = string | number | boolean | null;
+
+const aValor = (valor: unknown): ValorHistorial =>
+  valor === null || valor === undefined
+    ? null
+    : typeof valor === "string" || typeof valor === "number" || typeof valor === "boolean"
+      ? valor
+      : String(valor);
+
+/** Las cuatro pantallas que muestran una venta, tras tocarla. */
+function revalidarVenta(id: string) {
+  revalidatePath("/vendedor/ventas");
+  revalidatePath(`/vendedor/ventas/${id}`);
+  revalidatePath("/admin/ventas");
+  revalidatePath(`/admin/ventas/${id}`);
+}
+
+async function aplicarEdicion(
+  ctx: ContextoEdicion,
   formData: FormData
 ): Promise<EstadoVenta> {
-  const usuario = await requirePermiso("cargarVentas");
   const id = String(formData.get("id") ?? "");
 
   const parsed = ventaSchema.safeParse(Object.fromEntries(formData));
@@ -257,16 +291,27 @@ export async function editarVenta(
     return { errores: z.flattenError(parsed.error).fieldErrors };
   }
 
-  const venta = await db.venta.findFirst({
-    where: { id, vendedorId: usuario.vendedorId },
-  });
+  const venta = await db.venta.findFirst({ where: { id, ...ctx.alcance } });
   if (!venta) return { error: "No se encontró la venta." };
+
+  // Una venta anulada no se corrige: primero se reactiva. Editarla dejaria el
+  // historial contando cambios sobre algo que el sistema da por dado de baja.
+  if (venta.estado === "ANULADA") {
+    return { error: "La venta está anulada. Hay que reactivarla antes de editarla." };
+  }
 
   const plan = await db.plan.findFirst({
     where: { id: parsed.data.planId },
-    select: { id: true, codigoProducto: true, nombre: true },
+    select: { id: true, codigoProducto: true, activo: true },
   });
-  if (!plan) return { errores: { planId: ["Ese plan ya no está disponible."] } };
+
+  // Un plan dado de baja no se puede elegir, pero si conservar: corregirle el
+  // telefono a una venta vieja no tiene por que obligar a cambiarle el plan.
+  // Es la unica diferencia con el alta, donde el plan siempre tiene que estar
+  // activo.
+  if (!plan || (!plan.activo && plan.id !== venta.planId)) {
+    return { errores: { planId: ["Ese plan ya no está disponible."] } };
+  }
 
   const nuevos: Record<string, unknown> = {
     nombreCliente: parsed.data.nombreCliente,
@@ -281,16 +326,7 @@ export async function editarVenta(
   };
 
   // Se guarda el diff campo por campo, no la fila entera: el historial tiene
-  // que dejar ver que cambio exactamente y contra que valor. Los valores se
-  // normalizan a tipos JSON simples porque la columna es Json.
-  type ValorHistorial = string | number | boolean | null;
-  const aValor = (valor: unknown): ValorHistorial =>
-    valor === null || valor === undefined
-      ? null
-      : typeof valor === "string" || typeof valor === "number" || typeof valor === "boolean"
-        ? valor
-        : String(valor);
-
+  // que dejar ver que cambio exactamente y contra que valor.
   const cambios: Record<string, { antes: ValorHistorial; despues: ValorHistorial }> = {};
   for (const campo of CAMPOS_HISTORIAL) {
     const antes = aValor((venta as Record<string, unknown>)[campo]);
@@ -309,7 +345,7 @@ export async function editarVenta(
   if (contrato.archivo) nuevosAdjuntos.push({ tipo: "CONTRATO", archivo: contrato.archivo });
 
   if (Object.keys(cambios).length === 0 && nuevosAdjuntos.length === 0) {
-    redirect(`/vendedor/ventas/${venta.id}`);
+    redirect(ctx.destino(venta.id));
   }
 
   const rutas: string[] = [];
@@ -326,13 +362,13 @@ export async function editarVenta(
       if (Object.keys(cambios).length > 0) {
         await tx.venta.update({ where: { id: venta.id }, data: nuevos });
         await tx.ventaHistorial.create({
-          data: { ventaId: venta.id, cambios, modificadoPorUserId: usuario.id },
+          data: { ventaId: venta.id, cambios, modificadoPorUserId: ctx.userId },
         });
       }
 
       for (const adjunto of guardados) {
         await tx.ventaAdjunto.create({
-          data: { ...adjunto, ventaId: venta.id, subidoPorUserId: usuario.id },
+          data: { ...adjunto, ventaId: venta.id, subidoPorUserId: ctx.userId },
         });
       }
     });
@@ -341,8 +377,150 @@ export async function editarVenta(
     throw error;
   }
 
-  revalidatePath("/vendedor/ventas");
-  revalidatePath(`/vendedor/ventas/${venta.id}`);
-  revalidatePath("/admin/ventas");
-  redirect(`/vendedor/ventas/${venta.id}`);
+  revalidarVenta(venta.id);
+  redirect(ctx.destino(venta.id));
+}
+
+export async function editarVenta(
+  _previo: EstadoVenta,
+  formData: FormData
+): Promise<EstadoVenta> {
+  const usuario = await requirePermiso("cargarVentas");
+
+  return aplicarEdicion(
+    {
+      userId: usuario.id,
+      alcance: { vendedorId: usuario.vendedorId },
+      destino: (id) => `/vendedor/ventas/${id}`,
+    },
+    formData
+  );
+}
+
+/**
+ * Edicion desde /admin. Es la misma que la del vendedor —Lisandro fue explicito
+ * en que el admin no pierde ninguna opcion— cambiando de que depende el
+ * alcance: el vendedor tiene las suyas, Balta las de la zona que este mirando.
+ */
+export async function editarVentaComoAdmin(
+  _previo: EstadoVenta,
+  formData: FormData
+): Promise<EstadoVenta> {
+  const usuario = await requireAdmin();
+  const zonaId = await requireZonaActivaId();
+
+  return aplicarEdicion(
+    { userId: usuario.id, alcance: { zonaId }, destino: (id) => `/admin/ventas/${id}` },
+    formData
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Anulacion
+//
+// Anular no borra: marca. La venta se sigue viendo —atenuada— en los dos
+// listados, conserva sus adjuntos y su historial, y se puede reactivar. Borrar
+// la fila perderia la foto del DNI, el historial de cambios y hasta el hecho de
+// que la venta existio.
+//
+// No toca ninguna comision: el calculo sale del padron (`TituloCuota`) y no de
+// `Venta`. Anular una venta no le saca un peso a nadie, y eso se dice en el
+// cuadro de confirmacion para que nadie lo suponga al reves.
+//
+// Es una accion de admin. El pedido de "las mismas opciones" era sobre editar;
+// anular es de otra naturaleza y quedo asentado como supuesto en el plan.
+// ---------------------------------------------------------------------------
+
+export async function anularVenta(
+  _previo: EstadoVenta,
+  formData: FormData
+): Promise<EstadoVenta> {
+  const usuario = await requireAdmin();
+  const zonaId = await requireZonaActivaId();
+
+  const id = String(formData.get("id") ?? "");
+  const parsed = anulacionSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { errores: z.flattenError(parsed.error).fieldErrors };
+  }
+
+  const venta = await db.venta.findFirst({
+    where: { id, zonaId },
+    select: { id: true, estado: true },
+  });
+  if (!venta) return { error: "No se encontró la venta." };
+  if (venta.estado === "ANULADA") redirect(`/admin/ventas/${venta.id}`);
+
+  await db.$transaction(async (tx) => {
+    await tx.venta.update({
+      where: { id: venta.id },
+      data: {
+        estado: "ANULADA",
+        anuladaAt: new Date(),
+        anuladaPorUserId: usuario.id,
+        motivoAnulacion: parsed.data.motivo,
+      },
+    });
+
+    // El motivo va ademas al historial porque al reactivar se limpia de la
+    // venta: sin esto, una venta anulada y reactivada no dejaria rastro de por
+    // que se habia anulado.
+    await tx.ventaHistorial.create({
+      data: {
+        ventaId: venta.id,
+        cambios: {
+          estado: { antes: "activa", despues: "anulada" },
+          motivoAnulacion: { antes: null, despues: parsed.data.motivo },
+        },
+        modificadoPorUserId: usuario.id,
+      },
+    });
+  });
+
+  revalidarVenta(venta.id);
+  redirect(`/admin/ventas/${venta.id}`);
+}
+
+/**
+ * La vuelta atras de anular. No estaba en el pedido, pero anular sin salida
+ * convertiria un click equivocado en un dato irrecuperable; el sistema ya trata
+ * asi a los periodos de comision, que se cierran y se pueden reabrir.
+ */
+export async function reactivarVenta(
+  _previo: EstadoVenta,
+  formData: FormData
+): Promise<EstadoVenta> {
+  const usuario = await requireAdmin();
+  const zonaId = await requireZonaActivaId();
+
+  const id = String(formData.get("id") ?? "");
+  const venta = await db.venta.findFirst({
+    where: { id, zonaId },
+    select: { id: true, estado: true },
+  });
+  if (!venta) return { error: "No se encontró la venta." };
+  if (venta.estado === "ACTIVA") redirect(`/admin/ventas/${venta.id}`);
+
+  await db.$transaction(async (tx) => {
+    await tx.venta.update({
+      where: { id: venta.id },
+      data: {
+        estado: "ACTIVA",
+        anuladaAt: null,
+        anuladaPorUserId: null,
+        motivoAnulacion: null,
+      },
+    });
+
+    await tx.ventaHistorial.create({
+      data: {
+        ventaId: venta.id,
+        cambios: { estado: { antes: "anulada", despues: "activa" } },
+        modificadoPorUserId: usuario.id,
+      },
+    });
+  });
+
+  revalidarVenta(venta.id);
+  redirect(`/admin/ventas/${venta.id}`);
 }

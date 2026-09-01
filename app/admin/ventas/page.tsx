@@ -110,7 +110,16 @@ export default async function VentasAdminPage({ searchParams }: PageProps<"/admi
               return (
                 <TarjetaFila
                   key={venta.id}
-                  titulo={venta.nombreCliente}
+                  href={`/admin/ventas/${venta.id}`}
+                  atenuada={venta.estado === "ANULADA"}
+                  encabezado={
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="min-w-0 truncate font-medium">{venta.nombreCliente}</p>
+                      {venta.estado === "ANULADA" ? (
+                        <Badge variant="outline">anulada</Badge>
+                      ) : null}
+                    </div>
+                  }
                   lateral={FECHA.format(venta.fechaVenta)}
                 >
                   <DatoFila etiqueta="DNI" valor={venta.dni} />
@@ -120,22 +129,12 @@ export default async function VentasAdminPage({ searchParams }: PageProps<"/admi
                     valor={venta.plan ? `${venta.codigoProducto} · ${venta.plan.nombre}` : venta.codigoProducto}
                   />
                   <DatoFila etiqueta="Título" valor={venta.titulo?.numTit ?? "sin vincular"} />
+                  {/* Sin link: la tarjeta entera ya es uno, y un <a> adentro
+                      de otro <a> es HTML invalido que rompe la hidratacion.
+                      El archivo se abre desde la ficha. */}
                   <DatoFila
                     etiqueta="Documentación"
-                    valor={
-                      dni ? (
-                        <a
-                          href={`/api/uploads/${dni.id}`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="underline underline-offset-2"
-                        >
-                          Ver DNI
-                        </a>
-                      ) : (
-                        "sin DNI"
-                      )
-                    }
+                    valor={dni ? "con foto del DNI" : "sin DNI"}
                   />
                 </TarjetaFila>
               );
@@ -153,6 +152,7 @@ export default async function VentasAdminPage({ searchParams }: PageProps<"/admi
                   <TableHead>Fecha</TableHead>
                   <TableHead>Título</TableHead>
                   <TableHead>Documentación</TableHead>
+                  <TableHead className="w-0" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -161,8 +161,18 @@ export default async function VentasAdminPage({ searchParams }: PageProps<"/admi
                   const contrato = venta.adjuntos.find((a) => a.tipo === "CONTRATO");
 
                   return (
-                    <TableRow key={venta.id}>
-                      <TableCell className="font-medium">{venta.nombreCliente}</TableCell>
+                    <TableRow
+                      key={venta.id}
+                      className={venta.estado === "ANULADA" ? "opacity-55" : ""}
+                    >
+                      <TableCell className="font-medium">
+                        {venta.nombreCliente}
+                        {venta.estado === "ANULADA" ? (
+                          <Badge variant="outline" className="ml-2">
+                            anulada
+                          </Badge>
+                        ) : null}
+                      </TableCell>
                       <TableCell className="tabular-nums">{venta.dni}</TableCell>
                       <TableCell>
                         <Link
@@ -215,6 +225,11 @@ export default async function VentasAdminPage({ searchParams }: PageProps<"/admi
                             </Button>
                           ) : null}
                         </div>
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="outline" size="sm" asChild>
+                          <Link href={`/admin/ventas/${venta.id}`}>Ver</Link>
+                        </Button>
                       </TableCell>
                     </TableRow>
                   );

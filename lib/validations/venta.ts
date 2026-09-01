@@ -112,6 +112,20 @@ export const ventaSchema = z
 
 export type DatosVenta = z.infer<typeof ventaSchema>;
 
+/**
+ * Anular pide un motivo escrito y no una confirmacion a secas. Es lo unico que
+ * despues explica por que esa venta esta caida: el estado dice "anulada", pero
+ * no si fue un arrepentimiento del cliente, un dato mal cargado o una venta que
+ * el club rechazo.
+ */
+export const anulacionSchema = z.object({
+  motivo: z
+    .string()
+    .trim()
+    .min(5, "Escribí por qué se anula.")
+    .max(500, "No puede superar los 500 caracteres."),
+});
+
 /** Campos que se comparan para armar el historial de cambios. */
 export const CAMPOS_HISTORIAL = [
   "nombreCliente",
@@ -135,6 +149,9 @@ export const ETIQUETA_CAMPO: Record<string, string> = {
   observacion: "Observación",
   planId: "Plan",
   codigoProducto: "Código de producto",
+  // No se editan desde el formulario: los escribe anular o reactivar.
+  estado: "Estado",
+  motivoAnulacion: "Motivo de la anulación",
   // Salieron del formulario, pero las ventas viejas los tienen en el historial.
   localidad: "Localidad",
   provincia: "Provincia",

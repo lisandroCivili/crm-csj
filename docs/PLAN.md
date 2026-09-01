@@ -75,7 +75,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 8 | Tres arreglos chicos (toast · editar plan · código de agente) | ✅ commit `24e8013` |
 | 9 | Padrón: varios archivos y selector nuevo | ✅ commit `96f7c45` |
 | 10 | Clientes: corregir datos y ver la documentación | ✅ commit `351e633` |
-| 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ⬜ |
+| 11 | Ventas: confirmar, editar desde admin, foto con la cámara | 🔨 |
 | 12 | Actividad: leads + ventas, filtrable por vendedor | ⬜ |
 
 Dependencias:
@@ -1033,78 +1033,131 @@ comisiones **$105.000 / $38.000**, agente **$564.000** con margen **$421.000**,
 1 caído y 1 renovación — los mismos números de siempre. Lint, **149 tests** y
 build pasan; ninguna de las dos pantallas se sale por el costado en el teléfono.
 
-### ⬜ Fase 11 — Ventas: confirmar, editar desde admin, foto con la cámara
+### 🔨 Fase 11 — Ventas: confirmar, editar desde admin, foto con la cámara
+
+Migración `20260901225241_anulacion_venta`.
 
 #### 11.1 Confirmación al crear
 
-El botón "Cargar venta" (`components/ventas/venta-form.tsx`) pasa a ser
-`type="button"` y abre un `Dialog` con el resumen de lo que se va a guardar:
-vendedor, plan, nombre, DNI, suscripción o título, y si lleva adjuntos. Dos
-salidas: **Revisar** y **Confirmar y cargar**.
+El botón "Cargar venta" pasó a `type="button"` y abre un cuadro con el resumen
+de lo que se va a guardar: vendedor, plan, cliente, DNI, teléfono, el
+identificador —título o suscripción, el que corresponda— y si lleva adjuntos.
+Dos salidas: **Revisar** y **Confirmar y cargar**.
 
-Tres detalles que hay que hacer bien:
+**Aplica al alta, no a la edición.** Cargar una venta escribe un dato que
+después hay que perseguir para corregir; guardar cambios sobre algo que ya
+existe queda en el historial y no necesita ceremonia.
 
-- **Radix portalea el `DialogContent` al `<body>`**, así que un
-  `<button type="submit">` de adentro queda fuera del `<form>` en el DOM y no envía
-  nada. Se resuelve con `id` en el `<form>` y el atributo `form="…"` en el botón,
-  que sí cruza el portal.
-- **Antes de abrir el diálogo**, `formRef.current.reportValidity()`: no tiene
-  sentido mostrar el resumen de un formulario incompleto.
-- El resumen se arma con `new FormData(formRef.current)` en el `onClick`, para no
-  tener que volver controlados los campos que hoy usan `defaultValue`. Sólo
-  `planId`, `nroSuscripcion` y `numeroTitulo` tienen estado, y es a propósito:
-  mueven el asterisco mientras se escribe (Fase 6).
+Tres cosas que hubo que hacer bien:
 
-Aplica al alta desde vendedor y desde admin. **En la edición no**: guardar cambios
-sobre algo que ya existe no es lo mismo que crear.
+- **Radix portalea el `DialogContent` al `<body>`**, así que el botón de
+  confirmar queda fuera del `<form>` en el DOM y un `type="submit"` a secas no
+  enviaría nada. Lo que lo ata al formulario es el atributo `form="…"`, que sí
+  cruza el portal. En el JSX el diálogo se renderiza **dentro** del `<form>`
+  igual, para que `useFormStatus` lo siga viendo por contexto y el botón pueda
+  decir "Guardando…".
+- **`reportValidity()` antes de abrir**: no tiene sentido resumir un formulario
+  incompleto. Para que eso alcance, "Nro Suscripción" y "Observación" ahora
+  llevan `required` **dinámico**, siguiendo la misma regla que ya movía el
+  asterisco. El servidor las valida igual: la pantalla no es la que manda.
+- **Si la acción vuelve con un error, el diálogo se cierra**, porque el aviso
+  aparece arriba del formulario y el cuadro lo estaría tapando. Se ajusta
+  durante el render y no en un `useEffect`: con un efecto sería un render
+  encadenado de más, y acá no hay ningún sistema externo que sincronizar.
 
 #### 11.2 El admin gana ficha, edición y anulación
 
-Hoy `app/admin/ventas/` tiene sólo el listado y el alta: no existe `[id]`, y
-`editarVenta` exige `requirePermiso("cargarVentas")` —que obliga rol VENDEDOR— y
-scopea por `vendedorId`. O sea que Balta carga una venta y después no la puede ni
-ver ni corregir.
+Balta cargaba una venta desde `/admin` y después no la podía ni ver: no existía
+`/admin/ventas/[id]`, y `editarVenta` exigía `requirePermiso("cargarVentas")`
+—que obliga rol VENDEDOR— y scopeaba por `vendedorId`.
 
-Lisandro pidió que **el vendedor conserve todo lo que ya tiene y el admin reciba lo
-mismo**:
-
-- Extraer el cuerpo de `editarVenta` a un helper con contexto, igual que se hizo en
-  la Fase 0 con `registrarVenta()` para el alta. Quedan `editarVenta` (vendedor,
-  scope por `vendedorId`) y `editarVentaComoAdmin` (admin, scope por `zonaId`),
-  compartiendo validación de adjuntos, diff y transacción.
-- `app/admin/ventas/[id]/page.tsx` y `app/admin/ventas/[id]/editar/page.tsx`,
-  copiadas de las del vendedor con el scope cambiado, reutilizando `venta-form.tsx`
-  con `comoAdmin`. El listado `/admin/ventas` gana el link a la ficha.
-- De paso: la edición busca el plan **sin** `activo: true` mientras que el alta sí
-  lo filtra. Se unifica.
-- **Anular** —hace falta para la Fase 12—: botón en la ficha con `Dialog` de
-  confirmación y motivo. Migración chica: `anuladaAt`, `anuladaPorUserId`,
-  `motivoAnulacion`. El enum `VentaEstado.ANULADA` ya existe y el listado del
-  vendedor ya lo dibuja atenuado; falta la acción que lo escriba y el mismo
-  tratamiento en el listado de admin.
-- **Supuesto**: anular es sólo del admin. Es destructivo, y el pedido de "mismas
-  opciones" era sobre editar (ver Pendientes).
+- **`aplicarEdicion` es un solo motor** y lo único que cambia es el alcance: el
+  vendedor toca las suyas (`vendedorId`), el admin las de la zona activa
+  (`zonaId`). Validación, diff del historial, adjuntos y transacción son los
+  mismos: Lisandro pidió que el admin tuviera **las mismas** opciones, no un
+  subconjunto parecido.
+- **Ficha y edición nuevas** en `/admin/ventas/[id]` y `/admin/ventas/[id]/editar`,
+  con el vendedor a la vista y link a su ficha. El listado gana el botón **Ver**
+  y la tarjeta del celular entera navega.
+- **El plan dado de baja se conserva pero no se ofrece.** Era la unificación que
+  pedía el plan —el alta filtraba por `activo` y la edición no—, resuelta en el
+  sentido que no rompe nada: sin eso, editar el teléfono de una venta vieja
+  obligaba a cambiarle el plan, porque el `<select>` no encontraba su valor y
+  aparecía vacío.
+- **Anular** pide un motivo escrito, marca la venta y **no borra nada**: sigue
+  en los dos listados —atenuada—, con sus adjuntos y su historial. **No toca
+  ninguna comisión**, porque el cálculo sale del padrón y no de `Venta`, y eso
+  se dice en el cuadro de confirmación. Una venta anulada no se edita: el botón
+  no aparece y la URL de edición rebota a la ficha.
+- **Reactivar no estaba en el pedido y se agregó igual.** Anular sin vuelta
+  atrás convierte un click equivocado en un dato irrecuperable, y el sistema ya
+  trata así a los períodos de comisión, que se cierran y se pueden reabrir. Al
+  reactivar se limpian `anuladaAt`, `anuladaPorUserId` y `motivoAnulacion`
+  —describen el estado actual, no el pasado—, y por eso el motivo se guarda
+  **además** en `VentaHistorial`: si no, una venta anulada y reactivada no
+  dejaría rastro de por qué se había anulado.
+- El vendedor también ve el aviso de anulada en su ficha, sin el botón de
+  editar y con la explicación de a quién pedirle que la reactive.
 
 #### 11.3 Foto del DNI: cámara o galería
 
-Hoy es un `<Input type="file">` con
-`accept="image/jpeg,image/png,image/webp,application/pdf"` y **sin `capture`** —el
-atributo no aparece en ningún archivo del proyecto—.
+`components/ventas/campo-foto.tsx`, que reemplaza a los dos `<input type="file">`
+del formulario.
 
-`components/ventas/campo-foto.tsx` nuevo, de cliente:
+- **Dos botones** —*Sacar foto* y *Elegir archivo*— sobre **un solo input**, al
+  que se le pone o se le saca `capture="environment"` con JS justo antes del
+  `.click()`. Dos inputs con el mismo `name` harían que el vacío pise al lleno
+  al enviar.
+- **Vista previa** con `URL.createObjectURL`, más *Quitar* y *Sacar otra*. Es lo
+  que hace que sirva desde la calle: una foto de un DNI sacada de apuro sale
+  movida la mitad de las veces, y sin verla eso no se descubre hasta que Balta
+  abre el adjunto una semana después.
+- No se vacía el input antes de abrir el selector —cancelar el diálogo dejaría
+  un formulario vacío que en pantalla se ve lleno— y el input no se esconde con
+  `display: none`. Las dos reglas ya estaban aprendidas en el selector del
+  padrón.
+- **`TIPOS_ADJUNTO_PERMITIDOS` no cambió, y esa es la conclusión de revisarlo.**
+  El plan sospechaba que había que agregar HEIC para las fotos del iPhone; es al
+  revés. Mientras el `accept` no mencione HEIC, iOS **transcodifica a JPEG** al
+  elegir la foto; agregarlo haría que mande el HEIC crudo, que Chrome en Windows
+  no puede mostrar, y Balta terminaría con fotos de DNI que no puede abrir. Lo
+  que sí se arregló es el mensaje: si igual llega un HEIC, la pantalla dice
+  cómo cambiar el formato en el teléfono en vez de un "tipo no permitido".
 
-- **Dos botones**: *Sacar foto* y *Elegir archivo*. Un solo `<input type="file">`
-  en el DOM —dos con el mismo `name` harían que el vacío pise al lleno— al que se
-  le pone o se le saca `capture="environment"` con JS justo antes del `.click()`.
-- Vista previa con `URL.createObjectURL` y un *Sacar otra*. Es lo que hace que
-  sirva desde la calle: poder ver la foto antes de guardarla.
-- En escritorio `capture` se ignora y los dos botones abren el mismo selector. Se
-  muestran igual: detectar si hay cámara es frágil y el costo de equivocarse es
-  peor que el de un botón de más.
-- Se usa también para el contrato: es el mismo componente.
-- **Revisar `TIPOS_ADJUNTO_PERMITIDOS` en `lib/archivos.ts`**: las fotos que salen
-  de la galería de un iPhone pueden ser HEIC, y hoy el servidor las rechazaría con
-  un error que no explica nada.
+De paso, se cerró el pendiente que dejó la Fase 10: en la card de documentación
+del cliente, el identificador de la venta **ahora sí linkea**, porque
+`/admin/ventas/[id]` existe.
+
+**Archivos**: `components/ventas/campo-foto.tsx` y
+`components/ventas/acciones-venta.tsx` (nuevos), `app/admin/ventas/[id]/page.tsx`
+y `app/admin/ventas/[id]/editar/page.tsx` (nuevas),
+`components/ventas/venta-form.tsx`, `app/vendedor/ventas/actions.ts`,
+`app/vendedor/ventas/[id]/page.tsx`, `app/vendedor/ventas/[id]/editar/page.tsx`,
+`app/admin/ventas/page.tsx`, `app/admin/ventas/nueva/page.tsx`,
+`components/clientes/documentacion-cliente.tsx`, `lib/validations/venta.ts`,
+`prisma/schema.prisma`.
+
+Verificado con Playwright contra el build de producción, **43 comprobaciones en
+escritorio y las mismas 43 en viewport de iPhone**: el resumen no se abre con el
+formulario incompleto, muestra lo que se va a guardar, "Revisar" no crea nada y
+"Confirmar" sí; la ficha de admin abre, la edición guarda y queda en el
+historial; anular sin motivo no anula, con motivo marca la venta, esconde el
+botón de editar, rebota la URL de edición y la muestra anulada en el listado;
+reactivar la devuelve y el historial conserva los dos movimientos; los dos
+botones de foto ponen y sacan `capture`, la vista previa aparece, "Quitar" vacía
+el input y el resumen nombra el adjunto. Ninguna de las cuatro pantallas se sale
+por el costado en el teléfono. Lint, **149 tests** y build pasan.
+
+**Un bug propio encontrado en el camino**: al hacer clickeable la tarjeta del
+listado quedó un `<a>` —el de "Ver DNI"— dentro de otro `<a>`, que es HTML
+inválido y rompía la hidratación de `/admin/ventas` en el celular. La tarjeta
+ahora dice "con foto del DNI" y el archivo se abre desde la ficha.
+
+**Lo único que no se pudo probar desde el navegador** es el lado del vendedor
+—su ficha con el aviso de anulada y su edición—, porque hace falta iniciar
+sesión con una cuenta de vendedor y sus contraseñas no están en el repositorio.
+El código es el mismo motor ya verificado desde admin, pero conviene que
+Lisandro lo mire con su cuenta: está anotado como paso 7 de la guía.
 
 ### ⬜ Fase 12 — Actividad: leads + ventas, filtrable por vendedor
 
@@ -2287,19 +2340,124 @@ vuelve solo con **Volver a tomar todo del padrón** más una reimportación de
 `padron-prueba-07-2026-12.xlsx`. Si algo quedó raro: **Laboratorio → Vaciar el
 padrón de SALTA** y volver a subir los 7.
 
-### Fases 11 y 12 — qué va a tener que demostrar cada una
+### Fase 11 — Ventas: confirmar, editar desde admin, foto con la cámara
 
-La guía completa de cada fase se escribe **cuando la fase se termina**, como
-siempre. Lo que sigue son los criterios de aceptación, anotados ahora para que no
-se negocien después.
+No hace falta preparar nada: alcanza con la base como está. Entrá como **admin**
+y elegí **Salta**.
 
-Escenario base para todas: los 7 padrones de `docs/padrones-prueba/` importados en
-Salta desde `/admin/laboratorio`, que es como quedó la base de desarrollo.
+**1. El resumen no aparece con el formulario incompleto**
 
-- **Fase 11** — apretar "Cargar venta" y ver el resumen **antes** de que se guarde
-  nada; cancelar y comprobar que no se creó. Editar una venta desde
-  `/admin/ventas/[id]`. Anularla y verla atenuada en los dos listados. Desde el
-  celular, sacar la foto del DNI con la cámara y ver la vista previa.
+`/admin/ventas` → **Cargar venta**. Sin llenar nada, apretá **Cargar venta**
+abajo. No se abre ningún cuadro: el navegador señala el primer campo que falta.
+Es a propósito — no tiene sentido resumir una venta incompleta.
+
+**2. El resumen antes de guardar** — *esto es lo nuevo*
+
+Completá: Vendedor (cualquiera), Plan (cualquiera), **Nro Suscripción**
+`998877`, **D.N.I** `99999911`, Nombre `PRUEBA FASE ONCE`, Calle
+`Calle Falsa 123`, Teléfono `0387 415-1234`, Observación `PRUEBA-F11 alta`.
+
+**Cargar venta** → se abre **¿Cargamos esta venta?** con vendedor, plan,
+cliente, DNI, teléfono, **Nro Suscripción 998877** y *"sin adjuntos"*. Fijate
+que muestra la suscripción y **no** un "Título" vacío: enseña el identificador
+que corresponde.
+
+Apretá **Revisar**: el cuadro se cierra y seguís en el formulario, con todo lo
+que escribiste. **No se guardó nada** — comprobalo yendo a `/admin/ventas`: la
+venta no está. Volvé, completá de nuevo y esta vez **Confirmar y cargar**.
+
+**3. La ficha de la venta, desde admin** — *esto es lo nuevo*
+
+En `/admin/ventas`, la fila de `PRUEBA FASE ONCE` ahora tiene botón **Ver** (en
+el celular, la tarjeta entera es el link). Entrá.
+
+Tiene que verse el cliente, el plan, el **vendedor** (con link a su ficha), la
+documentación y el **Historial de cambios**, que dice *"La venta no se editó
+desde que se cargó"*. Hasta ahora esta pantalla existía sólo para el vendedor.
+
+**4. Editar desde admin** — *esto es lo nuevo*
+
+**Editar** → cambiá el teléfono a `3875550011` → **Guardar cambios**. Volvés a
+la ficha y abajo el historial dice **Teléfono: 03874151234 → 3875550011**, con
+tu nombre y la hora. El admin edita exactamente los mismos campos que el
+vendedor: no se le recortó nada.
+
+**5. Anular** — *esto es lo nuevo*
+
+En la ficha, **Anular**. Leé el cuadro: dice que la venta no se borra y que **no
+cambia ninguna comisión** (esas salen del padrón, no de las ventas cargadas acá).
+
+Apretá **Anular la venta** sin escribir el motivo: no deja. Escribí
+`PRUEBA-F11 el cliente se arrepintió` y confirmá.
+
+La ficha muestra la franja **Venta anulada** con quién, cuándo y el motivo; el
+botón **Editar desaparece** y en su lugar hay **Reactivar**. En `/admin/ventas`
+la fila queda atenuada con la etiqueta **anulada**.
+
+Probá forzar la edición por URL: pegá `/admin/ventas/<id>/editar` en la barra de
+direcciones. Te devuelve a la ficha en vez de mostrarte un formulario que no
+podría guardar.
+
+**6. Reactivar** — *esto no estaba pedido, y va explicado abajo*
+
+**Reactivar** → confirmá. Vuelve a estar activa, el botón **Editar** regresa y
+la franja desaparece. En el historial quedan los dos movimientos:
+**Estado: activa → anulada** con el motivo, y **Estado: anulada → activa**.
+
+> Anular sin vuelta atrás convertía un click equivocado en un dato
+> irrecuperable. Es el mismo criterio que ya usan los períodos de comisión, que
+> se cierran y se pueden reabrir. Si preferís que no exista, se saca en una
+> línea.
+
+**7. Del lado del vendedor** — *este paso lo tenés que hacer vos*
+
+Es lo único que no pude probar solo: hace falta la contraseña de una cuenta de
+vendedor y no está en el repositorio.
+
+Entrá con una cuenta de vendedor y cargá una venta desde `/vendedor/ventas/nueva`
+(DNI `99999913`, nombre `PRUEBA FASE ONCE VENDEDOR`): tiene que aparecer el
+mismo resumen del paso 2, **sin** la fila de vendedor —carga siempre a su
+nombre—. Después, desde admin, anulá esa venta y volvé a mirarla como vendedor:
+su ficha muestra la franja **Venta anulada**, sin botón de editar y con la
+indicación de pedirle a Balta que la reactive.
+
+**8. La foto con la cámara — desde el celular** — *esto es lo nuevo*
+
+Con el teléfono, entrá a `/admin/ventas/nueva` y bajá hasta **Documentación**.
+Donde antes había un campo de archivo gris, ahora hay dos botones: **Sacar foto**
+y **Elegir archivo**.
+
+- **Sacar foto** abre la cámara directamente.
+- Sacada la foto, aparece la **miniatura** con el nombre del archivo, un
+  **Quitar** y los botones cambian a **Sacar otra** / **Elegir otro archivo**.
+- Apretá **Cargar venta**: el resumen tiene que decir **"foto del DNI"** en
+  Documentación.
+
+En la computadora los dos botones abren el mismo selector de archivos; es
+esperable, `capture` sólo significa algo en el teléfono.
+
+**9. El link que faltaba de la Fase 10**
+
+`/admin/clientes` → entrá a un cliente que tenga documentación cargada. Al pie
+de cada adjunto, **"Venta título …"** ahora es un link y lleva a la ficha de esa
+venta. Quedó pendiente en la Fase 10 porque `/admin/ventas/[id]` todavía no
+existía.
+
+**Borrar los datos de prueba**
+
+Las ventas quedaron con DNI `99999911` y `99999913`. Se pueden dejar anuladas,
+que es justamente lo que la fase agrega; si las querés borradas del todo,
+pedímelo y las saco por script.
+
+### Fase 12 — qué va a tener que demostrar
+
+La guía completa se escribe **cuando la fase se termina**, como siempre. Lo que
+sigue son los criterios de aceptación, anotados de antemano para que no se
+negocien después.
+
+Escenario base: los 7 padrones de `docs/padrones-prueba/` importados en Salta
+desde `/admin/laboratorio`, que es como quedó la base de desarrollo.
+
 - **Fase 12** — con todo lo anterior hecho, `/admin/actividad` muestra el alta, la
   edición y la anulación de esa venta, más la corrección del cliente, además de los
   movimientos de leads que ya había. Filtrar por el vendedor de prueba deja sólo
@@ -2307,18 +2465,16 @@ Salta desde `/admin/laboratorio`, que es como quedó la base de desarrollo.
   migración: eso es lo que hay que mirar primero.
 
 Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
-`npm run build`. La fase 10 toca la importación, así que suma
-`npx tsx scripts/verificar-padron.ts "docs/Padron-siscaho-tucu-167-010626.xls" --limpiar`
-y hay que vaciar la zona después: ese script mete datos reales de miles de clientes
-en la base de desarrollo.
+`npm run build`.
 
 ---
 
 ## Contexto para la próxima sesión
 
 **Dónde retomar:** Lisandro validó la Fase 10 el 01/09/2026 (las 6 a 9, el
-28/08). Las fases 0 a 10 están cerradas; la próxima sesión arranca por la
-**Fase 11**.
+28/08). Las fases 0 a 10 están cerradas y la **Fase 11 está construida**,
+esperando validación. La próxima sesión arranca por la **Fase 12**, que es la
+última del plan.
 
 **El plan ya no termina en la Fase 6.** El 27/08/2026 Lisandro trajo una segunda
 tanda de pedidos y quedaron planificadas las **fases 7 a 12**.
@@ -2330,6 +2486,27 @@ reproducible en media hora si hace falta volver, pero no quedó en el repositori
 para dejarlo había que versionar la clave privada de un certificado autofirmado.
 La receta está en la guía de prueba de la fase.
 
+De la Fase 11, cuatro cosas que valen para la Fase 12:
+
+- **`Venta` ya tiene anulación** (`anuladaAt`, `anuladaPorUserId`,
+  `motivoAnulacion`) y las tres acciones que la Actividad tiene que registrar
+  existen: `registrarVenta`, `aplicarEdicion` y `anularVenta` —más
+  `reactivarVenta`, que la Fase 12 no tenía previsto y conviene registrar
+  también, o el feed va a mostrar anulaciones que después no se entiende por
+  qué desaparecieron—.
+- **El diff de la edición ya está armado** dentro de `aplicarEdicion`, con el
+  mismo formato que espera `VentaHistorial`. La `Actividad` puede guardar una
+  copia de ese mismo objeto sin recalcular nada, y la escritura va **dentro de
+  la transacción que ya está abierta ahí**.
+- **Anular y reactivar escriben en `VentaHistorial` con un campo que no es del
+  formulario** (`estado`, y `motivoAnulacion` al anular). `ETIQUETA_CAMPO` ya
+  los contempla, así que el render compartido que la Fase 12 va a extraer de
+  `historial-venta.tsx` los muestra sin tocar nada.
+- **Ojo con los `<a>` anidados** al hacer clickeables las tarjetas del celular:
+  el listado de ventas tenía el link del DNI adentro del link de la tarjeta y
+  eso rompía la hidratación de toda la pantalla. La Fase 12 agrega tarjetas al
+  feed de actividad, que es el mismo patrón.
+
 De la Fase 10, tres cosas que valen para lo que viene:
 
 - **El padrón ya no escribe los seis campos personales juntos.** Los que el
@@ -2340,10 +2517,8 @@ De la Fase 10, tres cosas que valen para lo que viene:
 - **`Cliente.editadoPorUserId` y `editadoAt` ya existen**, y son lo que la
   Fase 12 necesita para registrar `CLIENTE_EDICION` en la Actividad.
 - **La documentación del cliente se busca por DNI.** `Venta` no tiene FK a
-  `Cliente` y `Venta.tituloId` no lo escribe nadie. En la card, el
-  identificador de la venta **no linkea** porque `/admin/ventas/[id]` todavía
-  no existe: cuando la Fase 11 la cree, hay que agregar el link en
-  `components/clientes/documentacion-cliente.tsx`.
+  `Cliente` y `Venta.tituloId` no lo escribe nadie. El identificador de la
+  venta ya linkea a `/admin/ventas/[id]`, que creó la Fase 11.
 
 De la Fase 9, tres cosas que valen para lo que viene:
 
@@ -2396,10 +2571,11 @@ Lo que queda abierto después de las fases 6 y 7:
   pierde al recargar (y un hot-reload lo borra). Si hace falta volver a definir
   campos con Balta, conviene primero agregarle persistencia o pedirle una
   captura antes de tocar el archivo.
-- **La ficha de una venta es sólo para vendedores** (`/vendedor/ventas/[id]`);
-  desde `/admin` se ve el listado pero no la ficha. Para revisarla como admin
-  hay que crear una cuenta de vendedor y engancharla a la ficha del vendedor
-  dueño de la venta.
+- ~~**La ficha de una venta es sólo para vendedores.**~~ Desde la Fase 11 hay
+  ficha y edición en `/admin/ventas/[id]`, con el alcance puesto en la zona
+  activa. Lo que sigue siendo cierto es lo inverso: **probar el lado del
+  vendedor necesita una cuenta de vendedor**, y sus contraseñas no están en el
+  repositorio.
 - **`prisma generate` no le llega al `next dev` que ya está corriendo.**
   `lib/db.ts` guarda el cliente en `globalThis` para sobrevivir al hot-reload,
   así que después de una migración hay que reiniciar el servidor o levantar uno
@@ -2533,6 +2709,10 @@ corregir después si Balta dice otra cosa.
 6. **El código de agente, ¿es uno por persona o uno por zona?** Se implementa como
    uno por persona (`User.codigoAgente`). Si fuera por zona, el lugar natural sería
    `Vendedor.codigo`, que ya lo es. — Fase 8.
-7. **¿Quién puede anular una venta?** Se implementa como acción sólo del admin,
+7. **¿Quién puede anular una venta?** Implementado como acción sólo del admin,
    porque es destructiva. El pedido de "las mismas opciones para los dos" era sobre
    editar. — Fase 11.
+8. **¿Se puede reactivar una venta anulada?** No estaba pedido y se implementó
+   igual: anular sin vuelta atrás convierte un click equivocado en un dato
+   irrecuperable, y el sistema ya trata así a los períodos de comisión. Si Balta
+   prefiere que anular sea definitivo, se saca en una línea. — Fase 11.

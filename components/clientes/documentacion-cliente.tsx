@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { FileText, IdCard } from "lucide-react";
 import {
   Card,
@@ -96,12 +97,13 @@ export function DocumentacionCliente({ adjuntos }: { adjuntos: AdjuntoDeCliente[
                       </span>
                     </span>
                   </a>
-                  {/* El identificador de la venta no linkea: la ficha de una
-                      venta hoy es solo del vendedor (`/vendedor/ventas/[id]`) y
-                      un admin que entre ahi se va rebotado al dashboard. La
-                      ficha de admin llega en la Fase 11. */}
                   <p className="border-t px-3 py-2 text-xs text-muted-foreground">
-                    Venta {adjunto.venta.identificador}
+                    <Link
+                      href={`/admin/ventas/${adjunto.venta.id}`}
+                      className="underline underline-offset-2"
+                    >
+                      Venta {adjunto.venta.identificador}
+                    </Link>
                   </p>
                 </li>
               );

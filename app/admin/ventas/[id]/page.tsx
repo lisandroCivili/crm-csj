@@ -2,8 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Ban, FileText, IdCard, Pencil } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AnularVenta, ReactivarVenta } from "@/components/ventas/acciones-venta";
 import { HistorialVenta } from "@/components/ventas/historial-venta";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,7 +15,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { db } from "@/lib/db";
-import { requirePermiso } from "@/lib/sesion";
+import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
 const FECHA = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
 const FECHA_HORA = new Intl.DateTimeFormat("es-AR", {
@@ -33,16 +34,26 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode })
   );
 }
 
-export default async function DetalleVentaPage({ params }: PageProps<"/vendedor/ventas/[id]">) {
-  const usuario = await requirePermiso("cargarVentas");
+/**
+ * La ficha de la venta para el admin. Es la misma que ve el vendedor, con el
+ * alcance cambiado —cualquier venta de la zona activa, no solo las propias— y
+ * dos cosas que son suyas: el vendedor a nombre de quien quedo, y anular.
+ */
+export default async function DetalleVentaAdminPage({
+  params,
+}: PageProps<"/admin/ventas/[id]">) {
+  await requireAdmin();
+  const zonaId = await requireZonaActivaId();
   const { id } = await params;
 
   const venta = await db.venta.findFirst({
-    where: { id, vendedorId: usuario.vendedorId },
+    where: { id, zonaId },
     include: {
+      vendedor: { select: { id: true, nombreCompleto: true, codigo: true } },
       plan: { select: { nombre: true, duracionMeses: true } },
-      titulo: { select: { numTit: true } },
+      titulo: { select: { id: true, numTit: true } },
       lead: { select: { id: true, nombre: true } },
+      anuladaPor: { select: { nombre: true } },
       adjuntos: { orderBy: { createdAt: "desc" } },
       historial: {
         orderBy: { createdAt: "desc" },
@@ -60,26 +71,31 @@ export default async function DetalleVentaPage({ params }: PageProps<"/vendedor/
   return (
     <>
       <Button variant="ghost" size="sm" asChild className="mb-2 -ml-2">
-        <Link href="/vendedor/ventas">
+        <Link href="/admin/ventas">
           <ArrowLeft className="size-4" />
-          Mis ventas
+          Ventas
         </Link>
       </Button>
 
       <PageHeader
         titulo={venta.nombreCliente}
-        descripcion={`DNI ${venta.dni} · ${FECHA.format(venta.fechaVenta)}`}
+        descripcion={`DNI ${venta.dni} · ${FECHA.format(venta.fechaVenta)} · ${venta.vendedor.nombreCompleto}`}
         acciones={
-          // Una venta anulada no se edita: el boton no esta para que nadie
-          // llegue a una pantalla que lo va a devolver.
-          anulada ? null : (
-            <Button variant="outline" asChild>
-              <Link href={`/vendedor/ventas/${venta.id}/editar`}>
-                <Pencil className="size-4" />
-                Editar
-              </Link>
-            </Button>
-          )
+          <div className="flex flex-wrap gap-2">
+            {anulada ? (
+              <ReactivarVenta ventaId={venta.id} />
+            ) : (
+              <>
+                <Button variant="outline" asChild>
+                  <Link href={`/admin/ventas/${venta.id}/editar`}>
+                    <Pencil className="size-4" />
+                    Editar
+                  </Link>
+                </Button>
+                <AnularVenta ventaId={venta.id} />
+              </>
+            )}
+          </div>
         }
       />
 
@@ -89,12 +105,13 @@ export default async function DetalleVentaPage({ params }: PageProps<"/vendedor/
           <AlertTitle>Venta anulada</AlertTitle>
           <AlertDescription>
             <span>
-              Se anuló
+              {venta.anuladaPor?.nombre ?? "Alguien"} la anuló
               {venta.anuladaAt ? ` el ${FECHA_HORA.format(venta.anuladaAt)}` : ""}
               {venta.motivoAnulacion ? `: ${venta.motivoAnulacion}` : "."}
             </span>
             <span className="text-muted-foreground">
-              No se puede editar. Si es un error, pedile a Balta que la reactive.
+              No se puede editar hasta que se reactive. Las comisiones no cambian: salen
+              del padrón, no de las ventas cargadas acá.
             </span>
           </AlertDescription>
         </Alert>
@@ -117,6 +134,17 @@ export default async function DetalleVentaPage({ params }: PageProps<"/vendedor/
               {venta.provincia ? (
                 <Dato etiqueta="Provincia" valor={venta.provincia} />
               ) : null}
+              <Dato
+                etiqueta="Vendedor"
+                valor={
+                  <Link
+                    href={`/admin/vendedores/${venta.vendedor.id}`}
+                    className="underline underline-offset-2"
+                  >
+                    {venta.vendedor.nombreCompleto}
+                  </Link>
+                }
+              />
             </dl>
           </CardContent>
         </Card>
@@ -172,7 +200,7 @@ export default async function DetalleVentaPage({ params }: PageProps<"/vendedor/
                   etiqueta="Lead de origen"
                   valor={
                     <Link
-                      href={`/vendedor/leads/${venta.lead.id}`}
+                      href={`/admin/leads/${venta.lead.id}`}
                       className="underline underline-offset-2"
                     >
                       {venta.lead.nombre}
@@ -211,8 +239,6 @@ export default async function DetalleVentaPage({ params }: PageProps<"/vendedor/
                 </a>
               </Button>
             ) : (
-              // La foto dejo de ser obligatoria para cargar la venta, asi que
-              // esto ya no es un error: es un pendiente.
               <Badge variant="outline" className="text-amber-700 dark:text-amber-500">
                 sin foto del DNI todavía
               </Badge>
