@@ -75,7 +75,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 8 | Tres arreglos chicos (toast · editar plan · código de agente) | ✅ commit `24e8013` |
 | 9 | Padrón: varios archivos y selector nuevo | ✅ commit `96f7c45` |
 | 10 | Clientes: corregir datos y ver la documentación | ✅ commit `351e633` |
-| 11 | Ventas: confirmar, editar desde admin, foto con la cámara | 🔨 |
+| 11 | Ventas: confirmar, editar desde admin, foto con la cámara | 🔨 commit `aa06212` |
 | 12 | Actividad: leads + ventas, filtrable por vendedor | ⬜ |
 
 Dependencias:
@@ -1035,7 +1035,7 @@ build pasan; ninguna de las dos pantallas se sale por el costado en el teléfono
 
 ### 🔨 Fase 11 — Ventas: confirmar, editar desde admin, foto con la cámara
 
-Migración `20260901225241_anulacion_venta`.
+Commit `aa06212`. Migración `20260901225241_anulacion_venta`.
 
 #### 11.1 Confirmación al crear
 
