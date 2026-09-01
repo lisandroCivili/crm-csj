@@ -74,7 +74,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 7 | Que el CRM funcione desde el celular | ✅ commit `84db215` |
 | 8 | Tres arreglos chicos (toast · editar plan · código de agente) | ✅ commit `24e8013` |
 | 9 | Padrón: varios archivos y selector nuevo | ✅ commit `96f7c45` |
-| 10 | Clientes: corregir datos y ver la documentación | 🔨 commit `351e633` |
+| 10 | Clientes: corregir datos y ver la documentación | ✅ commit `351e633` |
 | 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ⬜ |
 | 12 | Actividad: leads + ventas, filtrable por vendedor | ⬜ |
 
@@ -943,7 +943,7 @@ se pide una vez para los dos archivos que la necesitaban, y Cancelar borra los
 dos temporales que había creado. Lint, 134 tests y build pasan; ninguna pantalla
 se sale por el costado en el teléfono.
 
-### 🔨 Fase 10 — Clientes: corregir los datos y ver la documentación
+### ✅ Fase 10 — Clientes: corregir los datos y ver la documentación
 
 Commit `351e633`. Migración `20260828231830_campos_manuales_cliente`.
 
@@ -2316,9 +2316,9 @@ en la base de desarrollo.
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Lisandro validó las fases 6, 7, 8 y 9 el 28/08/2026. Las
-fases 0 a 9 están cerradas. La **Fase 10 está construida** y espera validación;
-la próxima sesión arranca por la **Fase 11**.
+**Dónde retomar:** Lisandro validó la Fase 10 el 01/09/2026 (las 6 a 9, el
+28/08). Las fases 0 a 10 están cerradas; la próxima sesión arranca por la
+**Fase 11**.
 
 **El plan ya no termina en la Fase 6.** El 27/08/2026 Lisandro trajo una segunda
 tanda de pedidos y quedaron planificadas las **fases 7 a 12**.
