@@ -75,7 +75,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 8 | Tres arreglos chicos (toast · editar plan · código de agente) | ✅ commit `24e8013` |
 | 9 | Padrón: varios archivos y selector nuevo | ✅ commit `96f7c45` |
 | 10 | Clientes: corregir datos y ver la documentación | ✅ commit `351e633` |
-| 11 | Ventas: confirmar, editar desde admin, foto con la cámara | 🔨 commit `aa06212` |
+| 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ✅ commit `aa06212` |
 | 12 | Actividad: leads + ventas, filtrable por vendedor | ⬜ |
 
 Dependencias:
@@ -1033,7 +1033,7 @@ comisiones **$105.000 / $38.000**, agente **$564.000** con margen **$421.000**,
 1 caído y 1 renovación — los mismos números de siempre. Lint, **149 tests** y
 build pasan; ninguna de las dos pantallas se sale por el costado en el teléfono.
 
-### 🔨 Fase 11 — Ventas: confirmar, editar desde admin, foto con la cámara
+### ✅ Fase 11 — Ventas: confirmar, editar desde admin, foto con la cámara
 
 Commit `aa06212`. Migración `20260901225241_anulacion_venta`.
 
