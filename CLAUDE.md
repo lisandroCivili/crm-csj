@@ -302,6 +302,45 @@ endpoint y se puede mandar sin pasar por el navegador.
   ofrece pero se conserva**: corregir un teléfono no tiene por qué obligar a
   cambiarle el plan a una venta vieja.
 
+## Actividad
+
+El feed de `/admin/actividad`: todo lo que pasa en la zona, filtrable por vendedor. Era
+`LeadActividad` y sólo registraba leads; ahora es `Actividad` y registra también las ventas
+—alta, edición, anulación y reactivación— y las correcciones de datos del cliente.
+
+- **`vendedorId` y `actorUserId` no son lo mismo, y confundirlos es el error fácil.** El
+  vendedor es **a nombre de quien queda** el movimiento —es el eje del filtro— y el actor es
+  **quién apretó el botón**. Cuando Balta carga una venta a nombre de Nancy, el filtro tiene
+  que traerla por Nancy y la pantalla mostrar que la cargó Balta.
+- **Se escribe dentro de la transacción que la acción ya tiene abierta**, con
+  `registrarActividad(tx, …)` (`lib/actividad/registrar.ts`). Si la venta se guarda y la
+  actividad no, el feed miente; al revés es peor. La asignación masiva de leads es la
+  excepción y usa `datosActividad()` con un `createMany`: asignar doscientos leads con
+  doscientos `create` son doscientos viajes a la base.
+- **`Actividad.cambios` es una copia de `VentaHistorial.cambios`**, escrita en la misma
+  transacción. Es duplicación deliberada: sin ella el feed tendría que hacer un join distinto
+  por cada tipo de evento para dibujar un renglón. `VentaHistorial` se conserva porque es el
+  detalle que muestra la ficha de la venta, y las dos pantallas dibujan el diff con el mismo
+  componente (`components/actividad/lista-cambios.tsx`).
+- **La reactivación también se registra**, aunque no estaba prevista: sin ella el feed muestra
+  anulaciones de ventas que después aparecen activas y no se entiende por qué.
+- **Subir un adjunto al editar es una edición.** Antes no dejaba rastro en ningún lado, y la
+  foto del DNI se sube justamente después —es opcional para poder cargar la venta desde la
+  calle—, así que era el caso más común el que no se registraba. Entra al diff como
+  `adjuntoDni` / `adjuntoContrato`, que no son columnas de `Venta`: por eso el `update` de la
+  venta se decide con su propio flag y no con "hay cambios".
+- **El id de vendedor que llega por query se valida contra los de la zona.** Uno de la otra
+  zona no filtraría nada: mostraría el feed entero y haría creer que ese vendedor movió todo.
+- **Los chips agrupan por familia** (Leads · Ventas · Clientes) y no uno por tipo. Con siete
+  tipos la fila ocupaba tres renglones en el celular, y nadie filtra "sólo reactivaciones".
+- **No hay ficha de lead en `/admin`**: el renglón de un lead linkea a `/admin/leads?q=<nombre>`,
+  que es lo más cerca que se llega.
+- La migración `20260902141500_actividad_unificada` está **escrita a mano**: Prisma resolvería
+  el renombre como DROP + CREATE y se perdería el histórico. El enum se convierte con un CAST
+  (`'LEAD_' || tipo`) en vez de renombrar valores y agregar los que faltan, porque
+  `ALTER TYPE … ADD VALUE` no se puede usar en la misma transacción que lo agrega y las
+  migraciones de Prisma corren en una.
+
 ## Formularios y avisos
 
 Dos trampas que ya costaron un rato cada una y no se ven leyendo el código.

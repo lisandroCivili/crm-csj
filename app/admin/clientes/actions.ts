@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { registrarActividad } from "@/lib/actividad/registrar";
 import { db } from "@/lib/db";
 import { CAMPOS_PERSONALES } from "@/lib/padron/camposCliente";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
@@ -52,18 +53,41 @@ export async function editarCliente(
 
   const manuales = [...new Set([...actual.camposManuales, ...cambiados])];
 
-  await db.cliente.update({
-    where: { id },
-    data: {
-      ...parsed.data,
-      camposManuales: manuales,
-      editadoPorUserId: usuario.id,
-      editadoAt: new Date(),
-    },
+  // El mismo diff { campo: { antes, despues } } que guarda la venta, para que
+  // el feed lo dibuje con el mismo componente.
+  const cambios = Object.fromEntries(
+    cambiados.map((campo) => [
+      campo,
+      { antes: actual[campo] ?? null, despues: parsed.data[campo] ?? null },
+    ])
+  );
+
+  await db.$transaction(async (tx) => {
+    await tx.cliente.update({
+      where: { id },
+      data: {
+        ...parsed.data,
+        camposManuales: manuales,
+        editadoPorUserId: usuario.id,
+        editadoAt: new Date(),
+      },
+    });
+
+    // Sin vendedor: corregir los datos de un cliente es del admin, y no queda
+    // a nombre de nadie del equipo de venta.
+    await registrarActividad(tx, {
+      tipo: "CLIENTE_EDICION",
+      zonaId,
+      clienteId: id,
+      detalle: actual.nombre,
+      cambios,
+      actorUserId: usuario.id,
+    });
   });
 
   revalidatePath("/admin/clientes");
   revalidatePath(`/admin/clientes/${id}`);
+  revalidatePath("/admin/actividad");
   redirect(`/admin/clientes/${id}`);
 }
 

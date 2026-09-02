@@ -38,9 +38,20 @@ enum LeadEstado {
   DEVOLUCION
 }
 
-enum LeadActividadTipo {
-  ASIGNACION
-  CAMBIO_ESTADO
+/// Que registra el feed de Actividad. Los dos primeros son los que ya existian
+/// como `LeadActividadTipo` (ASIGNACION / CAMBIO_ESTADO), renombrados con
+/// prefijo ahora que el mismo log guarda tambien movimientos de venta y de
+/// cliente.
+enum ActividadTipo {
+  LEAD_ASIGNACION
+  LEAD_CAMBIO_ESTADO
+  VENTA_ALTA
+  VENTA_EDICION
+  VENTA_ANULACION
+  /// La vuelta atras de una anulacion. Sin este tipo el feed mostraria
+  /// anulaciones de ventas que despues aparecen activas, sin explicar por que.
+  VENTA_REACTIVACION
+  CLIENTE_EDICION
 }
 
 enum VentaEstado {
@@ -100,6 +111,7 @@ model Zona {
   comisiones       ComisionPeriodo[]
   escalaAgente     EscalaAgente[]
   comisionesAgente ComisionAgentePeriodo[]
+  actividades      Actividad[]
 
   @@map("zonas")
 }
@@ -130,7 +142,7 @@ model User {
 
   padronImports     PadronImport[]
   leadImports       LeadImport[]
-  leadActividades   LeadActividad[]
+  actividades       Actividad[]
   adjuntosSubidos   VentaAdjunto[]
   historialesVentas VentaHistorial[]
   clientesEditados  Cliente[]
@@ -190,11 +202,12 @@ model Vendedor {
   userId String?
   user   User?   @relation(fields: [userId], references: [id])
 
-  alias      VendedorAlias[]
-  titulos    Titulo[]
-  leads      Lead[]
-  ventas     Venta[]
-  comisiones ComisionPeriodo[]
+  alias       VendedorAlias[]
+  titulos     Titulo[]
+  leads       Lead[]
+  ventas      Venta[]
+  comisiones  ComisionPeriodo[]
+  actividades Actividad[]
 
   @@unique([zonaId, codigo])
   @@unique([zonaId, dni])
@@ -297,7 +310,8 @@ model Cliente {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  titulos Titulo[]
+  titulos     Titulo[]
+  actividades Actividad[]
 
   @@unique([zonaId, dni])
   @@index([zonaId])
@@ -463,7 +477,7 @@ model Lead {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  actividades LeadActividad[]
+  actividades Actividad[]
   ventas      Venta[]
 
   @@index([zonaId, estado])
@@ -471,26 +485,59 @@ model Lead {
   @@map("leads")
 }
 
-/// Log de asignaciones y cambios de estado. Los admins tienen que poder ver
-/// todo lo que hacen los vendedores sobre sus leads.
-model LeadActividad {
-  id     String            @id @default(cuid())
-  leadId String
-  lead   Lead              @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  tipo   LeadActividadTipo
+/// El log de todo lo que pasa en la zona: leads, ventas y correcciones de
+/// cliente. Era `LeadActividad` y solo guardaba leads; se renombro conservando
+/// el historico, porque los admins tienen que poder ver todo lo que hacen los
+/// vendedores y no nada mas lo que hacen con sus leads.
+///
+/// `vendedorId` y `actorUserId` NO son lo mismo, y confundirlos es el error
+/// facil de este modelo: el vendedor es a nombre de quien queda el movimiento
+/// —el eje del filtro de la pantalla—, el actor es quien apreto el boton.
+/// Cuando Balta carga una venta a nombre de Nancy, el filtro tiene que traerla
+/// por Nancy y la pantalla mostrar que la cargo Balta.
+model Actividad {
+  id   String        @id @default(cuid())
+  tipo ActividadTipo
+
+  /// Propio y no derivado del lead: una actividad de venta no tiene lead del
+  /// cual sacar la zona.
+  zonaId Int
+  zona   Zona @relation(fields: [zonaId], references: [id])
+
+  /// A nombre de quien queda. Para un lead, el vendedor asignado; para una
+  /// venta, el suyo; para una correccion de cliente, ninguno.
+  vendedorId String?
+  vendedor   Vendedor? @relation(fields: [vendedorId], references: [id])
+
+  /// Los tres opcionales: cada actividad cuelga de uno solo.
+  leadId    String?
+  lead      Lead?    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  ventaId   String?
+  venta     Venta?   @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  clienteId String?
+  cliente   Cliente? @relation(fields: [clienteId], references: [id], onDelete: Cascade)
 
   estadoAnterior LeadEstado?
   estadoNuevo    LeadEstado?
   detalle        String?
+
+  /// Copia del diff { campo: { antes, despues } }, con el mismo formato que
+  /// `VentaHistorial.cambios`. Es duplicacion deliberada: el feed mezcla seis
+  /// tipos de evento y sin esto tendria que hacer un join distinto por tipo
+  /// para mostrar un renglon. Se escribe en la misma transaccion.
+  cambios Json?
 
   actorUserId String?
   actor       User?   @relation(fields: [actorUserId], references: [id])
 
   createdAt DateTime @default(now())
 
+  @@index([zonaId, createdAt])
+  @@index([vendedorId, createdAt])
   @@index([leadId])
-  @@index([createdAt])
-  @@map("lead_actividades")
+  @@index([ventaId])
+  @@index([clienteId])
+  @@map("actividades")
 }
 
 // ---------------------------------------------------------------------------
@@ -594,6 +641,7 @@ model Venta {
   adjuntos         VentaAdjunto[]
   historial        VentaHistorial[]
   comisionDetalles ComisionDetalle[]
+  actividades      Actividad[]
 
   @@index([vendedorId])
   @@index([zonaId])

@@ -63,6 +63,12 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
   errores" (el estado inicial `{}` no tiene errores). Un toast en un `useEffect` no se ve si
   el formulario desaparece al revalidar. Los duplicados de Prisma se leen con
   `camposDuplicados()`, que ya contempla que `meta.target` no venga con el driver adapter.
+- **Actividad**: `vendedorId` es a nombre de quien queda el movimiento y `actorUserId` es
+  quien apretó el botón; el filtro va por el primero y la pantalla muestra los dos. Se escribe
+  **dentro de la transacción que la acción ya tiene abierta**, con `registrarActividad(tx, …)`.
+  `Actividad.cambios` duplica a propósito el diff de `VentaHistorial`, y las dos pantallas lo
+  dibujan con el mismo componente. El id de vendedor que llega por query se valida contra los
+  de la zona: uno ajeno mostraría el feed entero como si fuera suyo.
 - **Datos sensibles**: padrones reales y fotos de DNI no se versionan ni se sirven por URL pública.
 - **Sesión**: el rol, el estado de la cuenta y los permisos se leen de la base en cada request
   (`getUsuarioActual`), nunca de los claims del JWT. Sacar a alguien del sistema se hace por

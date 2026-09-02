@@ -152,6 +152,9 @@ export const ETIQUETA_CAMPO: Record<string, string> = {
   // No se editan desde el formulario: los escribe anular o reactivar.
   estado: "Estado",
   motivoAnulacion: "Motivo de la anulación",
+  // Tampoco son campos: son los adjuntos que se suben al editar.
+  adjuntoDni: "Foto del DNI",
+  adjuntoContrato: "Contrato",
   // Salieron del formulario, pero las ventas viejas los tienen en el historial.
   localidad: "Localidad",
   provincia: "Provincia",

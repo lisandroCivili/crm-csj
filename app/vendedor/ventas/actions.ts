@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { registrarActividad } from "@/lib/actividad/registrar";
 import {
   TAMANIO_MAXIMO_ADJUNTO,
   TIPOS_ADJUNTO_PERMITIDOS,
@@ -125,6 +126,17 @@ async function registrarVenta(
         select: { id: true },
       });
 
+      await registrarActividad(tx, {
+        tipo: "VENTA_ALTA",
+        zonaId: ctx.zonaId,
+        // A nombre del vendedor, no de quien la carga: cuando Balta carga una
+        // venta ajena, el filtro tiene que traerla por el vendedor.
+        vendedorId: ctx.vendedorId,
+        ventaId: creada.id,
+        detalle: `${parsed.data.nombreCliente} · ${plan.codigoProducto}`,
+        actorUserId: ctx.userId,
+      });
+
       if (rutaDni && dni.archivo) {
         await tx.ventaAdjunto.create({
           data: {
@@ -159,15 +171,15 @@ async function registrarVenta(
         });
         if (lead && lead.estado !== "VENDIDO") {
           await tx.lead.update({ where: { id: lead.id }, data: { estado: "VENDIDO" } });
-          await tx.leadActividad.create({
-            data: {
-              leadId: lead.id,
-              tipo: "CAMBIO_ESTADO",
-              estadoAnterior: lead.estado,
-              estadoNuevo: "VENDIDO",
-              detalle: "Se cargó la venta",
-              actorUserId: ctx.userId,
-            },
+          await registrarActividad(tx, {
+            tipo: "LEAD_CAMBIO_ESTADO",
+            zonaId: ctx.zonaId,
+            vendedorId: ctx.vendedorId,
+            leadId: lead.id,
+            estadoAnterior: lead.estado,
+            estadoNuevo: "VENDIDO",
+            detalle: "Se cargó la venta",
+            actorUserId: ctx.userId,
           });
         }
       }
@@ -184,6 +196,7 @@ async function registrarVenta(
 
   revalidatePath("/vendedor/ventas");
   revalidatePath("/admin/ventas");
+  revalidatePath("/admin/actividad");
   // Fuera del try: redirect() se implementa lanzando, y adentro se confundiria
   // con un fallo y borraria los adjuntos recien guardados.
   redirect(ctx.destino(ventaId));
@@ -272,12 +285,14 @@ const aValor = (valor: unknown): ValorHistorial =>
       ? valor
       : String(valor);
 
-/** Las cuatro pantallas que muestran una venta, tras tocarla. */
+/** Las pantallas que muestran una venta, tras tocarla. */
 function revalidarVenta(id: string) {
   revalidatePath("/vendedor/ventas");
   revalidatePath(`/vendedor/ventas/${id}`);
   revalidatePath("/admin/ventas");
   revalidatePath(`/admin/ventas/${id}`);
+  // Editar, anular y reactivar entran al feed de Actividad.
+  revalidatePath("/admin/actividad");
 }
 
 async function aplicarEdicion(
@@ -344,7 +359,22 @@ async function aplicarEdicion(
   if (dni.archivo) nuevosAdjuntos.push({ tipo: "DNI", archivo: dni.archivo });
   if (contrato.archivo) nuevosAdjuntos.push({ tipo: "CONTRATO", archivo: contrato.archivo });
 
-  if (Object.keys(cambios).length === 0 && nuevosAdjuntos.length === 0) {
+  // Solo estos hacen falta para el `update`; los adjuntos que siguen entran al
+  // diff pero no son columnas de la venta.
+  const hayCamposCambiados = Object.keys(cambios).length > 0;
+
+  // Subir la foto del DNI una semana despues es la edicion mas comun que hay
+  // —la foto es opcional justamente para poder cargar la venta desde la calle—
+  // y sin esto no dejaba rastro en ningun lado: ni en el historial de la ficha
+  // ni en el feed.
+  for (const { tipo } of nuevosAdjuntos) {
+    cambios[tipo === "DNI" ? "adjuntoDni" : "adjuntoContrato"] = {
+      antes: null,
+      despues: "archivo adjuntado",
+    };
+  }
+
+  if (!hayCamposCambiados && nuevosAdjuntos.length === 0) {
     redirect(ctx.destino(venta.id));
   }
 
@@ -359,12 +389,26 @@ async function aplicarEdicion(
     );
 
     await db.$transaction(async (tx) => {
-      if (Object.keys(cambios).length > 0) {
+      if (hayCamposCambiados) {
         await tx.venta.update({ where: { id: venta.id }, data: nuevos });
-        await tx.ventaHistorial.create({
-          data: { ventaId: venta.id, cambios, modificadoPorUserId: ctx.userId },
-        });
       }
+
+      await tx.ventaHistorial.create({
+        data: { ventaId: venta.id, cambios, modificadoPorUserId: ctx.userId },
+      });
+
+      // La misma copia del diff en el feed. Es duplicacion deliberada: sin
+      // ella la Actividad tendria que hacer un join distinto por cada tipo de
+      // evento para dibujar un renglon.
+      await registrarActividad(tx, {
+        tipo: "VENTA_EDICION",
+        zonaId: venta.zonaId,
+        vendedorId: venta.vendedorId,
+        ventaId: venta.id,
+        detalle: venta.nombreCliente,
+        cambios,
+        actorUserId: ctx.userId,
+      });
 
       for (const adjunto of guardados) {
         await tx.ventaAdjunto.create({
@@ -446,10 +490,15 @@ export async function anularVenta(
 
   const venta = await db.venta.findFirst({
     where: { id, zonaId },
-    select: { id: true, estado: true },
+    select: { id: true, estado: true, vendedorId: true, nombreCliente: true },
   });
   if (!venta) return { error: "No se encontró la venta." };
   if (venta.estado === "ANULADA") redirect(`/admin/ventas/${venta.id}`);
+
+  const cambios = {
+    estado: { antes: "activa", despues: "anulada" },
+    motivoAnulacion: { antes: null, despues: parsed.data.motivo },
+  };
 
   await db.$transaction(async (tx) => {
     await tx.venta.update({
@@ -466,14 +515,17 @@ export async function anularVenta(
     // venta: sin esto, una venta anulada y reactivada no dejaria rastro de por
     // que se habia anulado.
     await tx.ventaHistorial.create({
-      data: {
-        ventaId: venta.id,
-        cambios: {
-          estado: { antes: "activa", despues: "anulada" },
-          motivoAnulacion: { antes: null, despues: parsed.data.motivo },
-        },
-        modificadoPorUserId: usuario.id,
-      },
+      data: { ventaId: venta.id, cambios, modificadoPorUserId: usuario.id },
+    });
+
+    await registrarActividad(tx, {
+      tipo: "VENTA_ANULACION",
+      zonaId,
+      vendedorId: venta.vendedorId,
+      ventaId: venta.id,
+      detalle: venta.nombreCliente,
+      cambios,
+      actorUserId: usuario.id,
     });
   });
 
@@ -496,10 +548,12 @@ export async function reactivarVenta(
   const id = String(formData.get("id") ?? "");
   const venta = await db.venta.findFirst({
     where: { id, zonaId },
-    select: { id: true, estado: true },
+    select: { id: true, estado: true, vendedorId: true, nombreCliente: true },
   });
   if (!venta) return { error: "No se encontró la venta." };
   if (venta.estado === "ACTIVA") redirect(`/admin/ventas/${venta.id}`);
+
+  const cambios = { estado: { antes: "anulada", despues: "activa" } };
 
   await db.$transaction(async (tx) => {
     await tx.venta.update({
@@ -513,11 +567,19 @@ export async function reactivarVenta(
     });
 
     await tx.ventaHistorial.create({
-      data: {
-        ventaId: venta.id,
-        cambios: { estado: { antes: "anulada", despues: "activa" } },
-        modificadoPorUserId: usuario.id,
-      },
+      data: { ventaId: venta.id, cambios, modificadoPorUserId: usuario.id },
+    });
+
+    // Reactivar no estaba previsto en el feed, pero sin el se ven anulaciones
+    // de ventas que despues aparecen activas y no se entiende por que.
+    await registrarActividad(tx, {
+      tipo: "VENTA_REACTIVACION",
+      zonaId,
+      vendedorId: venta.vendedorId,
+      ventaId: venta.id,
+      detalle: venta.nombreCliente,
+      cambios,
+      actorUserId: usuario.id,
     });
   });
 

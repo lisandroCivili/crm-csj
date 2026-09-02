@@ -124,7 +124,7 @@ export default async function DetalleLeadPage({ params }: PageProps<"/vendedor/l
                 {lead.actividades.map((actividad) => (
                   <li key={actividad.id} className="flex flex-wrap justify-between gap-2 py-2 text-sm">
                     <span>
-                      {actividad.tipo === "ASIGNACION"
+                      {actividad.tipo === "LEAD_ASIGNACION"
                         ? actividad.detalle
                         : `${
                             actividad.estadoAnterior
@@ -133,7 +133,7 @@ export default async function DetalleLeadPage({ params }: PageProps<"/vendedor/l
                           } → ${
                             actividad.estadoNuevo ? ETIQUETA_ESTADO[actividad.estadoNuevo] : "—"
                           }`}
-                      {actividad.tipo === "CAMBIO_ESTADO" && actividad.detalle ? (
+                      {actividad.tipo === "LEAD_CAMBIO_ESTADO" && actividad.detalle ? (
                         <span className="text-muted-foreground"> · {actividad.detalle}</span>
                       ) : null}
                     </span>

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { datosActividad } from "@/lib/actividad/registrar";
 import { borrarTemporal, guardarTemporal, leerTemporal } from "@/lib/archivos";
 import { db } from "@/lib/db";
 import { parseLeads, claveTelefono, type CampoLead, type ErrorFilaLead } from "@/lib/excel/parseLeads";
@@ -227,13 +228,21 @@ export async function asignarLeads(formData: FormData) {
       where: { id: { in: leads.map((l) => l.id) } },
       data: { vendedorAsignadoId: vendedor.id, fechaAsignacion: new Date() },
     }),
-    db.leadActividad.createMany({
-      data: leads.map((lead) => ({
-        leadId: lead.id,
-        tipo: "ASIGNACION" as const,
-        detalle: `Asignado a ${vendedor.nombreCompleto}`,
-        actorUserId: usuario.id,
-      })),
+    // Una sola sentencia y no N `create`: asignar de a doscientos leads es lo
+    // normal, y ahi la diferencia son doscientos viajes a la base.
+    db.actividad.createMany({
+      data: leads.map((lead) =>
+        datosActividad({
+          tipo: "LEAD_ASIGNACION",
+          zonaId,
+          // A nombre del vendedor que lo recibe: es el que tiene que aparecer
+          // al filtrar el feed por el.
+          vendedorId: vendedor.id,
+          leadId: lead.id,
+          detalle: `Asignado a ${vendedor.nombreCompleto}`,
+          actorUserId: usuario.id,
+        })
+      ),
     }),
   ]);
 
@@ -274,7 +283,9 @@ export async function cambiarEstadoLead(
 
   const lead = await db.lead.findFirst({
     where: alcance,
-    select: { id: true, estado: true },
+    // La zona y el vendedor se leen antes de tocar nada: devolver el lead lo
+    // desasigna, y la actividad tiene que quedar a nombre de quien lo tenia.
+    select: { id: true, estado: true, zonaId: true, vendedorAsignadoId: true },
   });
   if (!lead) return { error: "No se encontró el lead." };
   if (lead.estado === estado && !motivoDevolucion) return { ok: true };
@@ -289,15 +300,17 @@ export async function cambiarEstadoLead(
         ...(estado === "DEVOLUCION" ? { vendedorAsignadoId: null, fechaAsignacion: null } : {}),
       },
     }),
-    db.leadActividad.create({
-      data: {
+    db.actividad.create({
+      data: datosActividad({
+        tipo: "LEAD_CAMBIO_ESTADO",
+        zonaId: lead.zonaId,
+        vendedorId: lead.vendedorAsignadoId,
         leadId: lead.id,
-        tipo: "CAMBIO_ESTADO",
         estadoAnterior: lead.estado,
         estadoNuevo: estado,
         detalle: motivoDevolucion,
         actorUserId: usuario.id,
-      },
+      }),
     }),
   ]);
 

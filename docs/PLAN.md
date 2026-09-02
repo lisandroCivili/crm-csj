@@ -76,7 +76,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 9 | Padrón: varios archivos y selector nuevo | ✅ commit `96f7c45` |
 | 10 | Clientes: corregir datos y ver la documentación | ✅ commit `351e633` |
 | 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ✅ commit `aa06212` |
-| 12 | Actividad: leads + ventas, filtrable por vendedor | ⬜ |
+| 12 | Actividad: leads + ventas, filtrable por vendedor | 🔨 |
 
 Dependencias:
 
@@ -1159,74 +1159,101 @@ sesión con una cuenta de vendedor y sus contraseñas no están en el repositori
 El código es el mismo motor ya verificado desde admin, pero conviene que
 Lisandro lo mire con su cuenta: está anotado como paso 7 de la guía.
 
-### ⬜ Fase 12 — Actividad: leads + ventas, filtrable por vendedor
+### 🔨 Fase 12 — Actividad: leads + ventas, filtrable por vendedor
 
-Va última porque tiene que registrar la anulación de venta (Fase 11) y la edición
-de cliente (Fase 10). Hacerla antes obligaría a volver a tocarla.
+Migración `20260902141500_actividad_unificada`, **escrita a mano**.
 
-#### El modelo
+#### 12.1 De log de leads a log de todo
 
-`LeadActividad` tiene `leadId` obligatorio, no tiene `zonaId` —la zona la deriva
-del lead, y por eso el filtro de la pantalla es `{ lead: { zonaId } }`— y no tiene
-`vendedorId`. No sirve para una venta.
+`LeadActividad` servía para una sola cosa: `leadId` obligatorio, la zona derivada
+del lead y ningún vendedor propio. Pasó a ser **`Actividad`**, con `zonaId` y
+`vendedorId` propios, `ventaId` y `clienteId`, y un `cambios Json?` para los
+diffs. El enum `LeadActividadTipo` (ASIGNACION / CAMBIO_ESTADO) es ahora
+`ActividadTipo` con siete valores.
 
-Se convierte en **`Actividad`**, con una migración escrita a mano que renombra la
-tabla y rellena las columnas nuevas desde el lead, para no perder el histórico:
+- **La migración no la generó Prisma y no podía generarla.** Prisma resuelve un
+  renombre de tabla como DROP + CREATE, y eso borraría el histórico de
+  asignaciones y cambios de estado que ya está cargado —justo lo que el admin usa
+  para ver qué hicieron los vendedores—. La escrita a mano renombra la tabla, sus
+  constraints y su índice, y rellena `zonaId` y `vendedorId` desde el lead.
+- **El enum se convierte con un CAST, no renombrando valores.**
+  `ALTER TYPE … ADD VALUE` no se puede usar dentro de la misma transacción que lo
+  agrega y las migraciones de Prisma corren en una, así que se crea el tipo nuevo
+  y se convierte la columna con `('LEAD_' || tipo::text)::"ActividadTipo"`: el
+  prefijo es exactamente lo que transforma los dos valores viejos en los nuevos.
+- **`vendedorId` y `actorUserId` son cosas distintas.** El vendedor es a nombre de
+  quien queda el movimiento —el eje del filtro que pidió Lisandro—; el actor es
+  quien apretó el botón. Cuando Balta carga una venta a nombre de Nancy, el filtro
+  la trae por Nancy y la pantalla muestra que la cargó Balta. Confundirlos habría
+  hecho que filtrar por un vendedor no mostrara ninguna de las ventas que Balta le
+  cargó.
+- El histórico quedó con la zona completa; los tres registros cuyo lead ya no
+  tiene vendedor asignado quedaron sin vendedor, que es lo correcto: devolver un
+  lead lo libera, y esa actividad no es de nadie.
 
-- **`zonaId` propio**, con índice `[zonaId, createdAt]`: una actividad de venta no
-  tiene lead del cual derivar la zona.
-- **`vendedorId` opcional**, con índice `[vendedorId, createdAt]`. Es el eje del
-  filtro que pidió Lisandro. Para un lead, el vendedor asignado; para una venta,
-  `venta.vendedorId`; para un cliente, null.
-- **`actorUserId` sigue existiendo y es otra cosa**: quién apretó el botón. Cuando
-  Balta carga una venta a nombre de un vendedor, el filtro tiene que traerla por el
-  **vendedor** y la pantalla mostrar que la cargó **Balta**. Confundir los dos es el
-  error fácil de esta fase.
-- `leadId`, `ventaId` y `clienteId`, los tres opcionales y con `onDelete: Cascade`.
-- `cambios Json?` para los diffs, con el mismo formato que `VentaHistorial.cambios`.
-- `enum ActividadTipo`: `LEAD_ASIGNACION`, `LEAD_CAMBIO_ESTADO`, `VENTA_ALTA`,
-  `VENTA_EDICION`, `VENTA_ANULACION`, `CLIENTE_EDICION`.
+#### 12.2 Dónde se escribe
 
-**`VentaHistorial` se conserva**: es el detalle que muestra la ficha de la venta.
-La `Actividad` guarda una copia del diff para que el feed no tenga que hacer joins
-distintos según el tipo. Es duplicación deliberada, escrita en la misma
-transacción.
+`lib/actividad/registrar.ts`, con `registrarActividad(tx, …)` para el caso normal
+y `datosActividad()` para armar la fila sin tocar la base.
 
-#### Dónde se escribe
+- **Siempre dentro de la transacción que la acción ya tenía abierta.** Si la venta
+  se guarda y la actividad no, el feed miente; al revés es peor todavía.
+- La asignación masiva de leads es la excepción y usa `createMany`: asignar
+  doscientos leads con doscientos `create` son doscientos viajes a la base.
+- **`Actividad.cambios` duplica el diff de `VentaHistorial`** a propósito. Sin esa
+  copia el feed tendría que hacer un join distinto por cada tipo de evento para
+  dibujar un renglón. `VentaHistorial` se conserva: es el detalle de la ficha.
+- **La reactivación también se registra**, aunque el plan no la tenía prevista.
+  Sin ella el feed muestra anulaciones de ventas que después aparecen activas y no
+  se entiende por qué.
+- **Subir un adjunto al editar entró al registro, y no estaba.** La foto del DNI
+  es opcional justamente para poder cargar la venta desde la calle, así que
+  subirla después es la edición más común que hay — y hasta ahora no dejaba rastro
+  ni en el historial de la ficha ni en ningún lado. Va al diff como `adjuntoDni` /
+  `adjuntoContrato`, que no son columnas de `Venta`: por eso el `update` de la
+  venta se decide con su propio flag y no con "hay cambios".
 
-Helper `lib/actividad/registrar.ts` con `registrarActividad(tx, …)`, para no
-repetir el shape en seis lugares. Todas las escrituras van **dentro de la
-transacción que ya existe** en cada acción, y todas revalidan `/admin/actividad` —
-hoy el alta de venta escribe un `LeadActividad` y no revalida—.
+#### 12.3 La pantalla
 
-| Acción | Archivo | Tipo |
-|---|---|---|
-| Asignar leads | `app/admin/leads/actions.ts` | `LEAD_ASIGNACION` |
-| Cambiar estado de lead | `app/admin/leads/actions.ts` | `LEAD_CAMBIO_ESTADO` |
-| Alta de venta | `app/vendedor/ventas/actions.ts` (`registrarVenta`) | `VENTA_ALTA` |
-| Edición de venta | `editarVenta` / `editarVentaComoAdmin` (Fase 11) | `VENTA_EDICION` |
-| Anulación | `anularVenta` (Fase 11) | `VENTA_ANULACION` |
-| Edición de cliente | `app/admin/clientes/actions.ts` (Fase 10) | `CLIENTE_EDICION` |
+- **Filtro por vendedor** (`?vendedor=<id>`), `<select>` nativo en un `<form>` GET.
+  **El id se valida contra los vendedores de la zona**: uno de la otra zona no
+  filtraría nada, mostraría el feed entero y haría creer que ese vendedor movió
+  todo.
+- **Chips por familia —Leads · Ventas · Clientes— y no uno por tipo.** Con siete
+  tipos la fila de chips ocupaba tres renglones en el celular, y nadie quiere
+  filtrar "sólo reactivaciones": lo que se busca es qué pasó con las ventas. El
+  tipo exacto se lee igual en cada renglón. Los contadores cuentan sobre el
+  vendedor elegido y no sobre la familia activa, para poder saltar de una a otra
+  sin perder el número — la misma regla que los chips de caída en Clientes.
+- **Tarjetas en el celular**, con el diff adentro del encabezado y no del `<dl>`:
+  un `<ul>` dentro de un `<dl>` es HTML inválido.
+- **El render del diff se extrajo** a `components/actividad/lista-cambios.tsx` y lo
+  usan las dos pantallas. Junta las etiquetas de venta y de cliente, porque el
+  renglón no tiene por qué saber de cuál viene el campo.
+- **La paginación conserva los filtros.** Antes los links de Anterior/Siguiente
+  volvían al feed sin ellos y la página 2 mostraba otra cosa.
+- No hay ficha de lead en `/admin`, así que el renglón de un lead linkea a
+  `/admin/leads?q=<nombre>`, que es lo más cerca que se llega.
 
-#### La pantalla
+**Archivos**: `lib/actividad/registrar.ts` y
+`components/actividad/lista-cambios.tsx` (nuevos), `app/admin/actividad/page.tsx`
+(reescrita), `app/admin/leads/actions.ts`, `app/vendedor/ventas/actions.ts`,
+`app/admin/clientes/actions.ts`, `components/ventas/historial-venta.tsx`,
+`app/vendedor/leads/[id]/page.tsx`, `lib/validations/venta.ts`,
+`prisma/schema.prisma`.
 
-`app/admin/actividad/page.tsx` es hoy la única página de listado sin helper
-`enlace()` y sin vista de tarjetas para el celular. Con seis tipos de evento eso no
-se sostiene:
-
-- **Filtro por vendedor**: `?vendedor=<id>`, con un `<select>` nativo dentro de un
-  `<form>` GET, validado contra los vendedores de la zona. El molde es
-  `app/admin/clientes/page.tsx`: mapa de filtros tipado más el helper `enlace()`
-  que preserva los demás parámetros. Los `<select>` de vendedor del repo son
-  nativos, no Radix.
-- **Chips por tipo** con contadores, como los de caída en Clientes.
-- **Tarjetas en móvil** con `components/layout/lista-tarjetas.tsx`, que es el
-  patrón del resto de los listados.
-- Para `VENTA_EDICION` y `CLIENTE_EDICION`, el renglón lista los cambios como
-  `components/ventas/historial-venta.tsx` (tachado → negrita). Ese render se extrae
-  a un componente compartido en vez de duplicarlo.
-- La descripción de la página deja de hablar sólo de leads.
-
+Verificado con Playwright contra el build de producción, **35 comprobaciones en
+escritorio y 39 en viewport de iPhone**: los seis tipos de evento entran al feed
+—asignación de lead, alta, edición, anulación y reactivación de venta, y
+corrección de cliente—; la edición muestra el diff viejo → nuevo con la etiqueta
+del campo; la anulación muestra el motivo escrito; el alta queda a nombre del
+vendedor y dice que la cargó Balta; los tres chips filtran y conservan el vendedor
+elegido; el filtro por vendedor deja fuera la corrección de cliente (que no es de
+nadie del equipo) y un id inventado se ignora en vez de mentir; la ficha de la
+venta conserva su historial con el mismo render; en el celular se dibujan las
+tarjetas y ninguna de las dos vistas se sale por el costado. **El histórico
+sobrevivió a la migración** y se sigue leyendo con los tipos nuevos, que es lo que
+había que demostrar. Lint, **149 tests** y build pasan.
 ---
 
 ## Cómo probar cada fase
@@ -2449,32 +2476,122 @@ Las ventas quedaron con DNI `99999911` y `99999913`. Se pueden dejar anuladas,
 que es justamente lo que la fase agrega; si las querés borradas del todo,
 pedímelo y las saco por script.
 
-### Fase 12 — qué va a tener que demostrar
+### Fase 12 — Actividad: leads + ventas, filtrable por vendedor
 
-La guía completa se escribe **cuando la fase se termina**, como siempre. Lo que
-sigue son los criterios de aceptación, anotados de antemano para que no se
-negocien después.
+No hace falta preparar nada. Entrá como **admin** y elegí **Salta**.
 
-Escenario base: los 7 padrones de `docs/padrones-prueba/` importados en Salta
-desde `/admin/laboratorio`, que es como quedó la base de desarrollo.
+**1. El histórico viejo sigue estando** — *esto es lo primero que hay que mirar*
 
-- **Fase 12** — con todo lo anterior hecho, `/admin/actividad` muestra el alta, la
-  edición y la anulación de esa venta, más la corrección del cliente, además de los
-  movimientos de leads que ya había. Filtrar por el vendedor de prueba deja sólo
-  los suyos. Y **el histórico viejo de leads sigue estando** después de la
-  migración: eso es lo que hay que mirar primero.
+`/admin/actividad`. Arriba de todo dice cuántos movimientos hay y abajo están los
+que ya existían de antes: **Lead asignado** y **Estado del lead**. La tabla se
+renombró y el enum cambió de valores, así que si algo se hubiera perdido en la
+migración, se vería acá y en ningún otro lado.
+
+**2. El filtro por vendedor** — *esto es lo que pediste*
+
+Arriba hay un select con todos los vendedores de la zona y un botón **Filtrar**.
+Elegí uno que tenga leads asignados y filtrá: quedan sólo sus movimientos, y el
+renglón de arriba dice *"N movimientos de Fulano"*.
+
+Volvé a **Todos los vendedores** para seguir.
+
+**3. Los chips** — *esto es nuevo*
+
+Debajo del select hay cuatro botones: **Todo**, **Leads**, **Ventas** y
+**Clientes**, cada uno con su número. Tocá **Leads**: quedan sólo los movimientos
+de lead. Los contadores no cambian al filtrar —cuentan sobre el vendedor elegido,
+no sobre la familia activa— para que puedas saltar de uno a otro sin perder de
+vista los números.
+
+> Son tres familias y no un chip por tipo de evento. Con siete tipos la fila
+> ocupaba tres renglones en el celular, y filtrar "sólo reactivaciones" no le
+> sirve a nadie. El tipo exacto igual se lee en cada renglón.
+
+**4. Una venta, de punta a punta** — *esto es lo nuevo*
+
+Ahora hacé las cuatro cosas y mirá cómo van cayendo en el feed.
+
+`/admin/ventas` → **Cargar venta**. Completá: Vendedor (cualquiera), Plan
+(cualquiera), **Nro Suscripción** `997712`, **D.N.I** `99999921`, Nombre
+`PRUEBA FASE DOCE`, Calle `Calle Falsa 456`, Teléfono `3870000021`, Observación
+`PRUEBA-F12 alta`. Confirmá.
+
+Andá a `/admin/actividad`. Arriba de todo:
+
+- dice **Venta cargada** y el nombre del cliente, que **linkea a la ficha**;
+- a la derecha figura **el vendedor** y abajo **"por Baltazar…"**. Son dos cosas
+  distintas a propósito: la venta queda a nombre del vendedor —y el filtro la trae
+  por él— pero la cargaste vos, y eso también tiene que verse.
+
+Volvé a la venta y **Editar**: cambiale el teléfono a `3875559999`. El feed suma
+un **Venta editada** con `Teléfono: 3870000021 → 3875559999`, el mismo renglón que
+ya muestra el historial de la ficha.
+
+**Anulala** con el motivo `PRUEBA-F12 el cliente se arrepintió`: aparece **Venta
+anulada** con el motivo entre comillas. **Reactivala**: aparece **Venta
+reactivada**.
+
+> La reactivación no estaba en el plan. La agregué porque, sin ella, el feed
+> muestra anulaciones de ventas que después figuran activas y no hay forma de
+> saber qué pasó.
+
+**5. Subir la foto del DNI también queda registrado** — *esto no estaba pedido*
+
+Editá esa misma venta y adjuntá una foto de DNI (sirve cualquier imagen), sin
+tocar ningún otro campo. Guardá.
+
+En el feed y en el historial de la ficha aparece **Foto del DNI: vacío → archivo
+adjuntado**. Antes esto no dejaba rastro en ningún lado, y es la edición más común
+que hay: la foto es opcional justamente para poder cargar la venta desde la calle
+y subirla más tarde.
+
+**6. Corregir un cliente** — *esto es lo nuevo*
+
+`/admin/clientes` → entrá a cualquiera → **Editar** → cambiale el teléfono →
+**Guardar**.
+
+En el feed aparece **Datos del cliente** con el nombre y el diff del teléfono.
+Fijate que este movimiento **no tiene vendedor**: corregir datos de un cliente es
+tuyo, no de nadie del equipo de venta. Por eso, si filtrás por cualquier vendedor,
+desaparece.
+
+**7. El filtro no se pierde al navegar**
+
+Con un vendedor elegido, tocá el chip **Ventas**: la URL queda con los dos
+filtros (`?vendedor=…&tipo=ventas`) y el select sigue mostrando el vendedor. Lo
+mismo con Anterior/Siguiente cuando haya más de una página — antes esos botones
+volvían al feed sin filtros y la página 2 mostraba otra cosa.
+
+**8. Desde el celular**
+
+`/admin/actividad` en el teléfono: en vez de la lista, tarjetas. Cada una es
+tocable y lleva a la ficha de la venta o del cliente. El diff se ve adentro de la
+tarjeta y nada se sale por el costado.
+
+**Borrar los datos de prueba**
+
+La venta quedó con DNI `99999921`. Se borra con:
+
+```bash
+npx tsx scripts/datos-prueba.ts borrar
+```
+
+Eso saca la venta y, con ella, sus movimientos del feed. La corrección del
+teléfono del cliente **no** se deshace sola: si querés, volvé a ponerle el valor
+viejo desde la misma pantalla, o apretá **"Volver a tomar todo del padrón"** en su
+ficha para que el próximo padrón lo pise.
 
 Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
 `npm run build`.
-
 ---
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Lisandro validó la Fase 10 el 01/09/2026 (las 6 a 9, el
-28/08). Las fases 0 a 10 están cerradas y la **Fase 11 está construida**,
-esperando validación. La próxima sesión arranca por la **Fase 12**, que es la
-última del plan.
+**Dónde retomar:** Lisandro validó la Fase 11 el 02/09/2026 (la 10, el 01/09;
+las 6 a 9, el 28/08). Las fases 0 a 11 están cerradas y la **Fase 12 está
+construida**, esperando validación. **Con eso el plan queda terminado**: no hay
+fase siguiente, así que la próxima sesión arranca por lo que Lisandro traiga
+—empezando, si todavía sigue abierto, por los pendientes de más abajo—.
 
 **El plan ya no termina en la Fase 6.** El 27/08/2026 Lisandro trajo una segunda
 tanda de pedidos y quedaron planificadas las **fases 7 a 12**.
@@ -2486,26 +2603,35 @@ reproducible en media hora si hace falta volver, pero no quedó en el repositori
 para dejarlo había que versionar la clave privada de un certificado autofirmado.
 La receta está en la guía de prueba de la fase.
 
-De la Fase 11, cuatro cosas que valen para la Fase 12:
+De la Fase 12, cuatro cosas que valen para lo que venga:
 
-- **`Venta` ya tiene anulación** (`anuladaAt`, `anuladaPorUserId`,
-  `motivoAnulacion`) y las tres acciones que la Actividad tiene que registrar
-  existen: `registrarVenta`, `aplicarEdicion` y `anularVenta` —más
-  `reactivarVenta`, que la Fase 12 no tenía previsto y conviene registrar
-  también, o el feed va a mostrar anulaciones que después no se entiende por
-  qué desaparecieron—.
-- **El diff de la edición ya está armado** dentro de `aplicarEdicion`, con el
-  mismo formato que espera `VentaHistorial`. La `Actividad` puede guardar una
-  copia de ese mismo objeto sin recalcular nada, y la escritura va **dentro de
-  la transacción que ya está abierta ahí**.
-- **Anular y reactivar escriben en `VentaHistorial` con un campo que no es del
-  formulario** (`estado`, y `motivoAnulacion` al anular). `ETIQUETA_CAMPO` ya
-  los contempla, así que el render compartido que la Fase 12 va a extraer de
-  `historial-venta.tsx` los muestra sin tocar nada.
+- **`Actividad` reemplazó a `LeadActividad`** y ya registra los seis tipos de
+  evento. Para sumar uno nuevo alcanza con agregar el valor al enum
+  `ActividadTipo`, su renglón en `PRESENTACION` y la familia que le corresponda
+  en `FAMILIAS` (`app/admin/actividad/page.tsx`), y llamar a
+  `registrarActividad(tx, …)` dentro de la transacción de la acción.
+- **`vendedorId` no es `actorUserId`.** El primero es a nombre de quien queda el
+  movimiento y es el eje del filtro; el segundo es quién apretó el botón. Toda
+  acción nueva que registre actividad tiene que decidir los dos.
+- **Renombrar una tabla de Prisma se escribe a mano.** Prisma lo resuelve como
+  DROP + CREATE y borra el histórico. Y un enum al que hay que agregarle valores
+  se convierte con un CAST a un tipo nuevo, porque `ALTER TYPE … ADD VALUE` no se
+  puede usar en la misma transacción que lo agrega y las migraciones de Prisma
+  corren en una. La migración `20260902141500_actividad_unificada` es el molde.
+- **Cuidado con Playwright y los `<Link>`**: al tocar un chip la navegación es del
+  cliente y la URL cambia recién cuando llega el RSC, así que `networkidle` no
+  alcanza y hay que esperar la URL. Lo mismo con `waitForURL(/\/admin\/ventas/)`,
+  que matchea `/admin/ventas/nueva` —o sea la página en la que ya se está— y
+  resuelve al instante: hay que anclar el final.
+
+De la Fase 11, dos cosas que siguen valiendo:
+
+- **El admin y el vendedor editan con el mismo motor** (`aplicarEdicion`), y lo
+  único que cambia es el alcance. Anular marca y no borra, pide motivo y **no
+  toca ninguna comisión**: esas salen del padrón.
 - **Ojo con los `<a>` anidados** al hacer clickeables las tarjetas del celular:
   el listado de ventas tenía el link del DNI adentro del link de la tarjeta y
-  eso rompía la hidratación de toda la pantalla. La Fase 12 agrega tarjetas al
-  feed de actividad, que es el mismo patrón.
+  eso rompía la hidratación de toda la pantalla.
 
 De la Fase 10, tres cosas que valen para lo que viene:
 
@@ -2716,3 +2842,12 @@ corregir después si Balta dice otra cosa.
    igual: anular sin vuelta atrás convierte un click equivocado en un dato
    irrecuperable, y el sistema ya trata así a los períodos de comisión. Si Balta
    prefiere que anular sea definitivo, se saca en una línea. — Fase 11.
+9. **¿Los chips del feed tienen que ser por familia o uno por tipo?** Están por
+   familia —Leads, Ventas, Clientes—: con siete tipos la fila ocupaba tres
+   renglones en el celular y "sólo reactivaciones" no le sirve a nadie. Si Balta
+   quiere aislar un evento puntual (las anulaciones del mes, por ejemplo), se
+   agrega ese chip sin tocar nada más. — Fase 12.
+10. **¿La corrección de datos de un cliente tiene que quedar a nombre de alguien
+    del equipo?** Hoy no: aparece en el feed sin vendedor, así que filtrar por
+    cualquiera de ellos la esconde. Es lo correcto —corregir un cliente es del
+    admin— pero significa que ese movimiento sólo se ve sin filtrar. — Fase 12.
