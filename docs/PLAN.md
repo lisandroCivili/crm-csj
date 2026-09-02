@@ -76,7 +76,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 9 | Padrón: varios archivos y selector nuevo | ✅ commit `96f7c45` |
 | 10 | Clientes: corregir datos y ver la documentación | ✅ commit `351e633` |
 | 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ✅ commit `aa06212` |
-| 12 | Actividad: leads + ventas, filtrable por vendedor | 🔨 |
+| 12 | Actividad: leads + ventas, filtrable por vendedor | 🔨 commit `3c24fc1` |
 
 Dependencias:
 
