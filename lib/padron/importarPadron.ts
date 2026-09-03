@@ -47,6 +47,16 @@ export type ResumenImportacion = {
   /** Nombres de NomVen que todavia no estan vinculados a un vendedor. */
   nomVenSinMapear: string[];
   /**
+   * Numeros de titulo del archivo que ya existen, pero en OTRA zona.
+   *
+   * `Titulo.numTit` es unico en todo el sistema, asi que un numero que ya esta
+   * en la otra zona no se puede crear aca. Antes esto ni se miraba: la busqueda
+   * de titulos no filtraba por zona, el titulo ajeno se daba por existente y se
+   * le pisaba el vendedor con el de este padron. La comision de una zona pasaba
+   * a calcularse con la produccion de la otra.
+   */
+  titulosDeOtraZona: string[];
+  /**
    * De los titulos del archivo, cuantos quedaron caidos despues de importarlo.
    * Es el total, no los que se cayeron recien. Al simular queda en 0: la caida
    * se calcula sobre el historico ya escrito.
@@ -133,6 +143,7 @@ export async function importarPadron({
     titulosNuevosRenovacion: 0,
     esLineaBase: false,
     nomVenSinMapear: [],
+    titulosDeOtraZona: [],
     titulosCaidos: 0,
   };
 
@@ -146,7 +157,7 @@ export async function importarPadron({
   // Nunca se agrupa por el texto crudo del padron: se resuelve por alias.
   const nomVenDelArchivo = [...new Set(filas.map((f) => f.nomVen))];
   const alias = await db.vendedorAlias.findMany({
-    where: { nomVenPadron: { in: nomVenDelArchivo }, vendedor: { zonaId } },
+    where: { zonaId, nomVenPadron: { in: nomVenDelArchivo } },
     select: { nomVenPadron: true, vendedorId: true },
   });
   const vendedorPorNomVen = new Map(alias.map((a) => [a.nomVenPadron, a.vendedorId]));
@@ -221,10 +232,31 @@ export async function importarPadron({
   const titulosDelArchivo = ultimaPorClave(filas, (f) => f.numTit);
   const numTits = [...titulosDelArchivo.keys()];
 
-  const titulosExistentes = await db.titulo.findMany({
+  // Los titulos se buscan DENTRO de la zona. Sin ese filtro, importar el padron
+  // de Tucuman encontraba los titulos de Salta con el mismo NumTit, los daba por
+  // existentes y les pisaba el vendedor con el de este archivo: la comision de
+  // una zona quedaba calculada con la produccion de la otra.
+  const titulosConEseNumero = await db.titulo.findMany({
     where: { numTit: { in: numTits } },
   });
+  const titulosExistentes = titulosConEseNumero.filter((t) => t.zonaId === zonaId);
   const tituloPorNumTit = new Map(titulosExistentes.map((t) => [t.numTit, t]));
+
+  // Y como el numero es unico en todo el sistema, el que ya esta en la otra zona
+  // tampoco se puede crear: sin este aviso la importacion reventaria recien al
+  // insertar, con un choque de clave que no explica nada.
+  resumen.titulosDeOtraZona = titulosConEseNumero
+    .filter((t) => t.zonaId !== zonaId)
+    .map((t) => t.numTit)
+    .sort();
+
+  if (resumen.titulosDeOtraZona.length > 0 && !soloSimular) {
+    const muestra = resumen.titulosDeOtraZona.slice(0, 5).join(", ");
+    throw new Error(
+      `${resumen.titulosDeOtraZona.length} título(s) de este archivo ya existen en otra zona (${muestra}). ` +
+        `El número de título es único en todo el sistema: revisá que el archivo sea de la zona que tenés activa.`
+    );
+  }
 
   // El origen se decide una sola vez, con la cuota mas baja que trae el archivo
   // que lo estrena. Los titulos que ya existen no se tocan: si se recalculara
@@ -449,7 +481,7 @@ export async function importarPadron({
       }
 
       const titulos = await tx.titulo.findMany({
-        where: { numTit: { in: numTits } },
+        where: { zonaId, numTit: { in: numTits } },
         select: { id: true, numTit: true },
       });
       const idTituloPorNumTit = new Map(titulos.map((t) => [t.numTit, t.id]));

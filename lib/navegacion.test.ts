@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { itemsVisibles, NAVEGACION } from "./navegacion";
+import { itemsVisibles, NAVEGACION, rutaInterna } from "./navegacion";
 import type { Permisos } from "./sesion";
 
 const TODO: Permisos = { verLeads: true, cargarVentas: true, verComision: true };
@@ -47,5 +47,33 @@ describe("itemsVisibles", () => {
   it("no rompe el orden ni duplica items", () => {
     const items = itemsVisibles("VENDEDOR", TODO);
     expect(new Set(items.map((item) => item.href)).size).toBe(items.length);
+  });
+});
+
+describe("rutaInterna", () => {
+  it("deja pasar una ruta del sistema, con query incluida", () => {
+    expect(rutaInterna("/admin/clientes")).toBe("/admin/clientes");
+    expect(rutaInterna("/admin/leads?q=ana&pagina=2")).toBe("/admin/leads?q=ana&pagina=2");
+  });
+
+  it("rechaza una URL absoluta", () => {
+    expect(rutaInterna("https://otro-sitio.com")).toBe("/");
+  });
+
+  it("rechaza las dos formas que empiezan con barra y salen del sitio", () => {
+    // `//otro.com` es una URL con el protocolo actual, y varios navegadores
+    // leen `/\otro.com` igual. Las dos pasan un startsWith("/") a secas.
+    expect(rutaInterna("//otro-sitio.com")).toBe("/");
+    expect(rutaInterna("/\\otro-sitio.com")).toBe("/");
+  });
+
+  it("rechaza lo que no es texto", () => {
+    expect(rutaInterna(undefined)).toBe("/");
+    expect(rutaInterna(null)).toBe("/");
+    expect(rutaInterna(42)).toBe("/");
+  });
+
+  it("respeta el destino por defecto que le pasen", () => {
+    expect(rutaInterna("http://otro.com", "/admin/dashboard")).toBe("/admin/dashboard");
   });
 });

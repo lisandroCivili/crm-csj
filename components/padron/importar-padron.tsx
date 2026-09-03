@@ -374,6 +374,24 @@ function PasoPreview({
         </>
       )}
 
+      {resumen && resumen.titulosDeOtraZona.length > 0 ? (
+        <Alert variant="destructive">
+          <AlertCircle />
+          <AlertDescription>
+            <p className="font-medium">
+              {resumen.titulosDeOtraZona.length} título(s) de este archivo ya existen en
+              otra zona.
+            </p>
+            <p>
+              El número de título es único en todo el sistema, así que no se pueden crear
+              acá: {resumen.titulosDeOtraZona.slice(0, 8).join(", ")}
+              {resumen.titulosDeOtraZona.length > 8 ? "…" : ""}. Revisá que el archivo sea
+              de la zona que tenés activa.
+            </p>
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       {faltanVincular ? (
         <Card>
           <CardHeader>

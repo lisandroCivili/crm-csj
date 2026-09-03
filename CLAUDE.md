@@ -62,6 +62,18 @@ Vocabulario del dominio (aparece tal cual en el padrón y en el código):
 - **`NomVen` es texto libre e inconsistente**: el mismo vendedor aparece escrito de varias formas
   (ej. `TOLEDO PEDRO`, `TOLEDO PEDRO A.`, `TOLEDO PEDRO ANTONIO` son la misma persona). Se
   normaliza con la tabla `VendedorAlias`; nunca agrupar vendedores por el string del padrón.
+  **El alias vale dentro de una zona** (`@@unique([zonaId, nomVenPadron])`, con `zonaId`
+  denormalizado): Balta y Pedro venden en las dos, así que `TOLEDO PEDRO` tiene que poder
+  apuntar a la ficha de Salta y a la de Tucumán a la vez. Se desvincula desde la ficha del
+  vendedor; desvincular no toca lo ya importado, sólo a quién se le imputa de ahí en adelante.
+- **Una clave `@unique` global leída por código que filtra por zona es un defecto.** Apareció
+  dos veces: el alias de arriba trababa la importación de la segunda zona sin decir nada, y
+  la búsqueda de títulos sin `zonaId` hacía que un padrón de Tucumán encontrara los títulos
+  de Salta, los diera por existentes y **les pisara el vendedor** — la comisión de una zona
+  calculada con la producción de la otra. Si aparece otra clave así, revisar las dos puntas:
+  la restricción y todas sus lecturas. `Titulo.numTit` **sigue siendo único global** y no
+  está confirmado que corresponda: mientras tanto la importación avisa cuando el número ya
+  está en la otra zona, en vez de pisarlo.
 - **Un `Vendedor` puede existir sin cuenta de usuario**: hay vendedores que figuran en el padrón
   pero no usan el sistema. La cuenta (`User`) es opcional.
 - **Balta y Pedro también venden.** Además de administrar tienen títulos propios en el padrón, y

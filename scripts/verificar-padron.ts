@@ -74,7 +74,7 @@ async function main() {
 
   titulo("2. VINCULACION DE VENDEDORES");
   const yaVinculados = await db.vendedorAlias.findMany({
-    where: { nomVenPadron: { in: parseo.nomVenEncontrados } },
+    where: { zonaId: zona.id, nomVenPadron: { in: parseo.nomVenEncontrados } },
     select: { nomVenPadron: true },
   });
   const faltantes = parseo.nomVenEncontrados.filter(
@@ -91,7 +91,7 @@ async function main() {
       },
     });
     await db.vendedorAlias.create({
-      data: { nomVenPadron: nomVen, vendedorId: vendedor.id },
+      data: { nomVenPadron: nomVen, vendedorId: vendedor.id, zonaId: zona.id },
     });
   }
   console.log(`ya vinculados ......... ${yaVinculados.length}`);

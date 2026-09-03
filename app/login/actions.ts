@@ -2,6 +2,7 @@
 
 import { AuthError } from "next-auth";
 import { signIn } from "@/lib/auth";
+import { rutaInterna } from "@/lib/navegacion";
 
 export type EstadoLogin = { error?: string };
 
@@ -9,7 +10,10 @@ export async function login(
   _estadoPrevio: EstadoLogin,
   formData: FormData
 ): Promise<EstadoLogin> {
-  const volverA = String(formData.get("volverA") || "/");
+  // El valor sale del formulario y `signIn` lo usa tal cual. Auth.js ya lo
+  // normaliza contra baseUrl, pero es el mismo recaudo que toma el resto del
+  // sistema y no cuesta nada tomarlo aca tambien.
+  const volverA = rutaInterna(formData.get("volverA"));
 
   try {
     // signIn redirige en caso de exito lanzando NEXT_REDIRECT, que no es un

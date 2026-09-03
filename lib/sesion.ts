@@ -219,6 +219,13 @@ export async function requireZonaActivaId(): Promise<number> {
   await requireUsuario();
   const id = await getZonaActivaId();
   if (id === null) redirect("/seleccionar-zona");
+
+  // La cookie sobrevive a que la zona deje de existir, y un id que no esta en la
+  // base no rompe nada: deja todas las consultas en cero y el CRM se dibuja
+  // entero y vacio, sin decir por que. Se vuelve a elegir. No agrega una consulta
+  // por request: `getZonaActiva` esta memoizada y el AppShell ya la pide.
+  if ((await getZonaActiva()) === null) redirect("/seleccionar-zona");
+
   return id;
 }
 

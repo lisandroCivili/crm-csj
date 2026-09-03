@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Pencil } from "lucide-react";
-import { cambiarEstadoVendedor } from "../actions";
+import { cambiarEstadoVendedor, desvincularAlias } from "../actions";
 import { PageHeader } from "@/components/layout/page-header";
 import { CrearUsuarioForm } from "@/components/vendedores/crear-usuario-form";
 import { CuentaVendedor } from "@/components/vendedores/cuenta-vendedor";
@@ -229,7 +229,8 @@ export default async function PerfilVendedorPage({
           <CardHeader>
             <CardTitle className="text-base">Nombres en el padrón</CardTitle>
             <CardDescription>
-              Variantes con las que aparece en la columna NomVen.
+              Variantes con las que aparece en la columna NomVen. Se cargan al
+              importar un padrón y valen sólo dentro de esta zona.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -240,8 +241,23 @@ export default async function PerfilVendedorPage({
             ) : (
               <ul className="space-y-1.5">
                 {vendedor.alias.map((alias) => (
-                  <li key={alias.id} className="font-mono text-xs">
-                    {alias.nomVenPadron}
+                  <li key={alias.id} className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs">{alias.nomVenPadron}</span>
+                    {/* Sin esto un nombre asignado al vendedor equivocado no se
+                        podía corregir: quedaba tomado en la zona y el padrón
+                        siguiente le seguía imputando las cuotas a él. No toca
+                        nada de lo ya importado. */}
+                    <form action={desvincularAlias}>
+                      <input type="hidden" name="aliasId" value={alias.id} />
+                      <Button
+                        type="submit"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-muted-foreground"
+                      >
+                        Desvincular
+                      </Button>
+                    </form>
                   </li>
                 ))}
               </ul>

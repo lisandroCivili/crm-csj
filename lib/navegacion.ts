@@ -14,6 +14,20 @@ import {
 import type { Permisos } from "./sesion";
 import type { Role } from "./generated/prisma/client";
 
+/**
+ * Una ruta a la que se puede volver sin salir del sistema.
+ *
+ * `startsWith("/")` no alcanza: `//otro-sitio.com` tambien empieza con barra y
+ * el navegador la lee como una URL absoluta con el protocolo actual, asi que un
+ * "volve a donde estabas" se convierte en un salto afuera. `/\otro-sitio.com`
+ * hace lo mismo en varios navegadores.
+ */
+export function rutaInterna(valor: unknown, porDefecto = "/"): string {
+  if (typeof valor !== "string" || !valor.startsWith("/")) return porDefecto;
+  if (valor.startsWith("//") || valor.startsWith("/\\")) return porDefecto;
+  return valor;
+}
+
 export type ItemNav = {
   href: string;
   etiqueta: string;

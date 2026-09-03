@@ -363,3 +363,33 @@ export async function cambiarEstadoCuentaVendedor(formData: FormData) {
   revalidatePath("/admin/vendedores");
   revalidatePath(`/admin/vendedores/${id}`);
 }
+
+/**
+ * Saca un nombre del padron de la ficha de un vendedor.
+ *
+ * Hasta la Fase 13 los alias solo se creaban al importar y no habia forma de
+ * corregir uno mal asignado: el nombre quedaba tomado en la zona para siempre y
+ * la importacion siguiente lo imputaba al vendedor equivocado, que es plata mal
+ * pagada. Desvincular no toca nada de lo ya importado —`Titulo.vendedorId` se
+ * sella al crear el titulo, igual que el origen— y solo cambia a quien se le
+ * imputa de aca en adelante.
+ */
+export async function desvincularAlias(formData: FormData) {
+  await requireAdmin();
+  const zonaId = await requireZonaActivaId();
+
+  const aliasId = String(formData.get("aliasId") ?? "");
+
+  // El id llega del formulario: se cruza con la zona activa para que no se pueda
+  // desvincular el alias de un vendedor de la otra zona escribiendo la URL.
+  const alias = await db.vendedorAlias.findFirst({
+    where: { id: aliasId, zonaId },
+    select: { id: true, vendedorId: true },
+  });
+  if (!alias) return;
+
+  await db.vendedorAlias.delete({ where: { id: alias.id } });
+
+  revalidatePath(`/admin/vendedores/${alias.vendedorId}`);
+  revalidatePath("/admin/padron");
+}

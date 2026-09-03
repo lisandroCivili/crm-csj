@@ -24,9 +24,6 @@ export async function seleccionarZona(formData: FormData) {
 
   if (!zona) redirect("/seleccionar-zona");
 
-  const volverA = String(formData.get("volverA") || "");
-  const destino = volverA.startsWith("/") ? volverA : RUTA_INICIO.ADMIN;
-
   (await cookies()).set(ZONA_COOKIE, String(zona.id), {
     httpOnly: true,
     sameSite: "lax",
@@ -36,5 +33,8 @@ export async function seleccionarZona(formData: FormData) {
 
   // Todo lo cacheado se calculo con la zona anterior.
   revalidatePath("/", "layout");
-  redirect(destino);
+  // Siempre al dashboard. Volver a la pantalla anterior en la otra zona daria
+  // notFound() en cualquier ficha de detalle, porque todas cruzan el id con la
+  // zona activa.
+  redirect(RUTA_INICIO.ADMIN);
 }

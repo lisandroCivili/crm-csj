@@ -3,6 +3,7 @@ import { LoginForm } from "@/components/auth/login-form";
 import { Marca } from "@/components/layout/marca";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { rutaInterna } from "@/lib/navegacion";
 
 /** Por que lo sacamos del sistema. Lo manda /api/salir. */
 const MOTIVOS: Record<string, string> = {
@@ -14,7 +15,7 @@ const MOTIVOS: Record<string, string> = {
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const { volverA, motivo } = await searchParams;
-  const destino = typeof volverA === "string" && volverA.startsWith("/") ? volverA : "/";
+  const destino = rutaInterna(volverA);
   const aviso = typeof motivo === "string" ? MOTIVOS[motivo] : undefined;
 
   return (

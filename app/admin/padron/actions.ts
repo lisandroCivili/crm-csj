@@ -61,7 +61,7 @@ async function nomVenSinVincular(nomVen: string[], zonaId: number): Promise<stri
   if (unicos.length === 0) return [];
 
   const alias = await db.vendedorAlias.findMany({
-    where: { nomVenPadron: { in: unicos }, vendedor: { zonaId } },
+    where: { zonaId, nomVenPadron: { in: unicos } },
     select: { nomVenPadron: true },
   });
   const vinculados = new Set(alias.map((a) => a.nomVenPadron));
@@ -281,10 +281,44 @@ export async function procesarPadron(
       ).map((v) => v.id)
     );
 
-    await db.vendedorAlias.createMany({
-      data: vinculos.filter((v) => idsValidos.has(v.vendedorId)),
-      skipDuplicates: true,
+    const aplicables = vinculos.filter((v) => idsValidos.has(v.vendedorId));
+
+    // El alias es unico por zona, asi que un mismo NomVen puede estar vinculado a
+    // otra ficha de esta zona. Antes eso lo tapaba el `skipDuplicates`: el insert
+    // se salteaba sin error y el paso volvia a pedir el mismo nombre para
+    // siempre. Ahora se dice de quien es.
+    const yaVinculados = await db.vendedorAlias.findMany({
+      where: { zonaId, nomVenPadron: { in: aplicables.map((v) => v.nomVenPadron) } },
+      select: {
+        nomVenPadron: true,
+        vendedorId: true,
+        vendedor: { select: { nombreCompleto: true } },
+      },
     });
+    const vinculoExistente = new Map(yaVinculados.map((a) => [a.nomVenPadron, a]));
+
+    const chocado = aplicables.find((v) => {
+      const ya = vinculoExistente.get(v.nomVenPadron);
+      return ya !== undefined && ya.vendedorId !== v.vendedorId;
+    });
+
+    if (chocado) {
+      const ya = vinculoExistente.get(chocado.nomVenPadron)!;
+      return {
+        paso: "inicial",
+        error: `"${chocado.nomVenPadron}" ya está vinculado a ${ya.vendedor.nombreCompleto} en esta zona. Si el nombre es de otro vendedor, hay que desvincularlo primero.`,
+      };
+    }
+
+    const nuevos = aplicables.filter((v) => !vinculoExistente.has(v.nomVenPadron));
+    if (nuevos.length > 0) {
+      // `skipDuplicates` queda por si dos admins vinculan a la vez; el caso real
+      // —el nombre ya tomado por otra ficha— se contesta arriba.
+      await db.vendedorAlias.createMany({
+        data: nuevos.map((v) => ({ ...v, zonaId })),
+        skipDuplicates: true,
+      });
+    }
   }
 
   const ordenados = ordenar(leidos);

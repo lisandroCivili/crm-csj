@@ -116,9 +116,9 @@ export async function crearVendedoresDePrueba(): Promise<ResultadoVaciado> {
     });
 
     await db.vendedorAlias.upsert({
-      where: { nomVenPadron: d.nomVen },
+      where: { zonaId_nomVenPadron: { zonaId, nomVenPadron: d.nomVen } },
       update: { vendedorId: vendedor.id },
-      create: { nomVenPadron: d.nomVen, vendedorId: vendedor.id },
+      create: { nomVenPadron: d.nomVen, vendedorId: vendedor.id, zonaId },
     });
   }
 

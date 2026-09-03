@@ -199,8 +199,12 @@ export default async function DetalleVentaAdminPage({
                 <Dato
                   etiqueta="Lead de origen"
                   valor={
+                    // No hay ficha de lead en /admin: el link apuntaba a una
+                    // ruta que no existe y daba 404. El listado filtrado por
+                    // nombre es lo mas cerca que se llega, igual que en el feed
+                    // de Actividad.
                     <Link
-                      href={`/admin/leads/${venta.lead.id}`}
+                      href={`/admin/leads?q=${encodeURIComponent(venta.lead.nombre)}`}
                       className="underline underline-offset-2"
                     >
                       {venta.lead.nombre}

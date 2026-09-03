@@ -89,7 +89,21 @@ async function registrarVenta(
   });
   if (!plan) return { errores: { planId: ["Ese plan ya no está disponible."] } };
 
-  const leadId = String(formData.get("leadId") ?? "") || null;
+  // El lead llega en el formulario, asi que hay que confirmar que sea suyo antes
+  // de pegarlo a la venta: un id ajeno quedaria colgado de la ficha, que muestra
+  // el nombre del lead sin volver a filtrar por nadie, y cruzaria la frontera de
+  // zona. La consulta ya existia, pero mas abajo y solo para cambiarle el estado.
+  const leadPedido = String(formData.get("leadId") ?? "") || null;
+  const lead = leadPedido
+    ? await db.lead.findFirst({
+        where: {
+          id: leadPedido,
+          zonaId: ctx.zonaId,
+          vendedorAsignadoId: ctx.vendedorId,
+        },
+        select: { id: true, estado: true },
+      })
+    : null;
 
   // Los archivos se escriben antes que la venta porque el disco no participa de
   // la transaccion; si despues falla la base, se borran a mano.
@@ -121,7 +135,7 @@ async function registrarVenta(
           observacion: parsed.data.observacion,
           planId: plan.id,
           codigoProducto: plan.codigoProducto,
-          ...(leadId ? { leadId } : {}),
+          ...(lead ? { leadId: lead.id } : {}),
         },
         select: { id: true },
       });
@@ -164,24 +178,18 @@ async function registrarVenta(
       }
 
       // Si la venta salio de un lead, el lead queda marcado como vendido.
-      if (leadId) {
-        const lead = await tx.lead.findFirst({
-          where: { id: leadId, vendedorAsignadoId: ctx.vendedorId },
-          select: { id: true, estado: true },
+      if (lead && lead.estado !== "VENDIDO") {
+        await tx.lead.update({ where: { id: lead.id }, data: { estado: "VENDIDO" } });
+        await registrarActividad(tx, {
+          tipo: "LEAD_CAMBIO_ESTADO",
+          zonaId: ctx.zonaId,
+          vendedorId: ctx.vendedorId,
+          leadId: lead.id,
+          estadoAnterior: lead.estado,
+          estadoNuevo: "VENDIDO",
+          detalle: "Se cargó la venta",
+          actorUserId: ctx.userId,
         });
-        if (lead && lead.estado !== "VENDIDO") {
-          await tx.lead.update({ where: { id: lead.id }, data: { estado: "VENDIDO" } });
-          await registrarActividad(tx, {
-            tipo: "LEAD_CAMBIO_ESTADO",
-            zonaId: ctx.zonaId,
-            vendedorId: ctx.vendedorId,
-            leadId: lead.id,
-            estadoAnterior: lead.estado,
-            estadoNuevo: "VENDIDO",
-            detalle: "Se cargó la venta",
-            actorUserId: ctx.userId,
-          });
-        }
       }
 
       return creada;

@@ -77,6 +77,9 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 10 | Clientes: corregir datos y ver la documentación | ✅ commit `351e633` |
 | 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ✅ commit `aa06212` |
 | 12 | Actividad: leads + ventas, filtrable por vendedor | 🔨 commit `3c24fc1` |
+| 13 | QA: los tres agujeros (alias por zona · `leadId` · links rotos) | ⬜ |
+| 14 | QA: la red (escenario de dos zonas · tests de parsers · guion de permisos) | ⬜ |
+| 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | ⬜ |
 
 Dependencias:
 
@@ -92,6 +95,12 @@ Fase 8  Chicos       (independiente, hecha)
 Fase 9  Padrón       (independiente, hecha)
 Fase 10 Clientes ──┐
 Fase 11 Ventas   ──┴──> Fase 12  Actividad
+
+Fase 13 Arreglos ──> 13.1 desbloquea importar el padrón de Tucumán
+                        │
+Fase 14 La red   ───────┴──> 14.1 siembra las dos zonas ──> 14.3 la verifica
+                        │
+Fase 15 Recorrido ──────┘
 ```
 
 **El orden de las fases 7 a 12 no es el del pedido, y es a propósito.** La 7 va
@@ -1254,6 +1263,216 @@ venta conserva su historial con el mismo render; en el celular se dibujan las
 tarjetas y ninguna de las dos vistas se sale por el costado. **El histórico
 sobrevivió a la migración** y se sigue leyendo con los tipos nuevos, que es lo que
 había que demostrar. Lint, **149 tests** y build pasan.
+
+---
+
+## Tercera tanda (03/09/2026) — QA de todo lo construido
+
+Lisandro pidió, antes de abrir el módulo del vendedor, una pasada completa sobre
+lo que ya está: buscar filtraciones, verificar front y back, y comprobar que
+funcione **con las cuentas de Balta y de Pedro, en Salta y en Tucumán**.
+
+No es una revisión preventiva sin motivo. [`PENDIENTE.md`](PENDIENTE.md) ya tenía
+anotado que faltaba *"una pasada completa sobre el resto de las URLs de admin
+antes de producción"*, y el relevamiento del 03/09/2026 encontró tres defectos
+reales — uno de los cuales **impide operar la segunda zona**.
+
+Lo que el relevamiento encontró **bien**, revisado archivo por archivo, para no
+volver a mirarlo: las 24 páginas de `/admin` llaman a `requireAdmin` y las 8 del
+vendedor a `requireVendedor`/`requirePermiso`; las 40+ server actions tienen guard
+propio y no dependen del layout; las 12 rutas `[id]` cargan con `findFirst`
+cruzando `{id, zonaId}` o `{id, vendedorId}`, así que **no hay IDOR de lectura**;
+ninguna query de negocio queda sin `zonaId` sobre un modelo que tenga la columna;
+`/api/uploads/[id]` —las fotos de DNI— aguanta el análisis; y nada lee el rol ni
+los permisos del JWT para autorizar.
+
+Fuera de alcance por decisión de Lisandro: el repaso previo al despliegue en
+Railway (variables, volumen de adjuntos, contraseñas reales, laboratorio
+inexistente en producción). Queda como fase aparte para cuando se decida publicar.
+
+### Fase 13 — Los tres agujeros
+
+Va primera porque **13.1 desbloquea la segunda zona**: sin eso no se puede
+importar el padrón de Tucumán, y sin padrón de Tucumán no se puede probar nada de
+lo que sigue.
+
+#### 13.1 El alias de vendedor traba la importación de la segunda zona
+
+`VendedorAlias.nomVenPadron` es `@unique` **en todo el sistema**, pero los tres
+lugares que lo usan filtran por zona: `importarPadron.ts` y `nomVenSinVincular`
+leen con `vendedor: { zonaId }`, y la escritura es un
+`createMany({ skipDuplicates: true })`.
+
+Con Pedro apareciendo en los padrones de las dos zonas —es el pendiente 4, con
+tres alias y 254 filas—, `TOLEDO PEDRO` sólo puede pertenecer a **una** ficha. Si
+ya está vinculado en Salta y se importa el padrón de Tucumán: la consulta filtrada
+por zona no lo encuentra, sale como "sin vincular", la importación se corta, y al
+intentar vincularlo el `skipDuplicates` **lo saltea en silencio**. La pantalla
+vuelve a pedir el mismo nombre indefinidamente, sin un solo mensaje de error. Hoy
+no tiene salida por la interfaz: la card "Nombres en el padrón" de la ficha del
+vendedor es de sólo lectura.
+
+**Arreglo: `zonaId` propio en `VendedorAlias`, con `@@unique([zonaId, nomVenPadron])`.**
+No sirve `@@unique([vendedorId, nomVenPadron])`: dejaría el mismo nombre vinculado
+a dos vendedores de la misma zona y la resolución elegiría uno arbitrario, que es
+justo lo que la regla de negocio prohíbe. La regla real es "un `NomVen` pertenece
+a un solo vendedor **dentro de una zona**", y Postgres no puede expresar eso
+contra una columna de otra tabla: hay que denormalizar. El dato es estable —un
+vendedor nunca cambia de zona— y de paso los lectores dejan de necesitar el join.
+
+El `createMany({ skipDuplicates: true })` pasa a `upsert`. El choque dentro de la
+zona deja de ser silencioso: es un error que se informa con el nombre del vendedor
+que ya tiene ese alias.
+
+#### 13.2 `leadId` sin validar al crear una venta
+
+`registrarVenta` toma el `leadId` del formulario y lo persiste sin verificar nada.
+Lo revelador es que 44 líneas más abajo, para cambiar el **estado** del lead, sí se
+valida contra `vendedorAsignadoId`: la comprobación existe, pero se aplicó a una
+sola de las dos escrituras.
+
+Se convierte en fuga de lectura porque las dos fichas de venta hacen join al lead
+sin filtro extra. Un vendedor de Salta que postee una venta con el id de un lead de
+Tucumán ve su nombre en su propia ficha — cruza la frontera de zona, que es lo que
+el sistema promete que no pasa. Atenuante: los ids son `cuid` y hay que conocerlos
+de antemano.
+
+El arreglo es subir esa misma consulta por encima del `create` y usar el lead que
+devuelve. No hace falta ninguna validación nueva.
+
+#### 13.3 Link a una ficha de lead que no existe
+
+La ficha de la venta en admin linkea a `/admin/leads/<id>`, que da 404: no hay
+ficha de lead en `/admin`. La Fase 12 ya resolvió este mismo caso en el feed de
+actividad linkeando a `/admin/leads?q=<nombre>`, y está documentado en
+`CLAUDE.md`. Se aplica el mismo criterio.
+
+#### 13.4 Tres cosas menores que salieron en el camino
+
+- **`volverA` sin validar en el login**: va directo a `redirectTo`. No es
+  explotable —Auth.js lo normaliza contra `baseUrl`— pero el patrón correcto ya
+  existe en `seleccionar-zona/actions.ts` y no cuesta nada cerrarlo.
+- **Una zona inexistente en la cookie da un CRM vacío sin explicación**:
+  `getZonaActivaId` valida que sea un entero positivo, no que exista. No es
+  escalada de privilegios —los dos admins ven las dos zonas igual—, pero conviene
+  mandar al selector en vez de dibujar pantallas vacías.
+- **Cambiar de zona siempre deposita en el dashboard.** `seleccionarZona` sabe
+  volver a donde estabas, pero **ningún llamador manda `volverA`**. Se saca el
+  código muerto: volver a la misma pantalla en la otra zona daría `notFound()` en
+  toda ficha de detalle.
+
+#### 13.5 El padrón de una zona pisaba los títulos de la otra
+
+**No estaba en el plan: apareció al probar 13.1.** Con el alias ya arreglado se
+importó un padrón en Tucumán y el resultado fue *"6 títulos actualizados, 0
+nuevos"* — en una zona que estaba vacía. La importación había encontrado los
+títulos de **Salta**.
+
+`importarPadron` buscaba los títulos así:
+
+```ts
+const titulosExistentes = await db.titulo.findMany({
+  where: { numTit: { in: numTits } },   // sin zonaId
+});
+```
+
+Los daba por existentes y les aplicaba el `update`, que incluye `vendedorId`. En
+la base local **6 de los 9 títulos de Salta quedaron imputados a vendedores de
+Tucumán**, y con datos retrocedidos al período del otro archivo. Eso no es una
+molestia de pantalla: la comisión sale de las cuotas del título y de su vendedor,
+así que una zona pasaba a liquidarse con la producción de la otra.
+
+Es el mismo defecto que 13.1 —una clave única global leída por código que filtra
+por zona— en el modelo que más importa. Había dos consultas sin `zonaId`: la del
+preview y la de adentro de la transacción.
+
+**Arreglo**: las dos filtran por zona. Y como `Titulo.numTit` es `@unique` global,
+un número que ya existe en la otra zona tampoco se puede crear acá: en vez de
+reventar recién al insertar con un choque de clave que no explica nada, la
+importación lo detecta antes, lo dice en el preview y corta al confirmar
+nombrando los títulos.
+
+**Lo que no se decidió**: si el número de título del club es único en todo el
+sistema o puede repetirse entre Salta y Tucumán. Se dejó el `@unique` global —que
+es lo que ya había— y se hizo visible el caso. Va como pendiente 11.
+
+### Fase 14 — La red que impide que vuelvan
+
+Hoy hay 149 tests de lógica pura y **cero** verificación de pantalla: Playwright
+está instalado pero sólo saca capturas.
+
+#### 14.1 Un comando que arma el escenario de las dos zonas
+
+Armar la base de prueba son hoy siete pasos manuales, y sólo existe para Salta.
+`prisma/seed.ts` siembra dos zonas y dos admins, nada más.
+
+`scripts/sembrar-demo.ts` deja el escenario completo de una: los padrones de prueba
+de **las dos zonas** importados por el camino real, las fichas de Balta y de Pedro
+en cada zona enlazadas a sus cuentas, **un vendedor con cuenta de ingreso** —hoy
+imposible: probar ese lado necesita una contraseña que no está en el repositorio—,
+la escala de ejemplo y el contrato de agencia.
+
+`generar-padrones-prueba.ts` gana un parámetro de zona y un juego `TT-000x` / DNI
+`9998000x` para Tucumán, distinto del `PT-000x` / `9999000x` de Salta, para que se
+distingan de un vistazo. Los alias de Pedro se cargan en las dos zonas: es la
+contraprueba de 13.1 y falla ruidosamente si esa migración no está.
+
+#### 14.2 Tests de los tres parsers de Excel
+
+`parsePadron.ts` (260 líneas), `parseLeads.ts` (161) y `parsePrecios.ts` (158) son
+funciones puras y **no tienen un solo test**. `parsePadron` es la puerta de entrada
+de todos los datos del sistema y hoy sólo se verifica de punta a punta con
+`verificar-padron.ts`, que necesita base, un Excel real y la zona SALTA hardcodeada.
+Los otros dos no se verifican de ninguna forma, y no hay ni un fixture de leads o
+de precios en el repositorio.
+
+Los casos que importan salen de las reglas ya documentadas: fechas como serial de
+Excel, `FchPago` vacío contra columna ausente (la distinción que borraba el email de
+toda una zona), `normalizarNomVen`, `columnasPersonales`, filas con error, y
+`claveTelefono` en leads. Los fixtures se arman con SheetJS en memoria, como hace
+`generar-padrones-prueba.ts`: sin binarios versionados.
+
+#### 14.3 Un guion que verifica los permisos y el aislamiento de zonas
+
+Es lo que fija los arreglos de la Fase 13 para siempre, y es el tipo de prueba que
+menos se rompe al cambiar la interfaz, porque mira códigos de respuesta y
+redirecciones y no textos.
+
+`scripts/qa-permisos.mjs` usa el molde de `capturas.mjs` —que ya resuelve lo
+difícil: login por `POST /api/auth/callback/credentials` en vez de llenar el
+formulario, y la cookie de zona seteada a mano— y devuelve `process.exitCode` como
+`verificar-padron.ts`. La matriz: vendedor entrando a `/admin`, vendedor sin
+permiso entrando a su propia sección, adjunto ajeno por `/api/uploads`, ruta sin
+sesión, ficha de la otra zona por URL, venta con `leadId` ajeno, cuenta desactivada
+mientras navega, y vendedor con ficha dada de baja.
+
+De paso, `capturas.mjs` recorre 11 pantallas de admin y **ninguna del vendedor**:
+se le suman las del vendedor, el laboratorio, la comisión del agente y las fichas
+de detalle. Es donde el chequeo de desborde horizontal tiene más para encontrar,
+porque son las pantallas que nunca se midieron.
+
+### Fase 15 — El recorrido humano, en las dos zonas y con los dos roles
+
+Lo que no se puede automatizar sin volverlo frágil: que las pantallas se
+**entiendan**, que los números den y que el celular sirva.
+
+- **Las dos cuentas.** Todo el QA anterior se hizo con `balta@`. Se repite lo
+  esencial con `pedro@`: que vea lo mismo, que su ficha de agente sea la suya y que
+  la comisión no se mezcle. Es la primera vez que se prueba la segunda cuenta.
+- **Las dos zonas, cruzadas.** Con los padrones de las dos importados, es la
+  primera vez que el aislamiento se prueba con datos y no leyendo el código:
+  dashboard, clientes, comisión del agente (objetivo 100 en Salta, 50 en Tucumán) y
+  `getVendedorDelAdmin()` devolviendo la ficha correcta en cada una.
+- **El lado del vendedor, por primera vez de verdad**, con la cuenta que crea 14.1:
+  sus leads, sus ventas, su comisión, y los tres permisos apagados de a uno.
+- **Las pantallas en el celular**, que es donde el sistema más se usa.
+- **Números que no pueden cambiar**, tomados de las guías ya validadas: $105.000 y
+  $38.000 de comisión, $564.000 del agente, 3 contratos de 100, una caída parcial y
+  un título sin datos suficientes.
+- **Cierre**: lo que quede se anota (HEIC en iPhone, los 74 huérfanos de
+  `uploads/tmp`, el prototipo del formulario, el modo oscuro sin interruptor,
+  `verComision` sin pantalla propia) y se cierra el punto pendiente de
+  `PENDIENTE.md`.
 ---
 
 ## Cómo probar cada fase
@@ -2583,15 +2802,116 @@ ficha para que el próximo padrón lo pise.
 
 Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
 `npm run build`.
+
+### Fase 13 — Los agujeros de zona
+
+Lo que hay que ver es que **el sistema aguante las dos zonas**. Todo se hace con
+`balta@crm-csj.local` / `CambiarEstePassword123`.
+
+Punto de partida: la base local con los 7 padrones de prueba en **Salta**
+(8 clientes, 9 títulos, 69 cuotas, 7 importaciones) y **Tucumán vacía**. Si no
+está así, `/admin/laboratorio` → *Vaciar el padrón*, *Crear los vendedores de
+prueba*, *Cargar escala de ejemplo*, e importar los 7 archivos de
+`docs/padrones-prueba/`.
+
+**1. El nombre del padrón ahora vale por zona** — es el arreglo principal.
+
+Cambiá a **Tucumán** (menú de arriba a la derecha → la zona). Andá a
+`/admin/laboratorio` y apretá **"Crear los vendedores de prueba"**.
+
+Antes de la Fase 13 esto era destructivo y en silencio: `PRUEBA VENDEDOR UNO` ya
+existía como nombre del padrón en Salta, y como la clave era única en todo el
+sistema, el alias **se lo llevaba** a la ficha de Tucumán. Salta quedaba sin
+vendedor y su próxima importación imputaba las cuotas a nadie.
+
+- En `/admin/vendedores` (Tucumán) tienen que estar los dos vendedores de prueba.
+- Entrá a la ficha de **PRUEBA VENDEDOR UNO** → card **"Nombres en el padrón"**:
+  tiene que decir `PRUEBA VENDEDOR UNO`, con un botón **Desvincular** al lado.
+- Volvé a **Salta**, entrá a la ficha del vendedor del mismo nombre: **su alias
+  sigue ahí**. Los dos lo tienen, cada uno en su zona.
+
+El botón **Desvincular** es nuevo. Antes los alias sólo se creaban al importar y
+no había forma de corregir uno mal asignado: el nombre quedaba tomado en la zona
+para siempre y el padrón siguiente le seguía imputando las cuotas al vendedor
+equivocado. Desvincular no toca nada de lo ya importado, sólo cambia a quién se
+le imputa de acá en adelante.
+
+**2. Un padrón de otra zona ya no pisa los títulos** — el defecto más serio, y
+apareció probando el anterior.
+
+Seguí en **Tucumán**. `/admin/padron/importar` → subí
+`docs/padrones-prueba/padron-prueba-01-2026-06.xlsx` (que es un archivo de Salta)
+y apretá Analizar.
+
+Tiene que aparecer un **aviso rojo**: *"6 título(s) de este archivo ya existen en
+otra zona"*, nombrando `PT-0001`, `PT-0002`… y diciendo que revises que el archivo
+sea de la zona activa.
+
+Antes, esa importación decía *"6 títulos actualizados"* en una zona vacía: había
+encontrado los títulos de Salta y les había pisado el vendedor con el de Tucumán.
+La comisión de una zona quedaba calculada con la producción de la otra.
+
+- Volvé a **Salta** → `/admin/padron`: sus **7 importaciones** siguen ahí.
+- `/admin/comisiones`, agosto 2026: `PRUEBA VENDEDOR UNO` **$105.000** y `DOS`
+  **$38.000**, como siempre. Si esos números cambiaron, algo del padrón se cruzó.
+
+**3. Una zona que no existe te manda a elegir de nuevo.**
+
+Es difícil de provocar a mano (la cookie es `httpOnly`); si tenés las
+herramientas del navegador abiertas, cambiá `zona_activa` a `9999` en
+Application → Cookies y recargá `/admin/clientes`. Tiene que llevarte a
+`/seleccionar-zona`, no mostrarte un CRM entero y vacío.
+
+**4. El lead de una venta ya no da 404.**
+
+Abrí una venta que tenga lead de origen en `/admin/ventas/[id]` y tocá el nombre
+del lead. Antes iba a `/admin/leads/<id>`, que no existe: pantalla de error. Ahora
+abre `/admin/leads` filtrado por ese nombre.
+
+**5. El login no te lleva a otro sitio.**
+
+Entrá a `http://localhost:3000/login?volverA=//ejemplo.com` estando deslogueado y
+logueate: tenés que terminar en tu dashboard, no afuera del sistema.
+
+**Para borrar lo de prueba**: en Tucumán, dar de baja los dos vendedores desde su
+ficha (o `/admin/laboratorio` → *Vaciar el padrón de TUCUMAN* si llegaste a
+importar algo). Salta no hay que tocarla.
+
+Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
+`npm run build`.
 ---
 
 ## Contexto para la próxima sesión
 
 **Dónde retomar:** Lisandro validó la Fase 11 el 02/09/2026 (la 10, el 01/09;
-las 6 a 9, el 28/08). Las fases 0 a 11 están cerradas y la **Fase 12 está
-construida**, esperando validación. **Con eso el plan queda terminado**: no hay
-fase siguiente, así que la próxima sesión arranca por lo que Lisandro traiga
-—empezando, si todavía sigue abierto, por los pendientes de más abajo—.
+las 6 a 9, el 28/08). Las fases 0 a 11 están cerradas; la **12 y la 13 están
+construidas**, esperando validación. La próxima sesión sigue por la **Fase 14**.
+
+**El plan volvió a crecer.** El 03/09/2026 Lisandro pidió, antes de abrir el
+módulo del vendedor, una pasada de QA sobre todo lo construido: buscar
+filtraciones y comprobar que funcione con las dos cuentas de admin en las dos
+zonas. De ahí salen las **fases 13 a 15**.
+
+De la Fase 13, lo que hay que llevarse:
+
+- **Una clave `@unique` global leída por código que filtra por zona es un
+  defecto, no un detalle.** Apareció dos veces en el mismo día:
+  `VendedorAlias.nomVenPadron` trababa la importación de la segunda zona, y la
+  búsqueda de títulos sin `zonaId` hacía que un padrón de Tucumán le pisara el
+  vendedor a los títulos de Salta —la comisión de una zona calculada con la
+  producción de la otra—. Si aparece otra clave así, revisar las dos puntas: la
+  restricción y todas sus lecturas.
+- **El segundo defecto lo encontró la prueba, no la lectura del código.** La
+  auditoría de las 59 rutas dio limpia y ese `findMany` no saltó; se vio al
+  importar de verdad en Tucumán y leer el resumen: *"6 títulos actualizados"* en
+  una zona vacía. Probar en las dos zonas encuentra cosas que revisar archivo por
+  archivo no encuentra.
+- **`Titulo.numTit` sigue siendo único global** y no está confirmado que
+  corresponda (pendiente 11). Mientras tanto la importación avisa cuando el
+  número ya está en la otra zona, en vez de pisarlo. Los padrones de prueba de
+  Tucumán de la Fase 14 tienen que usar numeración propia (`TT-000x`).
+- **Los alias ya se pueden desvincular** desde la ficha del vendedor. Antes se
+  creaban sólo al importar y no había forma de corregir uno mal asignado.
 
 **El plan ya no termina en la Fase 6.** El 27/08/2026 Lisandro trajo una segunda
 tanda de pedidos y quedaron planificadas las **fases 7 a 12**.
@@ -2851,3 +3171,12 @@ corregir después si Balta dice otra cosa.
     del equipo?** Hoy no: aparece en el feed sin vendedor, así que filtrar por
     cualquiera de ellos la esconde. Es lo correcto —corregir un cliente es del
     admin— pero significa que ese movimiento sólo se ve sin filtrar. — Fase 12.
+
+### De la tercera tanda (fases 13 a 15)
+
+11. **¿El número de título es único en todo el sistema o puede repetirse entre
+    Salta y Tucumán?** `Titulo.numTit` es `@unique` global desde el principio, y
+    quedó así. Si el club numera por agencia y un mismo número pudiera existir en
+    las dos zonas, hay que cambiarlo a `@@unique([zonaId, numTit])` —igual que se
+    hizo con el alias del vendedor en la Fase 13—. Mientras tanto la importación
+    avisa cuando el número ya está en la otra zona en vez de pisarlo. — Fase 13.

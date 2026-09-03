@@ -18,7 +18,20 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
   actualizando. Un campo cuya **columna no vino** en el Excel tampoco se escribe: "vacío" y
   "no informado" no son lo mismo y confundirlos borraba el dato en toda la zona. El DNI no se
   edita: es la clave con la que el padrón encuentra al cliente.
-- **Vendedores**: agrupar por `VendedorAlias`, nunca por el texto crudo de `NomVen`.
+- **Vendedores**: agrupar por `VendedorAlias`, nunca por el texto crudo de `NomVen`. El alias
+  es único **por zona** (`@@unique([zonaId, nomVenPadron])`), no en todo el sistema: Balta y
+  Pedro venden en las dos y el mismo `NomVen` tiene que poder apuntar a una ficha en cada una.
+  Se desvincula desde la ficha del vendedor.
+- **Claves únicas y zona**: una restricción `@unique` global leída por código que filtra por
+  zona es un defecto, no un detalle. Rompió dos veces la segunda zona: el alias trababa su
+  importación en silencio, y buscar títulos sin `zonaId` hacía que el padrón de una zona le
+  pisara el vendedor a los títulos de la otra —comisión calculada con producción ajena—.
+  Revisar siempre las dos puntas: la restricción y todas sus lecturas. **Toda consulta de
+  títulos lleva `zonaId`.** `Titulo.numTit` sigue siendo único global (pendiente de confirmar
+  con Balta): mientras tanto la importación avisa cuando el número ya está en la otra zona.
+- **Volver a una ruta que llega de afuera** (`volverA`, `redirectTo`) pasa por `rutaInterna()`
+  de `lib/navegacion.ts`: `startsWith("/")` no alcanza, porque `//otro-sitio.com` también
+  empieza con barra y saca al usuario del sistema.
 - **Comisiones**: los porcentajes salen de `EscalaComision`, nunca hardcodeados. El cálculo se
   hace desde el padrón (`TituloCuota`), nunca desde `Venta`, y se devenga por `detectadaPagaAt`,
   no por `fechaPago`. Un período cerrado no se recalcula: los porcentajes quedan congelados en

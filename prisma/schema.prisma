@@ -112,6 +112,7 @@ model Zona {
   escalaAgente     EscalaAgente[]
   comisionesAgente ComisionAgentePeriodo[]
   actividades      Actividad[]
+  vendedorAlias    VendedorAlias[]
 
   @@map("zonas")
 }
@@ -223,11 +224,27 @@ model Vendedor {
 /// real. `nomVenPadron` se guarda normalizado (mayusculas, sin espacios extra).
 model VendedorAlias {
   id           String   @id @default(cuid())
-  nomVenPadron String   @unique
+  nomVenPadron String
   vendedorId   String
   vendedor     Vendedor @relation(fields: [vendedorId], references: [id], onDelete: Cascade)
-  createdAt    DateTime @default(now())
 
+  /// La zona del vendedor, repetida aca a proposito.
+  ///
+  /// La regla es que un NomVen pertenece a un solo vendedor DENTRO de una zona:
+  /// Balta y Pedro venden en las dos, asi que `TOLEDO PEDRO` tiene que poder
+  /// apuntar a la ficha de Salta y a la de Tucuman al mismo tiempo. Postgres no
+  /// puede expresar eso contra una columna de otra tabla, y con `nomVenPadron`
+  /// unico global el alias quedaba tomado por la primera zona que lo importara:
+  /// la segunda lo veia "sin vincular", la importacion se cortaba, y el
+  /// createMany con skipDuplicates lo salteaba en silencio para siempre.
+  ///
+  /// El dato no se desincroniza: un vendedor no cambia de zona.
+  zonaId Int
+  zona   Zona @relation(fields: [zonaId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([zonaId, nomVenPadron])
   @@index([vendedorId])
   @@map("vendedores_alias")
 }
