@@ -77,7 +77,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 10 | Clientes: corregir datos y ver la documentación | ✅ commit `351e633` |
 | 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ✅ commit `aa06212` |
 | 12 | Actividad: leads + ventas, filtrable por vendedor | 🔨 commit `3c24fc1` |
-| 13 | QA: los tres agujeros (alias por zona · `leadId` · links rotos) | ⬜ |
+| 13 | QA: los agujeros de zona (alias · títulos · `leadId` · links rotos) | 🔨 commit `3dbfd89` |
 | 14 | QA: la red (escenario de dos zonas · tests de parsers · guion de permisos) | ⬜ |
 | 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | ⬜ |
 
