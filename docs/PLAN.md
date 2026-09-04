@@ -77,7 +77,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 10 | Clientes: corregir datos y ver la documentación | ✅ commit `351e633` |
 | 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ✅ commit `aa06212` |
 | 12 | Actividad: leads + ventas, filtrable por vendedor | 🔨 commit `3c24fc1` |
-| 13 | QA: los agujeros de zona (alias · títulos · `leadId` · links rotos) | 🔨 commit `3dbfd89` |
+| 13 | QA: los agujeros de zona (alias · títulos · `leadId` · links rotos) | ✅ commit `3dbfd89` |
 | 14 | QA: la red (escenario de dos zonas · tests de parsers · guion de permisos) | ⬜ |
 | 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | ⬜ |
 
@@ -2883,9 +2883,10 @@ Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Lisandro validó la Fase 11 el 02/09/2026 (la 10, el 01/09;
-las 6 a 9, el 28/08). Las fases 0 a 11 están cerradas; la **12 y la 13 están
-construidas**, esperando validación. La próxima sesión sigue por la **Fase 14**.
+**Dónde retomar:** Lisandro validó la **Fase 13 el 04/09/2026** (la 11, el
+02/09; la 10, el 01/09; las 6 a 9, el 28/08). Las fases 0 a 11 y la 13 están
+cerradas; **la 12 sigue esperando validación**. La próxima sesión sigue por la
+**Fase 15**.
 
 **El plan volvió a crecer.** El 03/09/2026 Lisandro pidió, antes de abrir el
 módulo del vendedor, una pasada de QA sobre todo lo construido: buscar
@@ -2906,10 +2907,13 @@ De la Fase 13, lo que hay que llevarse:
   importar de verdad en Tucumán y leer el resumen: *"6 títulos actualizados"* en
   una zona vacía. Probar en las dos zonas encuentra cosas que revisar archivo por
   archivo no encuentra.
-- **`Titulo.numTit` sigue siendo único global** y no está confirmado que
-  corresponda (pendiente 11). Mientras tanto la importación avisa cuando el
-  número ya está en la otra zona, en vez de pisarlo. Los padrones de prueba de
-  Tucumán de la Fase 14 tienen que usar numeración propia (`TT-000x`).
+- **`Titulo.numTit` es único global y así está bien.** Balta lo confirmó el
+  04/09/2026: el número no se repite nunca, es propio de cada contrato en todo el
+  club. Eso le da su sentido definitivo al aviso de la importación: si un archivo
+  trae números que ya están en la otra zona, **el archivo no es de esa zona** —no
+  es una colisión legítima que haya que soportar—. Y explica por qué los padrones
+  de prueba de Tucumán necesitan numeración propia (`TT-000x`): con los `PT-000x`
+  de Salta estaríamos simulando algo que en la realidad no pasa.
 - **Los alias ya se pueden desvincular** desde la ficha del vendedor. Antes se
   creaban sólo al importar y no había forma de corregir uno mal asignado.
 
@@ -3174,9 +3178,10 @@ corregir después si Balta dice otra cosa.
 
 ### De la tercera tanda (fases 13 a 15)
 
-11. **¿El número de título es único en todo el sistema o puede repetirse entre
-    Salta y Tucumán?** `Titulo.numTit` es `@unique` global desde el principio, y
-    quedó así. Si el club numera por agencia y un mismo número pudiera existir en
-    las dos zonas, hay que cambiarlo a `@@unique([zonaId, numTit])` —igual que se
-    hizo con el alias del vendedor en la Fase 13—. Mientras tanto la importación
-    avisa cuando el número ya está en la otra zona en vez de pisarlo. — Fase 13.
+11. ~~**¿El número de título es único en todo el sistema o puede repetirse entre
+    Salta y Tucumán?**~~ Resuelto el 04/09/2026: **el número de título no se
+    repite nunca**, es propio de cada contrato en todo el club. `Titulo.numTit`
+    se queda `@unique` global, que es lo correcto. Con eso, el aviso que agrega
+    la Fase 13 —*"N títulos de este archivo ya existen en otra zona"*— pasa a ser
+    lo que tiene que ser: no un caso de negocio, sino la señal de que el archivo
+    que se está subiendo **no es de la zona activa**. — Fase 13.

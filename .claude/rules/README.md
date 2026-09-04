@@ -27,8 +27,10 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
   importación en silencio, y buscar títulos sin `zonaId` hacía que el padrón de una zona le
   pisara el vendedor a los títulos de la otra —comisión calculada con producción ajena—.
   Revisar siempre las dos puntas: la restricción y todas sus lecturas. **Toda consulta de
-  títulos lleva `zonaId`.** `Titulo.numTit` sigue siendo único global (pendiente de confirmar
-  con Balta): mientras tanto la importación avisa cuando el número ya está en la otra zona.
+  títulos lleva `zonaId`.** `Titulo.numTit` sí es único global y está confirmado (Balta,
+  04/09/2026): el número no se repite nunca. Si un archivo trae números que ya están en la
+  otra zona, la importación lo dice y corta — no es una colisión, es que el archivo no es
+  de esa zona.
 - **Volver a una ruta que llega de afuera** (`volverA`, `redirectTo`) pasa por `rutaInterna()`
   de `lib/navegacion.ts`: `startsWith("/")` no alcanza, porque `//otro-sitio.com` también
   empieza con barra y saca al usuario del sistema.

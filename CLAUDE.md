@@ -71,9 +71,12 @@ Vocabulario del dominio (aparece tal cual en el padrón y en el código):
   la búsqueda de títulos sin `zonaId` hacía que un padrón de Tucumán encontrara los títulos
   de Salta, los diera por existentes y **les pisara el vendedor** — la comisión de una zona
   calculada con la producción de la otra. Si aparece otra clave así, revisar las dos puntas:
-  la restricción y todas sus lecturas. `Titulo.numTit` **sigue siendo único global** y no
-  está confirmado que corresponda: mientras tanto la importación avisa cuando el número ya
-  está en la otra zona, en vez de pisarlo.
+  la restricción y todas sus lecturas.
+- **`Titulo.numTit` sí es único global, y eso está confirmado** (Balta, 04/09/2026): el
+  número de título no se repite nunca, es propio de cada contrato en todo el club. Por eso
+  la importación **igual filtra los títulos por `zonaId`** —encontrar uno de la otra zona no
+  es un caso legítimo— y, si el archivo trae números que ya están allá, lo dice y corta: la
+  conclusión correcta no es "hay una colisión", es **"este archivo no es de esta zona"**.
 - **Un `Vendedor` puede existir sin cuenta de usuario**: hay vendedores que figuran en el padrón
   pero no usan el sistema. La cuenta (`User`) es opcional.
 - **Balta y Pedro también venden.** Además de administrar tienen títulos propios en el padrón, y
