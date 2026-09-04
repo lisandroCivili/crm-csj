@@ -1392,9 +1392,11 @@ reventar recién al insertar con un choque de clave que no explica nada, la
 importación lo detecta antes, lo dice en el preview y corta al confirmar
 nombrando los títulos.
 
-**Lo que no se decidió**: si el número de título del club es único en todo el
-sistema o puede repetirse entre Salta y Tucumán. Se dejó el `@unique` global —que
-es lo que ya había— y se hizo visible el caso. Va como pendiente 11.
+**Resuelto el 04/09/2026**: Balta confirmó que el número de título **no se repite
+nunca** — es propio de cada contrato en todo el club. El `@unique` global se
+queda como está, y el aviso pasa a significar lo que tiene que significar: si un
+archivo trae números que ya están en la otra zona, ese archivo no es de la zona
+activa.
 
 ### Fase 14 — La red que impide que vuelvan
 
@@ -1429,8 +1431,26 @@ de precios en el repositorio.
 Los casos que importan salen de las reglas ya documentadas: fechas como serial de
 Excel, `FchPago` vacío contra columna ausente (la distinción que borraba el email de
 toda una zona), `normalizarNomVen`, `columnasPersonales`, filas con error, y
-`claveTelefono` en leads. Los fixtures se arman con SheetJS en memoria, como hace
-`generar-padrones-prueba.ts`: sin binarios versionados.
+`claveTelefono` en leads. Los fixtures se arman con SheetJS en memoria
+(`lib/excel/hoja-de-prueba.ts`), como hace `generar-padrones-prueba.ts`: sin
+binarios versionados. Un `.xlsx` en el repositorio no se lee en un diff, nadie
+sabe qué caso cubre y hay que abrir Excel para cambiarle una columna.
+
+**Los tests encontraron un defecto el primer día.** `"$ 250.000"` se importaba
+como **$250**: `Number("250.000")` da 250 en JavaScript, porque lee el punto como
+decimal. Un plan de doscientos cincuenta mil pesos entraba como uno de doscientos
+cincuenta, y así se guardaba en `PlanPrecio`. El código ya intentaba manejar el
+formato local —`1.234.567,89` lo leía bien— pero el caso sin decimales, que es
+como se escribe una lista de precios acá, quedaba afuera.
+
+El arreglo es `lib/excel/numero.ts`, una regla sola para los tres archivos: si
+hay coma, la coma es el decimal y los puntos son miles; si no hay coma, un punto
+seguido de **exactamente** tres dígitos separa miles —un precio con tres
+decimales no existe en pesos— y con una o dos cifras es decimal. `parsePadron`
+tenía el error simétrico: quitaba todos los puntos siempre, así que un importe
+guardado como texto `"1234.56"` entraba como `123456`. Ahí casi nunca se dispara
+—el padrón se lee con `raw: true` y los importes llegan como número— pero era el
+mismo agujero mirando para el otro lado.
 
 #### 14.3 Un guion que verifica los permisos y el aislamiento de zonas
 
@@ -1438,18 +1458,31 @@ Es lo que fija los arreglos de la Fase 13 para siempre, y es el tipo de prueba q
 menos se rompe al cambiar la interfaz, porque mira códigos de respuesta y
 redirecciones y no textos.
 
-`scripts/qa-permisos.mjs` usa el molde de `capturas.mjs` —que ya resuelve lo
+`scripts/qa-permisos.ts` usa el molde de `capturas.mjs` —que ya resuelve lo
 difícil: login por `POST /api/auth/callback/credentials` en vez de llenar el
 formulario, y la cookie de zona seteada a mano— y devuelve `process.exitCode` como
-`verificar-padron.ts`. La matriz: vendedor entrando a `/admin`, vendedor sin
-permiso entrando a su propia sección, adjunto ajeno por `/api/uploads`, ruta sin
-sesión, ficha de la otra zona por URL, venta con `leadId` ajeno, cuenta desactivada
-mientras navega, y vendedor con ficha dada de baja.
+`verificar-padron.ts`. **Va en TypeScript y no en `.mjs`** como decía el plan:
+necesita leer la base para descubrir los ids con los que prueba el cruce entre
+zonas y para apagar y volver a encender permisos, y así queda igual que
+`verificar-padron.ts`, que es el otro script apto para CI.
 
-De paso, `capturas.mjs` recorre 11 pantallas de admin y **ninguna del vendedor**:
-se le suman las del vendedor, el laboratorio, la comisión del agente y las fichas
-de detalle. Es donde el chequeo de desborde horizontal tiene más para encontrar,
-porque son las pantallas que nunca se midieron.
+Las 35 comprobaciones, en diez bloques: sin sesión no se ve nada y se recuerda a
+dónde iba; el vendedor rebota de las seis secciones de `/admin` y ponerse la
+cookie de zona no lo mete; cada permiso apagado cierra su pantalla y no sólo su
+ítem del menú; una cuenta desactivada y un vendedor dado de baja salen por
+`/api/salir` en el acto; el admin recibe 404 en las cinco pantallas de detalle de
+la otra zona **y 200 en las mismas parado en la zona correcta** —que es lo que
+prueba que no es que Tucumán no exista—; una zona inexistente en la cookie manda
+al selector; el adjunto ajeno da 404 y sin sesión 401; el login no lleva afuera; y
+ningún título quedó imputado a un vendedor de otra zona, que es el defecto de la
+Fase 13 mirado desde los datos.
+
+De paso, `capturas.mjs` recorría 11 pantallas de admin y **ninguna del vendedor**:
+pasa a 23, con las cuatro del vendedor en su propia sesión, el laboratorio, la
+comisión del agente y su escala, el perfil y las tres fichas de detalle (cuyo id
+sale del primer link del listado, porque depende de lo que haya cargado). Es donde
+el chequeo de desborde tenía más para encontrar, porque son las que nunca se
+midieron: ninguna se sale.
 
 ### Fase 15 — El recorrido humano, en las dos zonas y con los dos roles
 
@@ -2879,14 +2912,139 @@ importar algo). Salta no hay que tocarla.
 
 Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
 `npm run build`.
+
+### Fase 14 — La red que impide que vuelvan
+
+Esta fase casi no se mira: **se corre**. Lo que hay que ver es que los tres
+comandos nuevos hagan lo que dicen y que el sistema quede armado en las dos zonas
+sin tocar nada a mano.
+
+**1. Un comando deja todo listo.**
+
+```bash
+npm run demo
+```
+
+Tarda menos de un minuto y tiene que terminar diciendo:
+
+```
+TUCUMAN  4 clientes · 4 títulos · 30 cuotas · 7 importaciones · 2 alias
+SALTA    8 clientes · 9 títulos · 69 cuotas · 7 importaciones · 3 alias
+```
+
+**Los números de Salta son los de siempre** —8 clientes, 9 títulos, 69 cuotas—
+porque su escenario no se tocó: todas las guías anteriores dependen de ellos.
+Tucumán es un juego nuevo y más chico, con numeración propia (`TT-000x`, DNI
+`9998000x`) porque el número de título no se repite nunca.
+
+Corrélo **dos veces seguidas**: tiene que dar exactamente lo mismo. Es la misma
+regla que rige la importación del padrón, y si duplicara algo estaría mintiendo
+sobre el escenario que arma.
+
+**2. Las cuentas.** Ahora hay una de vendedor, que es lo que faltaba para poder
+probar esa mitad del sistema:
+
+| Rol | Entrar con |
+|---|---|
+| Admin | `balta@crm-csj.local` · `pedro@crm-csj.local` |
+| Vendedor | `vendedor@crm-csj.local` / `CambiarEstePassword123` |
+
+Entrá como el vendedor y mirá sus tres pantallas. Es la primera vez que se puede
+hacer sin crear la cuenta a mano.
+
+**3. Las dos zonas, con sus propios números.** Como Balta, en `/admin/comisiones`
+(septiembre 2026):
+
+| | Salta | Tucumán |
+|---|---|---|
+| Equipo | **$143.000** | **$357.000** |
+| `PRUEBA VENDEDOR UNO` | $105.000 | $150.000 |
+| Comisión del club | **$564.000** (54 cuotas) | **$954.000** (30 cuotas) |
+| Contratos | 3 de 100 | 2 de 50 |
+
+Los de Salta son los de todas las guías anteriores. Que el objetivo diga 100 en
+una zona y 50 en la otra es lo que hay que ver: es por zona, no del sistema.
+
+En `/admin/comisiones` de Tucumán tiene que aparecer **Pedro Toledo** cobrando
+comisión como vendedor. Es el agente vendiendo con su propia ficha, que es por
+zona: entrá como `pedro@` y en su dashboard de Tucumán vas a ver la tarjeta *"Mi
+comisión del mes"*, y en Salta no, porque ahí no tiene títulos.
+
+**4. La verificación de permisos, sola.**
+
+```bash
+npm run qa
+```
+
+Recorre 35 comprobaciones y termina en `35 comprobaciones, todas bien.` Prueba lo
+que no se puede mirar a ojo: que el vendedor rebote de las seis secciones de
+administración, que apagarle un permiso le cierre la pantalla y no sólo le
+esconda el ítem, que una cuenta desactivada salga del sistema en el clic
+siguiente, que el admin reciba 404 al escribir a mano la URL de un cliente de la
+otra zona —y 200 en esa misma ficha parado en la zona correcta—, y que ningún
+título haya quedado imputado a un vendedor de la zona equivocada.
+
+Devuelve error si algo falla, así que es lo que hay que correr antes de cada
+entrega de acá en adelante.
+
+**5. Las capturas ahora incluyen al vendedor.**
+
+```bash
+CAPTURA_MOVIL=1 npm run capturas
+```
+
+Pasa de 11 pantallas a 23: se suman las cuatro del vendedor, el laboratorio, la
+comisión del agente, el perfil y las tres fichas de detalle. Tiene que terminar
+con **"Ninguna pantalla se sale por el costado."** Las imágenes quedan en
+`.capturas-movil/` si querés mirarlas.
+
+**6. Los tests.**
+
+```bash
+npm test
+```
+
+De 154 a 207. Los nuevos cubren los tres parsers de Excel, que no tenían
+ninguno. Uno de ellos encontró un error de verdad el primer día: una lista de
+precios con `$ 250.000` se importaba como **$250**, porque JavaScript lee ese
+punto como decimal. Si tenés a mano una lista de precios real, subila en
+`/admin/planes/importar` y mirá que los importes entren completos.
+
+**Para borrar lo de prueba**: `npx tsx scripts/sembrar-demo.ts --borrar`, que saca
+las fichas marcadas, la cuenta del vendedor y el padrón de las dos zonas. Las
+zonas, los admins y la escala quedan.
+
+Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
+`npm run build`.
 ---
 
 ## Contexto para la próxima sesión
 
 **Dónde retomar:** Lisandro validó la **Fase 13 el 04/09/2026** (la 11, el
 02/09; la 10, el 01/09; las 6 a 9, el 28/08). Las fases 0 a 11 y la 13 están
-cerradas; **la 12 sigue esperando validación**. La próxima sesión sigue por la
-**Fase 15**.
+cerradas; **la 12 y la 14 esperan validación**. La próxima sesión sigue por la
+**Fase 15**, que es el recorrido humano y la última del plan de QA.
+
+De la Fase 14, lo que hay que llevarse:
+
+- **`npm run demo` arma el escenario entero**, en las dos zonas y con una cuenta
+  de vendedor (`vendedor@crm-csj.local`). Es idempotente. Antes esto eran siete
+  pasos manuales por zona y sólo estaba documentado para Salta; el lado del
+  vendedor directamente no se podía probar sin crear la cuenta a mano.
+- **`npm run qa` corre 35 comprobaciones de permisos y aislamiento** y devuelve
+  exit code. Es lo que fija los arreglos de la Fase 13 y lo que conviene correr
+  antes de cada entrega.
+- **El escenario de Salta no se toca nunca.** Sus números (8 clientes, 9 títulos,
+  69 cuotas, $105.000 / $38.000 / $564.000) son la referencia de todas las guías
+  ya validadas: agregarle un título las invalida a todas. Tucumán es un juego
+  aparte, con numeración propia.
+- **Los tests de los parsers encontraron un error el primer día**: `"$ 250.000"`
+  entraba como `$250`, porque `Number("250.000")` da 250. La lectura de números
+  quedó en `lib/excel/numero.ts`, una sola regla para los tres archivos. Vale la
+  pena recordarlo antes de escribir el próximo parseo de un campo numérico.
+- **Los fixtures de Excel se fabrican en memoria** (`lib/excel/hoja-de-prueba.ts`),
+  nunca se versionan: un `.xlsx` en el repo no se lee en un diff y nadie sabe qué
+  caso cubre.
 
 **El plan volvió a crecer.** El 03/09/2026 Lisandro pidió, antes de abrir el
 módulo del vendedor, una pasada de QA sobre todo lo construido: buscar

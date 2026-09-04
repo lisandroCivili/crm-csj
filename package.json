@@ -14,7 +14,9 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:studio": "prisma studio",
     "db:migrate": "prisma migrate dev",
-    "capturas": "node scripts/capturas.mjs"
+    "capturas": "node scripts/capturas.mjs",
+    "demo": "tsx scripts/sembrar-demo.ts",
+    "qa": "tsx scripts/qa-permisos.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.3",

@@ -25,6 +25,15 @@ const ADMIN = {
   password: process.env.CAPTURA_PASSWORD ?? "CambiarEstePassword123",
 };
 
+/**
+ * La cuenta del vendedor de demo. La crea `scripts/sembrar-demo.ts`; si no
+ * está, sus pantallas se saltean con un aviso en vez de romper la corrida.
+ */
+const VENDEDOR = {
+  email: process.env.CAPTURA_EMAIL_VENDEDOR ?? "vendedor@crm-csj.local",
+  password: process.env.CAPTURA_PASSWORD_VENDEDOR ?? "CambiarEstePassword123",
+};
+
 const PANTALLAS = [
   ["dashboard", "/admin/dashboard"],
   ["leads", "/admin/leads"],
@@ -33,10 +42,35 @@ const PANTALLAS = [
   ["padron-importar", "/admin/padron/importar"],
   ["vendedores", "/admin/vendedores"],
   ["ventas", "/admin/ventas"],
+  ["ventas-nueva", "/admin/ventas/nueva"],
   ["planes", "/admin/planes"],
   ["comisiones", "/admin/comisiones"],
   ["comisiones-escalas", "/admin/comisiones/escalas"],
+  ["comisiones-agente", "/admin/comisiones/agente"],
+  ["comisiones-agente-escala", "/admin/comisiones/agente/escala"],
   ["actividad", "/admin/actividad"],
+  ["laboratorio", "/admin/laboratorio"],
+  ["perfil", "/perfil"],
+];
+
+/**
+ * Las fichas de detalle. No se pueden listar con una ruta fija —dependen de qué
+ * haya cargado— así que el id sale del primer link del listado. Nunca se habían
+ * mirado, y son las pantallas con más datos por renglón: el mejor lugar para
+ * que algo se salga por el costado en el celular.
+ */
+const DETALLES = [
+  ["cliente", "/admin/clientes", "/admin/clientes/"],
+  ["vendedor", "/admin/vendedores", "/admin/vendedores/"],
+  ["venta", "/admin/ventas", "/admin/ventas/"],
+];
+
+/** Lo que ve el vendedor. Hasta la Fase 14 no se capturaba ninguna. */
+const PANTALLAS_VENDEDOR = [
+  ["vendedor-dashboard", "/vendedor/dashboard"],
+  ["vendedor-leads", "/vendedor/leads"],
+  ["vendedor-ventas", "/vendedor/ventas"],
+  ["vendedor-venta-nueva", "/vendedor/ventas/nueva"],
 ];
 
 await mkdir(DESTINO, { recursive: true });
@@ -52,10 +86,12 @@ const pagina = await contexto.newPage();
 
 // El overlay de desarrollo de Next se superpone a la interfaz y ensucia las
 // capturas. En produccion no existe.
-const ocultarOverlay = () =>
-  pagina
+const ocultarOverlayDe = (pag) =>
+  pag
     .addStyleTag({ content: "nextjs-portal { display: none !important }" })
     .catch(() => {});
+
+const ocultarOverlay = () => ocultarOverlayDe(pagina);
 
 await pagina.goto(`${BASE}/login`, { waitUntil: "networkidle" });
 await ocultarOverlay();
@@ -96,8 +132,8 @@ await contexto.addCookies([
  * contencion que evita que el desborde se note, y con ella puesta `scrollWidth`
  * no acusa nada nunca. La idea es ver justamente lo que la red tapa.
  */
-const medirDesborde = () =>
-  pagina.evaluate(() => {
+const medirDesbordeDe = (pag) =>
+  pag.evaluate(() => {
     const raiz = document.documentElement;
     const previo = [raiz.style.overflowX, document.body.style.overflowX];
     raiz.style.overflowX = "visible";
@@ -145,25 +181,84 @@ const medirDesborde = () =>
   });
 
 const desbordes = [];
+let siguiente = 2;
 
-for (const [indice, [nombre, ruta]] of PANTALLAS.entries()) {
-  await pagina.goto(`${BASE}${ruta}`, { waitUntil: "networkidle" });
-  await ocultarOverlay();
-  await pagina.waitForTimeout(500);
-  const numero = String(indice + 2).padStart(2, "0");
-  await pagina.screenshot({ path: `${DESTINO}/${numero}-${nombre}.png` });
+async function capturar(pag, nombre, ruta) {
+  await pag.goto(`${BASE}${ruta}`, { waitUntil: "networkidle" });
+  await ocultarOverlayDe(pag);
+  await pag.waitForTimeout(500);
+  const numero = String(siguiente++).padStart(2, "0");
+  await pag.screenshot({ path: `${DESTINO}/${numero}-${nombre}.png` });
 
-  const { ancho, sobra, culpables } = await medirDesborde();
+  const { ancho, sobra, culpables } = await medirDesbordeDe(pag);
   if (sobra > 0) desbordes.push({ nombre, ruta, ancho, sobra, culpables });
   console.log(`${numero}-${nombre}${sobra > 0 ? `   ← se sale ${sobra}px` : ""}`);
 }
 
+for (const [nombre, ruta] of PANTALLAS) {
+  await capturar(pagina, nombre, ruta);
+}
+
+// Las fichas de detalle: el id sale del primer link del listado, porque depende
+// de lo que haya cargado en la base.
+for (const [nombre, listado, prefijo] of DETALLES) {
+  await pagina.goto(`${BASE}${listado}`, { waitUntil: "networkidle" });
+  const href = await pagina
+    .locator(`a[href^="${prefijo}"]:not([href$="/editar"]):not([href$="/nueva"])`)
+    .first()
+    .getAttribute("href")
+    .catch(() => null);
+
+  if (!href) {
+    console.log(`   (sin ${nombre} cargado: se saltea su ficha)`);
+    continue;
+  }
+  await capturar(pagina, `ficha-${nombre}`, href);
+}
+
 // En movil la navegacion vive detras del boton: sin esta captura no se ve.
 if (MOVIL) {
+  await pagina.goto(`${BASE}/admin/dashboard`, { waitUntil: "networkidle" });
+  await ocultarOverlay();
   await pagina.getByRole("button", { name: "Abrir menú" }).click();
   await pagina.waitForTimeout(400);
-  await pagina.screenshot({ path: `${DESTINO}/99-menu.png` });
-  console.log("99-menu");
+  await pagina.screenshot({ path: `${DESTINO}/90-menu.png` });
+  console.log("90-menu");
+}
+
+// ---------------------------------------------------------------------------
+// El lado del vendedor, en su propia sesion.
+//
+// Es la mitad del sistema que nunca se habia capturado, y la que mas se usa
+// desde el telefono. Necesita una cuenta de vendedor, que no viene en el seed:
+// la crea `scripts/sembrar-demo.ts`.
+// ---------------------------------------------------------------------------
+const contextoVendedor = await navegador.newContext({
+  ...(MOVIL
+    ? devices["iPhone 14"]
+    : { viewport: { width: 1440, height: 950 }, deviceScaleFactor: 2 }),
+  locale: "es-AR",
+});
+const paginaVendedor = await contextoVendedor.newPage();
+
+const csrfVendedor = await (await contextoVendedor.request.get(`${BASE}/api/auth/csrf`)).json();
+await contextoVendedor.request.post(`${BASE}/api/auth/callback/credentials`, {
+  form: { csrfToken: csrfVendedor.csrfToken, ...VENDEDOR, callbackUrl: `${BASE}/` },
+  maxRedirects: 0,
+});
+
+const sesionVendedor = await (await contextoVendedor.request.get(`${BASE}/api/auth/session`)).json();
+
+if (!sesionVendedor?.user) {
+  console.log(
+    `\n(no hay cuenta de vendedor ${VENDEDOR.email}: se saltean sus pantallas.\n` +
+      " Se crea con: npx tsx scripts/sembrar-demo.ts)"
+  );
+} else {
+  siguiente = 50;
+  for (const [nombre, ruta] of PANTALLAS_VENDEDOR) {
+    await capturar(paginaVendedor, nombre, ruta);
+  }
 }
 
 await navegador.close();

@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { aNumeroLocal } from "./numero";
 
 /**
  * Lista de precios de los planes. Como el archivo lo arma el club (o Balta a
@@ -48,20 +49,10 @@ function aTexto(valor: unknown): string | null {
   return texto === "" ? null : texto;
 }
 
-/** Acepta "1.234.567,89" (formato local) y "1234567.89". */
-function aNumero(valor: unknown): number | null {
-  if (typeof valor === "number") return Number.isFinite(valor) ? valor : null;
-  const texto = aTexto(valor);
-  if (!texto) return null;
-
-  const limpio = texto.replace(/[^\d.,-]/g, "");
-  const usaComaDecimal = /,\d{1,2}$/.test(limpio);
-  const numero = Number(
-    usaComaDecimal ? limpio.replace(/\./g, "").replace(",", ".") : limpio.replace(/,/g, "")
-  );
-
-  return Number.isFinite(numero) ? numero : null;
-}
+// La lectura de números vive en `numero.ts`, compartida con el padrón: el punto
+// significa dos cosas opuestas según el formato y la regla tiene que ser una
+// sola. Acá se leía "$ 250.000" como 250.
+const aNumero = aNumeroLocal;
 
 export function parsePrecios(buffer: Buffer): ResultadoParseoPrecios {
   const libro = XLSX.read(buffer, { type: "buffer", raw: false });

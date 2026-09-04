@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import { CAMPOS_PERSONALES, type CampoPersonal } from "@/lib/padron/camposCliente";
+import { aNumeroLocal } from "./numero";
 
 /** Una fila del padron = una cuota de un titulo en un mes determinado. */
 export type FilaPadron = {
@@ -101,14 +102,11 @@ function aTexto(valor: unknown): string | null {
   return texto === "" ? null : texto;
 }
 
-function aNumero(valor: unknown): number | null {
-  if (typeof valor === "number") return Number.isFinite(valor) ? valor : null;
-  const texto = aTexto(valor);
-  if (!texto) return null;
-  // El Excel puede traer la coma como separador decimal.
-  const numero = Number(texto.replace(/\./g, "").replace(",", "."));
-  return Number.isFinite(numero) ? numero : null;
-}
+// Compartida con la lista de precios: el punto separa miles o decimales segun
+// el formato, y la regla tiene que ser una sola. Acá los importes casi siempre
+// llegan como number (el padron se lee con `raw: true`), pero una celda de
+// importe guardada como texto entraba multiplicada por cien.
+const aNumero = aNumeroLocal;
 
 export function parsePadron(buffer: Buffer): ResultadoParseo {
   const libro = XLSX.read(buffer, { type: "buffer", cellDates: false });

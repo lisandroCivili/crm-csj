@@ -1,11 +1,29 @@
 /**
  * GENERADOR DE PADRONES DE PRUEBA. Solo para desarrollo.
  *
- *   npx tsx scripts/generar-padrones-prueba.ts
+ *   npx tsx scripts/generar-padrones-prueba.ts            # las dos zonas
+ *   npx tsx scripts/generar-padrones-prueba.ts SALTA
+ *   npx tsx scripts/generar-padrones-prueba.ts TUCUMAN
  *
  * Escribe en `docs/padrones-prueba/` una serie de archivos con la misma forma
  * que los del club, para importar desde /admin/padron/importar y probar el
  * sistema sin usar datos reales.
+ *
+ * DOS ZONAS, DOS JUEGOS DE NUMEROS
+ *
+ * El numero de titulo no se repite nunca en todo el club (Balta, 04/09/2026),
+ * asi que Tucuman lleva su propia numeracion (TT-*, DNI 9998*) y no una copia de
+ * la de Salta. Reusar los PT-* simularia algo que en la realidad no pasa, y
+ * ademas la importacion lo rechaza: un archivo con numeros que ya estan en la
+ * otra zona no es una colision, es un archivo subido en la zona equivocada.
+ *
+ * El escenario de SALTA no se toca. Sus numeros son la referencia de todas las
+ * guias de prueba ya validadas ($105.000, $38.000, $564.000, 8 clientes, 9
+ * titulos, 69 cuotas): agregarle un titulo las invalidaria a todas.
+ *
+ * Lo que si comparten las dos zonas es el NomVen: `PRUEBA VENDEDOR UNO` aparece
+ * en los padrones de las dos, y `TOLEDO PEDRO` tambien. Es deliberado — es el
+ * caso que la Fase 13 vino a arreglar y el que hay que poder seguir probando.
  *
  * POR QUE ARCHIVOS Y NO UNA CARGA DIRECTA A LA BASE
  *
@@ -48,6 +66,12 @@ const MESES = [
 
 const VENDEDOR_UNO = "PRUEBA VENDEDOR UNO";
 const VENDEDOR_DOS = "PRUEBA VENDEDOR DOS";
+/**
+ * Balta y Pedro venden en las dos zonas y aparecen en los dos padrones. En el
+ * padron real Pedro figura con tres variantes del mismo nombre; alcanza con una
+ * para que el escenario tenga el caso.
+ */
+const PEDRO = "TOLEDO PEDRO";
 
 type TituloPrueba = {
   numTit: string;
@@ -75,7 +99,7 @@ type TituloPrueba = {
   proposito: string;
 };
 
-const TITULOS: TituloPrueba[] = [
+const TITULOS_SALTA: TituloPrueba[] = [
   {
     numTit: "PT-0001",
     nomVen: VENDEDOR_UNO,
@@ -187,6 +211,79 @@ const TITULOS: TituloPrueba[] = [
   },
 ];
 
+/**
+ * TUCUMAN: un escenario chico, con numeracion propia.
+ *
+ * No es una copia del de Salta ni le hace falta serlo: lo que hay que poder
+ * probar aca es el aislamiento entre zonas, no otra vez las caidas y las
+ * renovaciones. Son pocos titulos y de importes distintos a proposito, para que
+ * cualquier numero de Salta que se cuele en una pantalla de Tucuman —o al reves—
+ * se vea de una.
+ */
+const TITULOS_TUCUMAN: TituloPrueba[] = [
+  {
+    numTit: "TT-0001",
+    nomVen: VENDEDOR_UNO,
+    nombre: "IVAN PRUEBA TUC",
+    dni: "99980001",
+    localidad: "SAN MIGUEL DE TUCUMAN",
+    importe: 300_000,
+    mesCuota1: "2026-07",
+    apareceDesde: "2026-07",
+    proposito:
+      "Venta nueva de julio a nombre de PRUEBA VENDEDOR UNO, que tambien vende en Salta: " +
+      "es el NomVen compartido entre zonas que la Fase 13 vino a arreglar.",
+  },
+  {
+    numTit: "TT-0002",
+    nomVen: PEDRO,
+    nombre: "JUANA PRUEBA TUC",
+    dni: "99980002",
+    localidad: "CONCEPCION",
+    importe: 300_000,
+    mesCuota1: "2026-07",
+    apareceDesde: "2026-07",
+    proposito:
+      "Venta nueva del agente: TOLEDO PEDRO vende en las dos zonas y cobra comision por " +
+      "sus propios titulos, con la ficha de vendedor que le corresponda a cada zona.",
+  },
+  {
+    numTit: "TT-0003",
+    nomVen: PEDRO,
+    nombre: "KARIM PRUEBA TUC",
+    dni: "99980003",
+    localidad: "TAFI VIEJO",
+    importe: 300_000,
+    mesCuota1: "2026-02",
+    apareceDesde: "2026-06",
+    proposito: "Titulo en curso: cuotas 5 a 11, para que la liquidacion no sea solo cuotas 1.",
+  },
+  {
+    numTit: "TT-0004",
+    nomVen: VENDEDOR_UNO,
+    nombre: "LUCIA PRUEBA TUC",
+    dni: "99980004",
+    localidad: "SAN MIGUEL DE TUCUMAN",
+    importe: 300_000,
+    mesCuota1: "2022-01",
+    apareceDesde: "2026-06",
+    proposito:
+      "Titulo viejo: cuotas 54 a 60. Cae en el tramo 6-60 del contrato de agencia, que es " +
+      "el grueso del margen y el que el tope del vendedor deja afuera.",
+  },
+];
+
+type Escenario = {
+  /** Va en el nombre del archivo. Vacio para Salta, que ya estaba sin sufijo. */
+  sufijo: string;
+  titulos: TituloPrueba[];
+};
+
+const ESCENARIOS: Record<string, Escenario> = {
+  SALTA: { sufijo: "", titulos: TITULOS_SALTA },
+  TUCUMAN: { sufijo: "tucuman-", titulos: TITULOS_TUCUMAN },
+};
+
 // ---------------------------------------------------------------------------
 // Fechas
 // ---------------------------------------------------------------------------
@@ -233,7 +330,10 @@ const ENCABEZADOS = [
 
 type Resumen = { archivo: string; filas: number; titulos: number; detalle: string[] };
 
-function generarPadron(mesPadron: string): { filas: unknown[][]; resumen: Resumen } {
+function generarPadron(
+  mesPadron: string,
+  titulos: TituloPrueba[]
+): { filas: unknown[][]; resumen: Resumen } {
   // El padron del club trae el mes en curso y los dos anteriores.
   const emisiones = [correrMeses(mesPadron, -2), correrMeses(mesPadron, -1), mesPadron];
 
@@ -241,7 +341,7 @@ function generarPadron(mesPadron: string): { filas: unknown[][]; resumen: Resume
   const titulosIncluidos = new Set<string>();
   const detalle: string[] = [];
 
-  for (const t of TITULOS) {
+  for (const t of titulos) {
     // Todavia no lo lista el club, o este mes no lo lista.
     const loLista = t.apareceEnPadrones
       ? t.apareceEnPadrones.includes(mesPadron)
@@ -327,16 +427,12 @@ function generarPadron(mesPadron: string): { filas: unknown[][]; resumen: Resume
   };
 }
 
-function main() {
-  mkdirSync(DESTINO, { recursive: true });
-
-  console.log("Generando padrones de prueba en", DESTINO, "\n");
-
-  const resumenes: Resumen[] = [];
+function generarZona(zona: string, escenario: Escenario) {
+  console.log(`\n=== ${zona} ===\n`);
 
   for (const [i, mes] of MESES.entries()) {
-    const { filas, resumen } = generarPadron(mes);
-    const nombre = `padron-prueba-${String(i + 1).padStart(2, "0")}-${mes}.xlsx`;
+    const { filas, resumen } = generarPadron(mes, escenario.titulos);
+    const nombre = `padron-prueba-${escenario.sufijo}${String(i + 1).padStart(2, "0")}-${mes}.xlsx`;
 
     const hoja = XLSX.utils.aoa_to_sheet([ENCABEZADOS, ...filas]);
     const libro = XLSX.utils.book_new();
@@ -344,20 +440,35 @@ function main() {
     writeFileSync(join(DESTINO, nombre), XLSX.write(libro, { type: "buffer", bookType: "xlsx" }));
 
     resumen.archivo = nombre;
-    resumenes.push(resumen);
-
     console.log(`${nombre}  ${String(resumen.filas).padStart(3)} filas · ${resumen.titulos} titulos`);
     for (const linea of resumen.detalle) console.log(`     ${linea}`);
   }
 
   console.log("\nQue prueba cada titulo:\n");
-  for (const t of TITULOS) {
+  for (const t of escenario.titulos) {
     console.log(`  ${t.numTit}  ${t.nomVen.replace("PRUEBA VENDEDOR ", "V")}  ${t.proposito}`);
   }
+}
+
+function main() {
+  mkdirSync(DESTINO, { recursive: true });
+
+  const pedida = (process.argv[2] ?? "").toUpperCase();
+  if (pedida && !ESCENARIOS[pedida]) {
+    console.error(`Zona desconocida: "${pedida}". Las que hay: ${Object.keys(ESCENARIOS).join(", ")}.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  const zonas = pedida ? [pedida] : Object.keys(ESCENARIOS);
+
+  console.log("Generando padrones de prueba en", DESTINO);
+  for (const zona of zonas) generarZona(zona, ESCENARIOS[zona]);
 
   console.log(
-    "\nSe importan en orden desde /admin/padron/importar.\n" +
-      "Antes conviene vaciar el padron desde /admin/laboratorio.\n"
+    "\nSe importan en orden desde /admin/padron/importar, cada juego en SU zona.\n" +
+      "Antes conviene vaciar el padron desde /admin/laboratorio.\n" +
+      "Para dejar todo armado de una: npx tsx scripts/sembrar-demo.ts\n"
   );
 }
 

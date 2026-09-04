@@ -100,6 +100,13 @@ Vocabulario del dominio (aparece tal cual en el padrón y en el código):
   anotado en `Cliente.camposManuales` y el padrón **deja de tocarlo**; el resto se sigue
   actualizando solo. Sin eso, corregir un teléfono duraba hasta el archivo siguiente. La regla
   es pura y está testeada en `lib/padron/camposCliente.ts`.
+- **Un número de una celda de Excel se lee con `aNumeroLocal()`** (`lib/excel/numero.ts`),
+  nunca con `Number()` a secas ni quitando todos los puntos. El punto significa dos cosas
+  opuestas: en `250.000` separa miles y en `1234.56` es el decimal. `Number("250.000")` da
+  **250**, y así una lista de precios importaba un plan de doscientos cincuenta mil pesos
+  como uno de doscientos cincuenta. La regla: con coma, la coma es el decimal y los puntos
+  son miles; sin coma, un punto seguido de exactamente tres dígitos separa miles. Está
+  testeada y la comparten el padrón y los precios.
 - **"La celda está vacía" y "la columna no vino" no son lo mismo.** Ninguna de las cinco
   columnas personales opcionales está en `COLUMNAS_REQUERIDAS`, así que un padrón sin la
   columna `Email` se importa igual, y antes **borraba el email de toda la zona** porque
@@ -423,12 +430,31 @@ Postgres y volumen persistente para adjuntos).
 npm run dev              # levanta la base local Y la web (localhost:3000)
 npm run build            # build de produccion
 npm run lint             # eslint
-npm test                 # vitest (motor de comisiones y helpers de lib/)
+npm test                 # vitest (motor de comisiones, parsers y helpers de lib/)
 npm run db:migrate       # aplicar cambios de schema
 npm run db:studio        # inspeccionar la base
 npm run db:seed          # cargar zonas y usuarios admin
+npm run demo             # escenario completo de prueba en LAS DOS zonas
+npm run qa               # 35 comprobaciones de permisos y aislamiento de zonas
 npm run capturas         # capturas de pantalla de todas las vistas
 ```
+
+`npm run demo` deja la base lista para probar cualquier cosa: los padrones de prueba
+importados por el camino real en Salta y en Tucumán, las fichas de Balta y de Pedro en
+cada zona enlazadas a sus cuentas, la escala cargada y **una cuenta de vendedor**
+(`vendedor@crm-csj.local`), que el seed no crea y sin la cual esa mitad del sistema no se
+puede probar. Es idempotente. Se deshace con `npx tsx scripts/sembrar-demo.ts --borrar`.
+
+**El escenario de Salta no se toca.** Sus números (8 clientes, 9 títulos, 69 cuotas,
+$105.000 / $38.000 / $564.000) son la referencia de todas las guías de prueba ya
+validadas; agregarle un título las invalida a todas. Tucumán es un juego aparte, con
+numeración propia (`TT-000x`, DNI `9998*`), porque el número de título nunca se repite.
+
+`npm run qa` necesita el servidor levantado y devuelve exit code, así que sirve para CI.
+Conviene correrlo contra el build (`npm run build && npx next start -p 3010`, con
+`BASE_URL` apuntando ahí) y no contra `next dev`, donde la compilación en frío hace que la
+primera visita a cada ruta tarde y el bloqueo de recursos de desarrollo distorsione las
+navegaciones.
 
 ### Desarrollo local necesita dos procesos
 

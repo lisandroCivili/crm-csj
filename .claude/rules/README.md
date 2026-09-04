@@ -84,6 +84,12 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
   `Actividad.cambios` duplica a propósito el diff de `VentaHistorial`, y las dos pantallas lo
   dibujan con el mismo componente. El id de vendedor que llega por query se valida contra los
   de la zona: uno ajeno mostraría el feed entero como si fuera suyo.
+- **Números de Excel**: se leen con `aNumeroLocal()` (`lib/excel/numero.ts`), nunca con
+  `Number()` a secas. `Number("250.000")` da 250, no doscientos cincuenta mil.
+- **Verificación**: `npm run demo` arma el escenario de las dos zonas (idempotente) y
+  `npm run qa` corre las 35 comprobaciones de permisos y aislamiento con exit code. El
+  escenario de **Salta no se toca**: sus números son la referencia de todas las guías de
+  prueba ya validadas. Los fixtures de Excel se fabrican en memoria, nunca se versionan.
 - **Datos sensibles**: padrones reales y fotos de DNI no se versionan ni se sirven por URL pública.
 - **Sesión**: el rol, el estado de la cuenta y los permisos se leen de la base en cada request
   (`getUsuarioActual`), nunca de los claims del JWT. Sacar a alguien del sistema se hace por
