@@ -78,7 +78,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ✅ commit `aa06212` |
 | 12 | Actividad: leads + ventas, filtrable por vendedor | 🔨 commit `3c24fc1` |
 | 13 | QA: los agujeros de zona (alias · títulos · `leadId` · links rotos) | ✅ commit `3dbfd89` |
-| 14 | QA: la red (escenario de dos zonas · tests de parsers · guion de permisos) | 🔨 commit `ab8dccc` |
+| 14 | QA: la red (escenario de dos zonas · tests de parsers · guion de permisos) | ✅ commit `ab8dccc` |
 | 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | ⬜ |
 
 Dependencias:
@@ -3020,10 +3020,10 @@ Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Lisandro validó la **Fase 13 el 04/09/2026** (la 11, el
-02/09; la 10, el 01/09; las 6 a 9, el 28/08). Las fases 0 a 11 y la 13 están
-cerradas; **la 12 y la 14 esperan validación**. La próxima sesión sigue por la
-**Fase 15**, que es el recorrido humano y la última del plan de QA.
+**Dónde retomar:** Lisandro validó la **Fase 14 el 05/09/2026** (la 13, el
+04/09; la 11, el 02/09; la 10, el 01/09; las 6 a 9, el 28/08). Las fases 0 a 11,
+la 13 y la 14 están cerradas; **la 12 sigue esperando validación**. La sesión
+del 05/09 sigue por la **Fase 15**, el recorrido humano y última del plan de QA.
 
 De la Fase 14, lo que hay que llevarse:
 
