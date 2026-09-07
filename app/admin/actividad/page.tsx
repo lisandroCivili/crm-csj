@@ -13,6 +13,7 @@ import {
 import { ListaCambios } from "@/components/actividad/lista-cambios";
 import { DatoFila, ListaTarjetas, TarjetaFila } from "@/components/layout/lista-tarjetas";
 import { PageHeader } from "@/components/layout/page-header";
+import { Paginacion } from "@/components/layout/paginacion";
 import { BadgeEstado } from "@/components/leads/badge-estado";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -158,6 +159,8 @@ export default async function ActividadPage({ searchParams }: PageProps<"/admin/
     };
   });
 
+  // Conserva los filtros activos: antes la paginacion volvia al feed sin ellos
+  // y la pagina 2 mostraba otra cosa que la 1.
   const enlace = (extra: Record<string, string | undefined>) => {
     const params = new URLSearchParams();
     const valores = {
@@ -356,25 +359,11 @@ export default async function ActividadPage({ searchParams }: PageProps<"/admin/
             </ul>
           </Card>
 
-          {paginas > 1 ? (
-            <div className="mt-4 flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Página {pagina} de {paginas}
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" asChild disabled={pagina <= 1}>
-                  {/* El enlace conserva los filtros: antes volvia al feed sin
-                      ellos y la pagina 2 mostraba otra cosa. */}
-                  <Link href={enlace({ pagina: String(Math.max(1, pagina - 1)) })}>Anterior</Link>
-                </Button>
-                <Button variant="outline" size="sm" asChild disabled={pagina >= paginas}>
-                  <Link href={enlace({ pagina: String(Math.min(paginas, pagina + 1)) })}>
-                    Siguiente
-                  </Link>
-                </Button>
-              </div>
-            </div>
-          ) : null}
+          <Paginacion
+            pagina={pagina}
+            paginas={paginas}
+            enlace={(n) => enlace({ pagina: String(n) })}
+          />
         </>
       )}
     </>

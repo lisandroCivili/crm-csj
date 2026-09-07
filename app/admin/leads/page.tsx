@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ClipboardList, Search, Upload } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
+import { Paginacion } from "@/components/layout/paginacion";
 import { TablaLeads } from "@/components/leads/tabla-leads";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -170,23 +171,7 @@ export default async function LeadsPage({ searchParams }: PageProps<"/admin/lead
 
           <TablaLeads leads={leads} vendedores={vendedores} />
 
-          {paginas > 1 ? (
-            <div className="mt-4 flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">
-                Página {pagina} de {paginas}
-              </p>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" asChild disabled={pagina <= 1}>
-                  <Link href={enlace({ pagina: String(Math.max(1, pagina - 1)) })}>Anterior</Link>
-                </Button>
-                <Button variant="outline" size="sm" asChild disabled={pagina >= paginas}>
-                  <Link href={enlace({ pagina: String(Math.min(paginas, pagina + 1)) })}>
-                    Siguiente
-                  </Link>
-                </Button>
-              </div>
-            </div>
-          ) : null}
+          <Paginacion pagina={pagina} paginas={paginas} enlace={(n) => enlace({ pagina: String(n) })} />
         </>
       )}
     </>

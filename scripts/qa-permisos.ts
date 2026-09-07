@@ -142,6 +142,11 @@ async function main() {
 
   const navegador = await chromium.launch();
 
+  // Se crean dentro del recorrido y se borran en el `finally`: si algo falla a
+  // mitad, no quedan sembrados en la base de nadie.
+  let leadPropio: { id: string } | null = null;
+  let leadAjeno: { id: string } | null = null;
+
   try {
     // -------------------------------------------------------------------
     titulo("1. Sin sesión no se ve nada");
@@ -285,7 +290,110 @@ async function main() {
     });
 
     // -------------------------------------------------------------------
-    titulo("6. Una cuenta desactivada deja de entrar en el acto");
+    titulo("6. Los listados del vendedor no ofrecen ni traen de más");
+    // Necesita dos leads que el escenario no siembra: uno suyo y uno de otro
+    // vendedor de la zona. Se crean acá, marcados `PRUEBA-QA`, y se borran en
+    // el `finally` pase lo que pase. No se agregan a `sembrar-demo.ts` a
+    // propósito: el escenario de Salta es la referencia de todas las guías ya
+    // validadas y no se toca.
+    const otraFicha = await db.vendedor.findFirst({
+      where: { zonaId: salta.id, NOT: { id: fichaVendedor.id } },
+      select: { id: true },
+    });
+
+    if (!otraFicha) {
+      console.log("  (falta una segunda ficha en Salta para comparar: se salta)");
+    } else {
+      leadPropio = await db.lead.create({
+        data: {
+          nombre: "PRUEBA-QA LEAD PROPIO",
+          telefono: "3870000001",
+          origen: "PROPIO",
+          zonaId: salta.id,
+          vendedorAsignadoId: fichaVendedor.id,
+          fechaAsignacion: new Date(),
+        },
+        select: { id: true },
+      });
+      leadAjeno = await db.lead.create({
+        data: {
+          nombre: "PRUEBA-QA LEAD AJENO",
+          telefono: "3870000002",
+          origen: "PROPIO",
+          zonaId: salta.id,
+          vendedorAsignadoId: otraFicha.id,
+          fechaAsignacion: new Date(),
+        },
+        select: { id: true },
+      });
+
+      // El listado filtra por `vendedorAsignadoId`, y el buscador es superficie
+      // nueva por donde podría escaparse: se comprueba con el buscador puesto,
+      // que es cuando el `where` se arma con un OR y es más fácil equivocarse.
+      const buscando = await (
+        await vend.request.get(`${BASE}/vendedor/leads?q=PRUEBA-QA`)
+      ).text();
+      check(
+        buscando.includes("PRUEBA-QA LEAD PROPIO"),
+        "el buscador de Mis leads encuentra el suyo"
+      );
+      check(
+        !buscando.includes("PRUEBA-QA LEAD AJENO"),
+        "y no trae el de otro vendedor, ni buscándolo por nombre"
+      );
+
+      // La ficha ajena tampoco se abre por URL, como las otras rutas `[id]`.
+      const fichaAjena = await ir(vend, `/vendedor/leads/${leadAjeno.id}`);
+      check(
+        fichaAjena.status === 404,
+        "la ficha de un lead que no es suyo da 404",
+        `dio ${fichaAjena.status}`
+      );
+
+      // El botón "Cargar venta" se dibujaba siempre: el vendedor sin el
+      // permiso lo apretaba y la pantalla destino lo devolvía al dashboard sin
+      // decirle nada. Es el mismo criterio que los links a la cartera.
+      const conCarga = await (
+        await vend.request.get(`${BASE}/vendedor/leads/${leadPropio.id}`)
+      ).text();
+      check(
+        conCarga.includes("/vendedor/ventas/nueva"),
+        "con el permiso, la ficha del lead ofrece cargar la venta"
+      );
+      await db.vendedor.update({
+        where: { id: fichaVendedor.id },
+        data: { puedeCargarVentas: false },
+      });
+      const sinCarga = await (
+        await vend.request.get(`${BASE}/vendedor/leads/${leadPropio.id}`)
+      ).text();
+      check(
+        !sinCarga.includes("/vendedor/ventas/nueva"),
+        "y sin él no lo ofrece, en vez de mandarlo a un rebote"
+      );
+      await db.vendedor.update({
+        where: { id: fichaVendedor.id },
+        data: { puedeCargarVentas: true },
+      });
+    }
+
+    // Lo que llega por query no rompe la página: `pagina` fuera de rango o
+    // basura, y un `estado` que no existe, caen al listado de siempre.
+    for (const ruta of [
+      "/vendedor/leads?pagina=0",
+      "/vendedor/leads?pagina=abc",
+      "/vendedor/leads?pagina=99999",
+      "/vendedor/leads?estado=INVENTADO",
+      "/vendedor/ventas?pagina=-3",
+      "/vendedor/ventas?estado=INVENTADO",
+      "/vendedor/cartera?pagina=99999",
+    ]) {
+      const r = await ir(vend, ruta);
+      check(r.status === 200, `${ruta} no rompe`, `dio ${r.status}`);
+    }
+
+    // -------------------------------------------------------------------
+    titulo("7. Una cuenta desactivada deja de entrar en el acto");
     await db.user.update({ where: { id: fichaVendedor.userId }, data: { activo: false } });
     const desactivado = await ir(vend, "/vendedor/dashboard");
     check(
@@ -295,7 +403,7 @@ async function main() {
     );
     await db.user.update({ where: { id: fichaVendedor.userId }, data: { activo: true } });
 
-    titulo("7. Un vendedor dado de baja del equipo tampoco entra");
+    titulo("8. Un vendedor dado de baja del equipo tampoco entra");
     await db.vendedor.update({ where: { id: fichaVendedor.id }, data: { activo: false } });
     const deBaja = await ir(vend, "/vendedor/dashboard");
     check(
@@ -307,7 +415,7 @@ async function main() {
     await vend.close();
 
     // -------------------------------------------------------------------
-    titulo("8. El admin no ve la otra zona escribiendo la URL");
+    titulo("9. El admin no ve la otra zona escribiendo la URL");
     const admin = await navegador.newContext();
     await entrar(admin, "balta@crm-csj.local", PASSWORD_ADMIN);
     await ponerZona(admin, salta.id);
@@ -339,7 +447,7 @@ async function main() {
     check(saltaDesdeTuc.status === 404, "y el de Salta pasa a dar 404", `dio ${saltaDesdeTuc.status}`);
 
     // -------------------------------------------------------------------
-    titulo("9. Una zona que no existe manda a elegir de nuevo");
+    titulo("10. Una zona que no existe manda a elegir de nuevo");
     await ponerZona(admin, 99999);
     const zonaFantasma = await ir(admin, "/admin/clientes");
     check(
@@ -350,7 +458,7 @@ async function main() {
     await ponerZona(admin, salta.id);
 
     // -------------------------------------------------------------------
-    titulo("10. Los adjuntos son de quien los subió");
+    titulo("11. Los adjuntos son de quien los subió");
     const adjunto = await db.ventaAdjunto.findFirst({
       select: { id: true, venta: { select: { zonaId: true, vendedorId: true } } },
     });
@@ -375,7 +483,7 @@ async function main() {
     await sinSesion.close();
 
     // -------------------------------------------------------------------
-    titulo("11. El login no lleva a otro sitio");
+    titulo("12. El login no lleva a otro sitio");
     const conVolver = await navegador.newContext();
     const paginaLogin = await conVolver.newPage();
     await paginaLogin.goto(`${BASE}/login?volverA=//ejemplo.com/x`, { waitUntil: "domcontentloaded" });
@@ -384,7 +492,7 @@ async function main() {
     await conVolver.close();
 
     // -------------------------------------------------------------------
-    titulo("12. Cada zona liquida lo suyo");
+    titulo("13. Cada zona liquida lo suyo");
     // No es una prueba de permisos, pero es el defecto que la Fase 13 encontró:
     // un título imputado a la zona equivocada no se ve en ninguna pantalla de
     // permisos, se ve en la plata.
@@ -416,6 +524,13 @@ async function main() {
 
     await admin.close();
   } finally {
+    const temporales = [leadPropio?.id, leadAjeno?.id].filter(
+      (id): id is string => typeof id === "string"
+    );
+    if (temporales.length > 0) {
+      await db.actividad.deleteMany({ where: { leadId: { in: temporales } } });
+      await db.lead.deleteMany({ where: { id: { in: temporales } } });
+    }
     await navegador.close();
     await db.$disconnect();
   }

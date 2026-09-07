@@ -40,6 +40,13 @@ export default async function DetalleLeadPage({ params }: PageProps<"/vendedor/l
 
   if (!lead) notFound();
 
+  // La pantalla de carga ya rebota al que no tiene el permiso, asi que esto no
+  // es seguridad: es no ofrecer lo que la otra pantalla va a rechazar. El boton
+  // se dibujaba siempre, y el vendedor sin `cargarVentas` lo apretaba para
+  // volver al dashboard sin explicacion.
+  const puedeCargarVenta = usuario.permisos.cargarVentas;
+  const hayAcciones = Boolean(lead.telefono) || puedeCargarVenta;
+
   return (
     <>
       <Button variant="ghost" size="sm" asChild className="mb-2 -ml-2">
@@ -52,22 +59,26 @@ export default async function DetalleLeadPage({ params }: PageProps<"/vendedor/l
       <PageHeader
         titulo={lead.nombre}
         acciones={
-          <>
-            {lead.telefono ? (
-              <Button variant="outline" asChild>
-                <a href={`tel:${lead.telefono}`}>
-                  <Phone className="size-4" />
-                  Llamar
-                </a>
-              </Button>
-            ) : null}
-            <Button asChild>
-              <Link href={`/vendedor/ventas/nueva?lead=${lead.id}`}>
-                <ShoppingCart className="size-4" />
-                Cargar venta
-              </Link>
-            </Button>
-          </>
+          hayAcciones ? (
+            <>
+              {lead.telefono ? (
+                <Button variant="outline" asChild>
+                  <a href={`tel:${lead.telefono}`}>
+                    <Phone className="size-4" />
+                    Llamar
+                  </a>
+                </Button>
+              ) : null}
+              {puedeCargarVenta ? (
+                <Button asChild>
+                  <Link href={`/vendedor/ventas/nueva?lead=${lead.id}`}>
+                    <ShoppingCart className="size-4" />
+                    Cargar venta
+                  </Link>
+                </Button>
+              ) : null}
+            </>
+          ) : undefined
         }
       />
 

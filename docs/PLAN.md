@@ -82,7 +82,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | ✅ commit `f5f2faa` |
 | 16 | Vendedor: mi cartera (títulos, cuotas, caídas) | ✅ commit `00dd9b2` |
 | 17 | Vendedor: mi comisión (histórico y de dónde sale cada peso) | ✅ commit `1228eb8` |
-| 18 | Vendedor: listados a escala (buscar, filtrar, paginar) | ⬜ |
+| 18 | Vendedor: listados a escala (buscar, filtrar, paginar) | 🔨 commit `PENDIENTE` |
 
 Dependencias:
 
@@ -1706,21 +1706,51 @@ vio en la captura móvil, no leyendo el código. Va el mismo patrón que los
 listados: lista abajo de 768px, tabla arriba, con el renglón escrito igual que el
 del dashboard para no estrenar otro formato.
 
-### Fase 18 — Los listados a escala
+### 🔨 Fase 18 — Los listados a escala
 
-Lo que hoy funciona sólo porque la base de prueba es chica.
+Lo que funcionaba sólo porque la base de prueba es chica.
 
-- **Paginación y buscador** en Mis leads y Mis ventas, con el mismo `POR_PAGINA` y
-  el mismo patrón de `searchParams` del admin.
-- **Filtro por estado en Mis ventas** (activa / anulada), que hoy no existe.
-- **El botón "Cargar venta" de la ficha del lead se dibuja sin chequear
-  `cargarVentas`**: el vendedor sin ese permiso lo ve y la pantalla destino lo
-  rebota en silencio. La seguridad está bien; lo que está mal es ofrecer algo que
-  no se puede dar.
-- **Los dos `db.venta.count` del dashboard se ejecutan sin `cargarVentas`**, aunque
-  las tarjetas que los usan no se rendericen. Es el criterio que ya se aplicó a los
-  leads y a la comisión.
-- Las pantallas nuevas se suman a `scripts/capturas.mjs`, en las dos medidas.
+**Mis leads y Mis ventas traían todo sin `take`.** Ahora paginan de a 50 con el
+mismo `POR_PAGINA` y el mismo patrón de `searchParams` que los cuatro listados del
+admin. Mis leads busca por nombre, teléfono y localidad; Mis ventas por cliente,
+DNI, código de plan, número de título y suscripción — las cinco formas en que el
+vendedor identifica una venta suya cuando la va a buscar.
+
+**Mis ventas no leía un solo `searchParam`, y ahora filtra por estado.**
+"Anuladas" hace falta tanto como "Activas": anular marca y no borra, justamente
+para que la venta se pueda encontrar después, y sin el chip la única manera de dar
+con una anulada vieja era scrollear el listado entero. "Todas" sigue siendo el
+estado inicial, con las anuladas atenuadas entre las demás.
+
+**Un `<a>` no se deshabilita, y eso estaba copiado cinco veces.** El bloque de
+paginación decía `<Button asChild disabled={pagina <= 1}><Link …>` en las cinco
+pantallas que paginaban. No apagaba nada: `asChild` convierte el botón en un
+`Slot`, así que el `disabled` viaja hasta el `<a>` —donde no significa nada— y las
+clases `disabled:opacity-50` y `disabled:pointer-events-none` cuelgan de la
+pseudo-clase `:disabled`, que sólo existe para los controles de formulario. En la
+página 1 el botón "Anterior" se veía igual de vivo que "Siguiente" y se podía
+apretar. Al ir a escribirlo por sexta y séptima vez se extrajo a
+`components/layout/paginacion.tsx`, que en el extremo dibuja un `<button disabled>`
+de verdad: es el único elemento al que `:disabled` le aplica, y de paso el teclado
+y el lector de pantalla se enteran.
+
+**No se ofrece lo que la otra pantalla va a rebotar.** El botón "Cargar venta" de
+la ficha del lead se dibujaba sin mirar `cargarVentas`: el vendedor sin el permiso
+lo apretaba y la pantalla destino lo devolvía al dashboard sin decirle nada. Es el
+mismo defecto que la Fase 17 ya había evitado con los links a la cartera, y ahora
+`npm run qa` lo fija en los dos lados.
+
+**Y no se consulta lo que no se va a mostrar.** Los dos `db.venta.count` y el
+`findMany` de las últimas cinco ventas del dashboard corrían aunque el vendedor no
+tuviera `cargarVentas`, para alimentar tarjetas que no se renderizan. Es el
+criterio que ya se había aplicado a los leads y a la comisión: tres viajes a la
+base para descartar el resultado.
+
+**Lo que apareció en la captura, no en el código:** con cero leads, el buscador y
+los cinco chips en cero ocupaban media pantalla del celular justo arriba del cartel
+que explica por qué no hay nada. Con el listado vacío de verdad —sin búsqueda ni
+filtro— ya no se dibujan: no hay nada que filtrar. Vacío *por* una búsqueda es otra
+cosa, y ahí quedan, porque hay que poder deshacerla.
 
 ### Lo que queda afuera, y por qué
 
@@ -1734,6 +1764,12 @@ Lo que hoy funciona sólo porque la base de prueba es chica.
 - **Los porcentajes reales de la escala** siguen sin cargar. Hasta que Balta los
   cargue, todo lo que muestren estas tres pantallas es el escenario de
   `npm run demo`.
+- **El escenario de demo no siembra leads ni ventas**, así que `/vendedor/leads` y
+  `/vendedor/ventas` se ven vacíos con `npm run demo` puesto. No se agregaron a
+  propósito: el escenario de Salta es la referencia de todas las guías ya
+  validadas y sus números no se tocan. Lo que necesita datos —el guion de QA y la
+  verificación de esta fase— los crea marcados `PRUEBA-QA` y los borra al
+  terminar.
 
 ---
 
@@ -3207,7 +3243,7 @@ en las dos, y el número sale de la ficha que corresponde a la zona activa.
 npm run qa
 ```
 
-Recorre 45 comprobaciones y termina en `45 comprobaciones, todas bien.` Prueba lo
+Recorre 57 comprobaciones y termina en `57 comprobaciones, todas bien.` Prueba lo
 que no se puede mirar a ojo: que el vendedor rebote de las seis secciones de
 administración, que apagarle un permiso le cierre la pantalla y no sólo le
 esconda el ítem, que una cuenta desactivada salga del sistema en el clic
@@ -3508,6 +3544,120 @@ encenderla.
 Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
 `npm run build`, más `npm run qa` contra el build.
 
+### Fase 18 — Los listados a escala
+
+**Preparación**
+
+```bash
+npm run dev
+npx tsx scripts/sembrar-listados.ts
+```
+
+El segundo comando hace falta porque `npm run demo` **no** siembra leads ni
+ventas: el escenario de Salta es la referencia de las guías anteriores y no se le
+agregan datos. Éste crea 55 leads y 3 ventas de prueba —todos marcados
+`PRUEBA-QA`— para el vendedor de demo, y se borran al final con el comando del
+último paso.
+
+Entrar a http://localhost:3000/login con `vendedor@crm-csj.local` /
+`CambiarEstePassword123`.
+
+**1. Mis leads pagina**
+
+Menú **Mis leads**. Abajo de la tabla tiene que decir **"Página 1 de 2"**, y la
+tabla mostrar **50 filas** (antes traía las 55 de un saque, y con una tanda real
+de leads asignados eso no entra en ninguna pantalla).
+
+**2. El botón del extremo está apagado de verdad** — *esto es lo que estaba mal*
+
+En la página 1, **"Anterior"** tiene que verse **gris y no dejarse apretar**.
+Apretalo: no pasa nada. Antes se veía igual que "Siguiente" y clickeaba.
+
+Tocar **Siguiente**: la URL pasa a `?pagina=2`, quedan **5 filas**, y ahora el que
+está apagado es **"Siguiente"**.
+
+**3. El buscador**
+
+Volver a **Mis leads** y escribir `ORAN` en el buscador. Tienen que quedar los de
+*San Ramón de la Nueva Orán* (28), y la paginación desaparece porque entran todos.
+
+Probar también con un teléfono (`38740`) y con un nombre.
+
+**4. Los chips cuentan sobre la búsqueda** — *el detalle que importa*
+
+Con `ORAN` escrito, mirar el chip **Todos**: tiene que decir **(28)**, no (55). Y
+la suma de *Pendiente + Vendido + No vendido* tiene que dar esos mismos 28. Si el
+chip dijera 55 y la lista mostrara 28, estaría diciendo dos cosas distintas sobre
+lo mismo.
+
+Tocar **Pendiente** sin borrar la búsqueda: la búsqueda **se conserva** (mirá la
+URL: lleva `q=ORAN&estado=PENDIENTE`) y quedan sólo los pendientes de Orán.
+
+**5. Mis ventas filtra por estado** — *esto es nuevo*
+
+Menú **Mis ventas**. Arriba hay tres chips: **Todas 3 · Activas 2 · Anuladas 1**.
+
+- **Todas** las muestra juntas, con *PRUEBA-QA LAURA SOSA* **atenuada** y con el
+  badge *anulada*.
+- **Anuladas** deja sólo esa. Antes no había forma de llegar a una anulada vieja
+  que no fuera scrollear el listado entero.
+- **Activas** deja las otras dos.
+
+**6. El buscador de ventas**
+
+Buscar `GONZALEZ` (por cliente), después `9999` (por DNI) y después `PRUEBA-PLAN`
+(por código de plan). Los tres tienen que encontrar.
+
+Buscar algo que no existe: tiene que decir *"No hay resultados para esa búsqueda"*
+y **no** ofrecer el botón grande de *Nueva venta* del medio (ése es la invitación
+a cargar la primera; el del encabezado sigue).
+
+**7. La ficha del lead no ofrece lo que no se puede** — *esto es lo que estaba mal*
+
+Abrir cualquier lead. Arriba a la derecha están **Llamar** y **Cargar venta**.
+
+Ahora, con Balta (`balta@crm-csj.local`, zona Salta): **Vendedores** → *PRUEBA
+VENDEDOR UNO* → apagar el switch **Cargar ventas**.
+
+Volver a la pestaña del vendedor y **recargar la ficha del lead**: el botón
+**Cargar venta** ya no está. Antes se dibujaba igual, el vendedor lo apretaba y la
+pantalla destino lo devolvía al dashboard sin decirle nada.
+
+Volver a encender el switch.
+
+**8. Que nada se rompa con la URL escrita a mano**
+
+Probar `?pagina=99999`, `?pagina=abc` y `?estado=INVENTADO` en las dos pantallas:
+todas tienen que abrir normalmente, no romperse ni mostrar otra cosa.
+
+**9. En el celular**
+
+Achicar la ventana abajo de 768px (o abrir desde el teléfono). Las dos pantallas
+pasan a tarjetas, el buscador y los chips entran sin que nada se salga por el
+costado, y la paginación queda abajo con los dos botones.
+
+Entrar a **Mis ventas** con el listado vacío (después de borrar, paso 10): ahí el
+buscador y los chips **no se dibujan** — no hay nada que filtrar y tapaban el
+cartel que explica por qué no hay nada.
+
+**10. Borrar los datos de prueba**
+
+```bash
+npx tsx scripts/sembrar-listados.ts --borrar
+```
+
+Tiene que decir *"Borrados 55 leads y 3 ventas de prueba."*, y los dos listados
+vuelven a su cartel de vacío. El escenario de Salta queda igual que antes: 8
+clientes, 9 títulos, 69 cuotas.
+
+**Datos de prueba:** los 55 leads `PRUEBA-QA *` y las 3 ventas con
+`codigoProducto` **PRUEBA-PLAN** y DNI `9999*`, que crea y borra
+`scripts/sembrar-listados.ts`. El guion de `npm run qa` crea dos leads propios con
+la misma marca y los borra solo, aunque falle a mitad.
+
+Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
+`npm run build`, más `npm run qa` contra el build.
+
 ---
 
 ## Contexto para la próxima sesión
@@ -3515,8 +3665,34 @@ Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
 **Dónde retomar:** Lisandro validó las **fases 12, 15, 16 y 17 el 07/09/2026**
 (la 14, el 05/09; la 13, el 04/09; la 11, el 02/09; la 10, el 01/09; las 6 a 9, el
 28/08). **Las dieciocho fases del QA están cerradas.** Del **módulo del vendedor**,
-las fases 16 (Mi cartera) y 17 (Mi comisión) están validadas; queda la 18 (los
-listados a escala), que es la última de la tanda.
+las fases 16 (Mi cartera) y 17 (Mi comisión) están validadas, y la **Fase 18 (los
+listados a escala) está construida y espera validación**: es la última de la tanda,
+así que con ella validada **el módulo del vendedor queda cerrado**.
+
+De la Fase 18, lo que hay que llevarse:
+
+- **Un `<a>` no se deshabilita, y estaba mal en las cinco pantallas que
+  paginaban.** `<Button asChild disabled>` manda el `disabled` al `<a>`, donde no
+  significa nada, y las clases `disabled:*` cuelgan de `:disabled`, que sólo aplica
+  a los controles de formulario. Nadie lo vio en cinco revisiones porque no rompe
+  nada: "Anterior" en la página 1 lleva a la página 1. Ahora la paginación vive en
+  `components/layout/paginacion.tsx` y en el extremo dibuja un `<button disabled>`
+  de verdad.
+- **Se extrajo al escribirlo por sexta vez, no antes.** Cinco copias eran
+  aguantables; siete no, y además la copia arrastraba el defecto.
+- **No consultar lo que no se muestra, no ofrecer lo que se va a rebotar.** Son la
+  misma regla vista de los dos lados, y aparecieron juntas: el dashboard hacía tres
+  consultas de ventas para tarjetas que no se renderizan, y la ficha del lead
+  ofrecía "Cargar venta" al que no puede cargarlas.
+- **Lo que apareció en la captura, no en el código:** con cero leads, el buscador y
+  los cinco chips en cero se comían media pantalla del celular arriba del cartel de
+  vacío. Es la segunda fase seguida en que el defecto lo encuentra la captura móvil
+  y no la lectura.
+- **El escenario de demo no siembra leads ni ventas**, y no se le agregaron: los
+  números de Salta son la referencia de todas las guías validadas. Lo que necesita
+  datos los crea marcados y los borra —`scripts/sembrar-listados.ts` para probar a
+  mano, y el guion de `npm run qa` los suyos, en el `finally`, aunque falle a
+  mitad.
 
 De la Fase 17, lo que hay que llevarse:
 
@@ -3591,7 +3767,7 @@ De la Fase 14, lo que hay que llevarse:
   de vendedor (`vendedor@crm-csj.local`). Es idempotente. Antes esto eran siete
   pasos manuales por zona y sólo estaba documentado para Salta; el lado del
   vendedor directamente no se podía probar sin crear la cuenta a mano.
-- **`npm run qa` corre 45 comprobaciones de permisos y aislamiento** y devuelve
+- **`npm run qa` corre 57 comprobaciones de permisos y aislamiento** y devuelve
   exit code. Es lo que fija los arreglos de la Fase 13 y lo que conviene correr
   antes de cada entrega.
 - **El escenario de Salta no se toca nunca.** Sus números (8 clientes, 9 títulos,

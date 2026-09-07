@@ -166,6 +166,27 @@ necesita tres datos y un botón grande. Se verifica con `CAPTURA_MOVIL=1 npm run
   se arregla donde se sale, y por eso el chequeo de `scripts/capturas.mjs` **apaga la red antes
   de medir** y nombra al elemento culpable.
 
+## Los listados
+
+Los cuatro del admin y los tres del vendedor paginan de a 50 con el mismo patrón
+de `searchParams` (`q`, `pagina`, y el filtro que tenga cada uno). Dos cosas que
+no se ven leyendo una sola pantalla:
+
+- **Los chips cuentan sobre la búsqueda, no sobre el filtro activo.** Así se salta
+  de un chip a otro sin perder el número. Si contaran sobre todo, con "Juan"
+  escrito un chip diría 12 y la lista mostraría 2.
+- **Un `<a>` no se deshabilita.** La paginación vive en
+  `components/layout/paginacion.tsx` y en el extremo dibuja un `<button disabled>`,
+  no un link apagado. El bloque estaba copiado en cinco pantallas como
+  `<Button asChild disabled={pagina <= 1}><Link …>`, y eso no apagaba nada:
+  `asChild` manda el `disabled` al `<a>`, donde no significa nada, y las clases
+  `disabled:*` cuelgan de `:disabled`, que sólo existe para los controles de
+  formulario. En la página 1 el botón "Anterior" se veía igual de vivo que el otro.
+- **Con el listado vacío de verdad no se dibujan ni el buscador ni los chips.** No
+  hay nada que filtrar, y en el celular ocupaban media pantalla justo arriba del
+  cartel que explica por qué no hay nada. Vacío por una búsqueda o un filtro es
+  otra cosa: ahí quedan, porque hay que poder deshacerlos.
+
 ## Cómo se liquida la comisión
 
 Confirmado por Balta el 2026-08-12. El motor vive en
@@ -450,7 +471,7 @@ npm run db:migrate       # aplicar cambios de schema
 npm run db:studio        # inspeccionar la base
 npm run db:seed          # cargar zonas y usuarios admin
 npm run demo             # escenario completo de prueba en LAS DOS zonas
-npm run qa               # 45 comprobaciones de permisos y aislamiento de zonas
+npm run qa               # 57 comprobaciones de permisos y aislamiento de zonas
 npm run capturas         # capturas de pantalla de todas las vistas
 ```
 
@@ -470,6 +491,12 @@ prueba **de la zona activa**, no los catorce. Listarlos todos juntos y numerados
 "importalos en orden" enseñaba a importar el padrón de Tucumán parado en Salta, que es
 justo lo que la importación aprendió a frenar. La convención de nombres está en
 `lib/padron/padrones-prueba.ts` y la comparten la pantalla y el generador.
+
+`scripts/sembrar-listados.ts` es aparte de la demo a propósito: llena Mis leads y
+Mis ventas con 55 leads y 3 ventas marcados `PRUEBA-QA` para poder ver la
+paginación y el filtro por estado, y se deshace con `--borrar`. No está en
+`npm run demo` porque los números de Salta son la referencia de todas las guías de
+prueba validadas.
 
 `npm run qa` necesita el servidor levantado y devuelve exit code, así que sirve para CI.
 Conviene correrlo contra el build (`npm run build && npx next start -p 3010`, con

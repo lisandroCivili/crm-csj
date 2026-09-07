@@ -99,7 +99,7 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
   juntos con un "importalos en orden"; ahora muestra los de la zona activa
   (`lib/padron/padrones-prueba.ts`).
 - **Verificación**: `npm run demo` arma el escenario de las dos zonas (idempotente) y
-  `npm run qa` corre las 45 comprobaciones de permisos y aislamiento con exit code. El
+  `npm run qa` corre las 57 comprobaciones de permisos y aislamiento con exit code. El
   escenario de **Salta no se toca**: sus números son la referencia de todas las guías de
   prueba ya validadas. Los fixtures de Excel se fabrican en memoria, nunca se versionan.
 - **Datos sensibles**: padrones reales y fotos de DNI no se versionan ni se sirven por URL pública.
@@ -116,6 +116,21 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
   la URL; lo único que viaja por query es el período. No se le muestra el nombre de la escala
   ni se le deja editar los gastos de representación, y los links a la cartera se dibujan sólo
   con `verCartera`: ofrecer lo que la otra pantalla rebota es un defecto.
+- **Listados**: paginan de a 50 con el patrón de `searchParams` del admin (`q`,
+  `pagina`, y el filtro propio de cada uno), y la paginación sale de
+  `components/layout/paginacion.tsx`. **Un `<a>` no se deshabilita**: en el
+  extremo va un `<button disabled>` y nunca un link apagado con clases —
+  `<Button asChild disabled>` manda el `disabled` al `<a>`, donde no hace nada, y
+  las clases `disabled:*` cuelgan de `:disabled`, que es sólo de los controles de
+  formulario. Los chips cuentan **sobre la búsqueda**, no sobre el filtro activo.
+  Y con el listado vacío de verdad —sin búsqueda ni filtro— no se dibujan ni el
+  buscador ni los chips: no hay nada que filtrar y tapan el cartel que explica
+  por qué no hay nada.
+- **Ofrecer lo que la otra pantalla rebota es un defecto.** El botón "Cargar
+  venta" de la ficha del lead se dibujaba sin mirar `cargarVentas`, y los dos
+  `db.venta.count` del dashboard corrían sin ese permiso para alimentar una
+  tarjeta que no se renderiza. La seguridad ya estaba; lo que faltaba era no
+  prometer. Es el mismo criterio que los links a la cartera en la comisión.
 - **La cartera del vendedor**: lista **títulos**, no clientes, filtrando por `vendedorId` y
   `zonaId`. Agrupar por cliente —como hace el listado del admin— mostraría producción ajena,
   porque un cliente puede tener títulos de dos vendedores. Balta pidió que "solo admin ve

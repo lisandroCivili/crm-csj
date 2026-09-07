@@ -63,14 +63,21 @@ export default async function VendedorDashboardPage() {
       usuario.permisos.verLeads
         ? db.lead.count({ where: { vendedorAsignadoId: usuario.vendedorId, estado: "PENDIENTE" } })
         : 0,
-      db.venta.count({
-        where: {
-          vendedorId: usuario.vendedorId,
-          estado: "ACTIVA",
-          fechaVenta: { gte: inicioDeMes },
-        },
-      }),
-      db.venta.count({ where: { vendedorId: usuario.vendedorId, estado: "ACTIVA" } }),
+      // Como los leads y la comision: sin el permiso no se consulta. La tarjeta
+      // y la lista que usan estos tres no se renderizan, asi que eran tres
+      // viajes a la base para descartar el resultado.
+      usuario.permisos.cargarVentas
+        ? db.venta.count({
+            where: {
+              vendedorId: usuario.vendedorId,
+              estado: "ACTIVA",
+              fechaVenta: { gte: inicioDeMes },
+            },
+          })
+        : 0,
+      usuario.permisos.cargarVentas
+        ? db.venta.count({ where: { vendedorId: usuario.vendedorId, estado: "ACTIVA" } })
+        : 0,
       usuario.permisos.verLeads
         ? db.lead.findMany({
             where: { vendedorAsignadoId: usuario.vendedorId, estado: "PENDIENTE" },
@@ -79,12 +86,14 @@ export default async function VendedorDashboardPage() {
             select: { id: true, nombre: true, telefono: true, localidad: true, estado: true },
           })
         : [],
-      db.venta.findMany({
-        where: { vendedorId: usuario.vendedorId },
-        orderBy: { fechaVenta: "desc" },
-        take: 5,
-        select: { id: true, nombreCliente: true, fechaVenta: true, codigoProducto: true },
-      }),
+      usuario.permisos.cargarVentas
+        ? db.venta.findMany({
+            where: { vendedorId: usuario.vendedorId },
+            orderBy: { fechaVenta: "desc" },
+            take: 5,
+            select: { id: true, nombreCliente: true, fechaVenta: true, codigoProducto: true },
+          })
+        : [],
       // Los titulos suyos que vienen atrasados: caidos y en riesgo juntos, que
       // es la lista de a quien llamar. El caido ya pasa el umbral de riesgo, asi
       // que con esa condicion alcanza para los dos.
