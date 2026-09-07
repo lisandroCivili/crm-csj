@@ -80,7 +80,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 13 | QA: los agujeros de zona (alias · títulos · `leadId` · links rotos) | ✅ commit `3dbfd89` |
 | 14 | QA: la red (escenario de dos zonas · tests de parsers · guion de permisos) | ✅ commit `ab8dccc` |
 | 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | ✅ commit `f5f2faa` |
-| 16 | Vendedor: mi cartera (títulos, cuotas, caídas) | 🔨 commit `00dd9b2` |
+| 16 | Vendedor: mi cartera (títulos, cuotas, caídas) | ✅ commit `00dd9b2` |
 | 17 | Vendedor: mi comisión (histórico y de dónde sale cada peso) | ⬜ |
 | 18 | Vendedor: listados a escala (buscar, filtrar, paginar) | ⬜ |
 
@@ -1630,7 +1630,7 @@ el padrón completo. La frase de Balta se respeta en su espíritu —nadie se as
 lo que no es suyo— y además se agrega el permiso `puedeVerCartera`, para que Balta
 pueda apagarlo por vendedor si prefiere la lectura literal.
 
-### 🔨 Fase 16 — Mi cartera
+### ✅ Fase 16 — Mi cartera
 
 Commit `00dd9b2`. Migración `20260907134104_permiso_cartera`.
 
@@ -3409,11 +3409,11 @@ Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Lisandro validó las **fases 12 y 15 el 07/09/2026** (la 14, el
-05/09; la 13, el 04/09; la 11, el 02/09; la 10, el 01/09; las 6 a 9, el 28/08).
-**Las dieciocho fases del QA están cerradas.** Arrancó el **módulo del vendedor**:
-la **Fase 16 (Mi cartera) está construida y espera validación**; siguen la 17 (Mi
-comisión) y la 18 (los listados a escala).
+**Dónde retomar:** Lisandro validó las **fases 12, 15 y 16 el 07/09/2026** (la 14,
+el 05/09; la 13, el 04/09; la 11, el 02/09; la 10, el 01/09; las 6 a 9, el 28/08).
+**Las dieciocho fases del QA están cerradas** y el **módulo del vendedor** arrancó
+con la Fase 16 (Mi cartera) ya validada; siguen la 17 (Mi comisión) y la 18 (los
+listados a escala).
 
 De la Fase 16, lo que hay que llevarse:
 
