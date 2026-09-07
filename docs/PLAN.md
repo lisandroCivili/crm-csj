@@ -81,7 +81,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 14 | QA: la red (escenario de dos zonas · tests de parsers · guion de permisos) | ✅ commit `ab8dccc` |
 | 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | ✅ commit `f5f2faa` |
 | 16 | Vendedor: mi cartera (títulos, cuotas, caídas) | ✅ commit `00dd9b2` |
-| 17 | Vendedor: mi comisión (histórico y de dónde sale cada peso) | 🔨 commit `1228eb8` |
+| 17 | Vendedor: mi comisión (histórico y de dónde sale cada peso) | ✅ commit `1228eb8` |
 | 18 | Vendedor: listados a escala (buscar, filtrar, paginar) | ⬜ |
 
 Dependencias:
@@ -1662,7 +1662,7 @@ checklist de `/perfil`, los switches de `/admin/vendedores/[id]` y
 `scripts/qa-permisos.ts`, que gana la comprobación de que apagarlo cierra la ruta
 además de esconder el ítem.
 
-### 🔨 Fase 17 — Mi comisión
+### ✅ Fase 17 — Mi comisión
 
 Commit `1228eb8`.
 
@@ -3512,12 +3512,11 @@ Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Lisandro validó las **fases 12, 15 y 16 el 07/09/2026** (la 14,
-el 05/09; la 13, el 04/09; la 11, el 02/09; la 10, el 01/09; las 6 a 9, el 28/08).
-**Las dieciocho fases del QA están cerradas.** Del **módulo del vendedor**, la
-Fase 16 (Mi cartera) está validada y la **Fase 17 (Mi comisión) está construida y
-espera validación**; queda la 18 (los listados a escala), que es la última de la
-tanda.
+**Dónde retomar:** Lisandro validó las **fases 12, 15, 16 y 17 el 07/09/2026**
+(la 14, el 05/09; la 13, el 04/09; la 11, el 02/09; la 10, el 01/09; las 6 a 9, el
+28/08). **Las dieciocho fases del QA están cerradas.** Del **módulo del vendedor**,
+las fases 16 (Mi cartera) y 17 (Mi comisión) están validadas; queda la 18 (los
+listados a escala), que es la última de la tanda.
 
 De la Fase 17, lo que hay que llevarse:
 
