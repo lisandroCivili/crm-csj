@@ -81,7 +81,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 14 | QA: la red (escenario de dos zonas · tests de parsers · guion de permisos) | ✅ commit `ab8dccc` |
 | 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | ✅ commit `f5f2faa` |
 | 16 | Vendedor: mi cartera (títulos, cuotas, caídas) | ✅ commit `00dd9b2` |
-| 17 | Vendedor: mi comisión (histórico y de dónde sale cada peso) | 🔨 commit `PENDIENTE` |
+| 17 | Vendedor: mi comisión (histórico y de dónde sale cada peso) | 🔨 commit `1228eb8` |
 | 18 | Vendedor: listados a escala (buscar, filtrar, paginar) | ⬜ |
 
 Dependencias:
@@ -1664,7 +1664,7 @@ además de esconder el ítem.
 
 ### 🔨 Fase 17 — Mi comisión
 
-Commit `PENDIENTE`.
+Commit `1228eb8`.
 
 Cierra el único permiso sin pantalla y contesta lo que el vendedor pregunta todos
 los meses: cuánto cobro y por qué.
