@@ -82,7 +82,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | ✅ commit `f5f2faa` |
 | 16 | Vendedor: mi cartera (títulos, cuotas, caídas) | ✅ commit `00dd9b2` |
 | 17 | Vendedor: mi comisión (histórico y de dónde sale cada peso) | ✅ commit `1228eb8` |
-| 18 | Vendedor: listados a escala (buscar, filtrar, paginar) | 🔨 commit `PENDIENTE` |
+| 18 | Vendedor: listados a escala (buscar, filtrar, paginar) | 🔨 commit `b757100` |
 
 Dependencias:
 
