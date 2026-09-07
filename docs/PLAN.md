@@ -80,7 +80,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 13 | QA: los agujeros de zona (alias · títulos · `leadId` · links rotos) | ✅ commit `3dbfd89` |
 | 14 | QA: la red (escenario de dos zonas · tests de parsers · guion de permisos) | ✅ commit `ab8dccc` |
 | 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | ✅ commit `f5f2faa` |
-| 16 | Vendedor: mi cartera (títulos, cuotas, caídas) | 🔨 |
+| 16 | Vendedor: mi cartera (títulos, cuotas, caídas) | 🔨 commit `00dd9b2` |
 | 17 | Vendedor: mi comisión (histórico y de dónde sale cada peso) | ⬜ |
 | 18 | Vendedor: listados a escala (buscar, filtrar, paginar) | ⬜ |
 
@@ -1631,6 +1631,8 @@ lo que no es suyo— y además se agrega el permiso `puedeVerCartera`, para que 
 pueda apagarlo por vendedor si prefiere la lectura literal.
 
 ### 🔨 Fase 16 — Mi cartera
+
+Commit `00dd9b2`. Migración `20260907134104_permiso_cartera`.
 
 Sus títulos del padrón: quién le está pagando y quién no.
 
