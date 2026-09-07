@@ -18,11 +18,8 @@ import {
 } from "@/components/ui/table";
 import { cuotasDelPeriodo, obtenerLiquidacionVendedor } from "@/lib/comisiones/liquidacion";
 import { esPeriodoValido, etiquetaPeriodo, periodoActual } from "@/lib/comisiones/periodo";
-import { pesos, porcentaje } from "@/lib/formato";
+import { dia, diaDelPadron, momento, pesos, porcentaje } from "@/lib/formato";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
-
-const FECHA = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
-const FECHA_HORA = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" });
 
 export default async function DetalleComisionPage({
   params,
@@ -184,7 +181,7 @@ export default async function DetalleComisionPage({
             {linea.fechaCierre ? (
               <div className="flex justify-between gap-3">
                 <span className="text-muted-foreground">Cerrado el</span>
-                <span>{FECHA_HORA.format(linea.fechaCierre)}</span>
+                <span>{momento(linea.fechaCierre)}</span>
               </div>
             ) : null}
             <div className="flex justify-between gap-3">
@@ -271,10 +268,10 @@ export default async function DetalleComisionPage({
                             {pesos(Number(cuota.importe))}
                           </TableCell>
                           <TableCell className="text-muted-foreground">
-                            {cuota.fechaPago ? FECHA.format(cuota.fechaPago) : "—"}
+                            {cuota.fechaPago ? diaDelPadron(cuota.fechaPago) : "—"}
                           </TableCell>
                           <TableCell className="text-muted-foreground">
-                            {cuota.detectadaPagaAt ? FECHA.format(cuota.detectadaPagaAt) : "—"}
+                            {cuota.detectadaPagaAt ? dia(cuota.detectadaPagaAt) : "—"}
                           </TableCell>
                           <TableCell className="text-right text-xs text-muted-foreground">
                             {dentroDelTope ? "sí" : `no, pasa c${linea.topeCuotasComision}`}

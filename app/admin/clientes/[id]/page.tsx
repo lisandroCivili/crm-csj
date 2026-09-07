@@ -29,6 +29,7 @@ import { db } from "@/lib/db";
 import type { TituloOrigen } from "@/lib/generated/prisma/client";
 import { contradiceAlClub } from "@/lib/padron/caidas";
 import { esCampoPersonal, type CampoPersonal } from "@/lib/padron/camposCliente";
+import { dia, diaDelPadron } from "@/lib/formato";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
 const PESOS = new Intl.NumberFormat("es-AR", {
@@ -41,7 +42,6 @@ const MES = new Intl.DateTimeFormat("es-AR", {
   year: "numeric",
   timeZone: "UTC",
 });
-const FECHA = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
 
 /**
  * Como entro el titulo al sistema. `BASE` es el que ya venia cuando se importo
@@ -202,7 +202,7 @@ export default async function FichaClientePage({
               <p className="text-xs text-muted-foreground">
                 {manuales.size === 1 ? "Un dato corregido" : `${manuales.size} datos corregidos`}{" "}
                 {cliente.editadoPor ? `por ${cliente.editadoPor.nombre} ` : ""}
-                {cliente.editadoAt ? `el ${FECHA.format(cliente.editadoAt)}` : ""}. El padrón ya
+                {cliente.editadoAt ? `el ${dia(cliente.editadoAt)}` : ""}. El padrón ya
                 no {manuales.size === 1 ? "lo toca" : "los toca"}.
               </p>
               {/* Saca las marcas, no revierte los valores: el proximo padron
@@ -301,7 +301,7 @@ export default async function FichaClientePage({
                   }
                 />
                 {titulo.caidoAt ? (
-                  <Dato etiqueta="Caído desde" valor={FECHA.format(titulo.caidoAt)} />
+                  <Dato etiqueta="Caído desde" valor={dia(titulo.caidoAt)} />
                 ) : null}
               </div>
 
@@ -355,7 +355,7 @@ export default async function FichaClientePage({
                         </TableCell>
                         <TableCell>
                           {cuota.fechaPago ? (
-                            <span className="tabular-nums">{FECHA.format(cuota.fechaPago)}</span>
+                            <span className="tabular-nums">{diaDelPadron(cuota.fechaPago)}</span>
                           ) : (
                             <Badge variant="outline" className="text-amber-700 dark:text-amber-500">
                               impaga

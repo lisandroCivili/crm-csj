@@ -41,10 +41,9 @@ import {
   periodoAnterior,
 } from "@/lib/comisiones/periodo";
 import { db } from "@/lib/db";
-import { pesos, porcentaje } from "@/lib/formato";
+import { momento, pesos, porcentaje } from "@/lib/formato";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
-const FECHA = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" });
 
 /** "c1 a c2", "c5", "c61 en adelante". */
 function rango(desde: number, hasta: number | null): string {
@@ -146,7 +145,7 @@ export default async function ComisionAgentePage({
           <Badge variant="secondary" className="gap-1.5">
             <Lock className="size-3" />
             Cerrado
-            {liquidacion.fechaCierre ? ` · ${FECHA.format(liquidacion.fechaCierre)}` : ""}
+            {liquidacion.fechaCierre ? ` · ${momento(liquidacion.fechaCierre)}` : ""}
           </Badge>
         ) : (
           <Badge variant="outline">Borrador · se recalcula solo</Badge>

@@ -27,10 +27,9 @@ import {
   PADRONES_EN_LAS_BARRAS,
 } from "@/lib/dashboard/graficos";
 import { db } from "@/lib/db";
-import { pesos } from "@/lib/formato";
+import { momento, pesos } from "@/lib/formato";
 import { getVendedorDelAdmin, requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
-const FECHA = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" });
 
 export default async function AdminDashboardPage({
   searchParams,
@@ -261,7 +260,7 @@ export default async function AdminDashboardPage({
                 <div className="space-y-3">
                   <p className="truncate text-sm font-medium">{ultimoPadron.archivoNombre}</p>
                   <p className="text-xs text-muted-foreground">
-                    {ultimoPadron.importadoPor.nombre} · {FECHA.format(ultimoPadron.createdAt)}
+                    {ultimoPadron.importadoPor.nombre} · {momento(ultimoPadron.createdAt)}
                   </p>
                   <dl className="grid grid-cols-2 gap-3 pt-1">
                     <div>

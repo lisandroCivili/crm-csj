@@ -86,6 +86,18 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
   de la zona: uno ajeno mostraría el feed entero como si fuera suyo.
 - **Números de Excel**: se leen con `aNumeroLocal()` (`lib/excel/numero.ts`), nunca con
   `Number()` a secas. `Number("250.000")` da 250, no doscientos cincuenta mil.
+- **Fechas**: un **instante** (cuándo se cargó una venta, cuándo se importó un padrón) se
+  muestra con `dia()` o `momento()`, en hora argentina; un **día del padrón** (emisión,
+  fecha de pago, vigencia) con `diaDelPadron()`, en UTC, porque no tiene hora. Mostrar un
+  instante en UTC ponía la venta cargada de noche en el día siguiente. La zona va escrita
+  en el formateador: sin ella depende del servidor, y Railway corre en UTC.
+- **Temporales de la importación**: el archivo subido caduca a las 24 horas. Son padrones
+  reales; el que abandona la previsualización no pasa por el borrado y quedaban para
+  siempre en el volumen persistente.
+- **Pantallas que enseñan**: un instructivo en pantalla que lleva a hacer algo mal es un
+  defecto aunque el código esté bien. El laboratorio listaba los padrones de las dos zonas
+  juntos con un "importalos en orden"; ahora muestra los de la zona activa
+  (`lib/padron/padrones-prueba.ts`).
 - **Verificación**: `npm run demo` arma el escenario de las dos zonas (idempotente) y
   `npm run qa` corre las 35 comprobaciones de permisos y aislamiento con exit code. El
   escenario de **Salta no se toca**: sus números son la referencia de todas las guías de

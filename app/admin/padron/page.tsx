@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { db } from "@/lib/db";
+import { momento } from "@/lib/formato";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
 const MES = new Intl.DateTimeFormat("es-AR", {
@@ -108,7 +109,7 @@ export default async function PadronPage() {
               <CardHeader>
                 <CardTitle className="text-base">Última importación</CardTitle>
                 <CardDescription>
-                  {ultima.archivoNombre} · {ultima.createdAt.toLocaleString("es-AR")} ·{" "}
+                  {ultima.archivoNombre} · {momento(ultima.createdAt)} ·{" "}
                   {ultima.importadoPor.nombre}
                 </CardDescription>
               </CardHeader>
@@ -138,7 +139,7 @@ export default async function PadronPage() {
                     <TableCell>
                       <p className="font-medium">{importacion.archivoNombre}</p>
                       <p className="text-xs text-muted-foreground">
-                        {importacion.createdAt.toLocaleString("es-AR")}
+                        {momento(importacion.createdAt)}
                       </p>
                     </TableCell>
                     <TableCell className="text-sm">

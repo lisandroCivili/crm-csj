@@ -450,6 +450,12 @@ $105.000 / $38.000 / $564.000) son la referencia de todas las guías de prueba y
 validadas; agregarle un título las invalida a todas. Tucumán es un juego aparte, con
 numeración propia (`TT-000x`, DNI `9998*`), porque el número de título nunca se repite.
 
+El **laboratorio** (`/admin/laboratorio`, sólo en desarrollo) muestra los padrones de
+prueba **de la zona activa**, no los catorce. Listarlos todos juntos y numerados bajo un
+"importalos en orden" enseñaba a importar el padrón de Tucumán parado en Salta, que es
+justo lo que la importación aprendió a frenar. La convención de nombres está en
+`lib/padron/padrones-prueba.ts` y la comparten la pantalla y el generador.
+
 `npm run qa` necesita el servidor levantado y devuelve exit code, así que sirve para CI.
 Conviene correrlo contra el build (`npm run build && npx next start -p 3010`, con
 `BASE_URL` apuntando ahí) y no contra `next dev`, donde la compilación en frío hace que la
@@ -498,12 +504,54 @@ va a tomar de nuevo. Los datos viven en `.../Data/crm-csj/.pglite` y no se tocan
 La primera vez el arranque de la base tarda porque descarga el binario
 ("Fetching latest updates…"). Después es inmediato.
 
+### Dos `next dev` sobre el mismo `.next` dejan 404 en rutas que existen
+
+Next 16 no permite dos servidores de desarrollo en el mismo directorio y avisa
+("Another next dev server is already running"), pero **el segundo alcanza a
+pisar el manifiesto de rutas antes de rendirse**. El que queda vivo sigue
+respondiendo —el login anda, el dashboard anda— y devuelve **404 en algunas
+rutas que existen**, siempre las mismas, sin un error en la terminal ni en
+pantalla. Pasó con editar cliente, editar venta, la escala del agente y el
+detalle de comisión: parecían cuatro pantallas rotas.
+
+No se arregla reintentando ni borrando `.next`: hay que **matar el servidor
+sobreviviente y levantar uno solo**. Si una ruta que está en el árbol da 404,
+antes de buscar el defecto en el código conviene contar cuántos `next dev` hay
+vivos.
+
+## Fechas: hay dos clases y no se muestran igual
+
+- Un **instante** —cuándo se cargó una venta, cuándo se importó un padrón,
+  cuándo se anuló algo— se guarda con `now()` y lleva hora. Va con `dia()` o
+  `momento()` de `lib/formato.ts`.
+- Un **día del padrón** —la emisión de una cuota, su fecha de pago, la vigencia
+  de un precio— no tiene hora: se guarda a medianoche UTC. Va con
+  `diaDelPadron()`.
+
+Los dos se mostraban con `timeZone: "UTC"`, que es correcto para el segundo y
+falso para el primero: **una venta cargada a las nueve de la noche figuraba con
+la fecha del día siguiente**, y una del último día del mes caía en el mes
+siguiente. Al revés tampoco sirve: formatear en hora argentina un día guardado a
+medianoche UTC lo corre un día para atrás.
+
+La zona va **escrita en el formateador**, nunca librada al servidor: Railway
+corre en UTC, así que un `toLocaleString` sin `timeZone` se ve bien en la máquina
+de desarrollo y mal en producción. Y `toLocaleString("es-AR")` a secas **no pone
+a. m. ni p. m.**: las tres de la tarde se leían como las tres de la mañana en el
+listado de importaciones.
+
 ## Datos sensibles
 
 Los padrones reales contienen nombre, DNI, domicilio, teléfono y email de miles de clientes
 reales, y los adjuntos incluyen **fotos de DNI**. Nada de eso se versiona (ver `.gitignore`) ni
 se expone por URL pública: los adjuntos se sirven por `/api/uploads/[id]`, que valida sesión y
 permiso antes de entregar el archivo.
+
+**Los temporales de la importación también son padrones reales.** El archivo que se sube vive
+en `uploads/tmp` entre la previsualización y el confirmar; quien cierra la pestaña en el medio
+no pasa por el borrado. Se habían juntado 82 sin dueño —en producción, en el volumen
+persistente—. Caducan a las 24 horas y se barren al guardar el siguiente
+(`limpiarTemporalesViejos` en `lib/archivos.ts`).
 
 ## Estructura
 

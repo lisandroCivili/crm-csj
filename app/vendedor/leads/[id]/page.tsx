@@ -12,11 +12,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { momento } from "@/lib/formato";
 import { db } from "@/lib/db";
 import { requirePermiso } from "@/lib/sesion";
 import { ETIQUETA_ESTADO } from "@/lib/validations/lead";
 
-const FECHA = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" });
 
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode }) {
   return (
@@ -94,7 +94,7 @@ export default async function DetalleLeadPage({ params }: PageProps<"/vendedor/l
               <Dato etiqueta="Estado actual" valor={<BadgeEstado estado={lead.estado} />} />
               <Dato
                 etiqueta="Asignado"
-                valor={lead.fechaAsignacion ? FECHA.format(lead.fechaAsignacion) : null}
+                valor={lead.fechaAsignacion ? momento(lead.fechaAsignacion) : null}
               />
             </dl>
           </CardContent>
@@ -138,7 +138,7 @@ export default async function DetalleLeadPage({ params }: PageProps<"/vendedor/l
                       ) : null}
                     </span>
                     <span className="text-xs text-muted-foreground">
-                      {FECHA.format(actividad.createdAt)}
+                      {momento(actividad.createdAt)}
                     </span>
                   </li>
                 ))}

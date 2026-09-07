@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { db } from "@/lib/db";
+import { dia } from "@/lib/formato";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode }) {
@@ -277,7 +278,7 @@ export default async function PerfilVendedorPage({
                     <span>{venta.nombreCliente}</span>
                     <span className="text-muted-foreground">
                       {venta.codigoProducto ? `${venta.codigoProducto} · ` : ""}
-                      {venta.fechaVenta.toLocaleDateString("es-AR")}
+                      {dia(venta.fechaVenta)}
                     </span>
                   </li>
                 ))}

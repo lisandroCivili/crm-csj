@@ -4,12 +4,8 @@ import { Marca } from "./marca";
 import { MenuMovil } from "./menu-movil";
 import { NavLinks } from "./nav-links";
 import { UserMenu } from "./user-menu";
+import { etiquetaZona } from "@/lib/constantes";
 import { getZonaActiva, type Usuario } from "@/lib/sesion";
-
-const ETIQUETA_ZONA: Record<string, string> = {
-  SALTA: "Salta",
-  TUCUMAN: "Tucumán",
-};
 
 export async function AppShell({
   usuario,
@@ -47,7 +43,7 @@ export async function AppShell({
           {zona ? (
             <span className="inline-flex items-center gap-1.5 rounded-full bg-card px-3 py-1.5 text-sm font-medium ring-1 ring-border">
               <MapPin className="size-3.5 text-primary" />
-              {ETIQUETA_ZONA[zona.nombre] ?? zona.nombre}
+              {etiquetaZona(zona.nombre)}
             </span>
           ) : null}
 

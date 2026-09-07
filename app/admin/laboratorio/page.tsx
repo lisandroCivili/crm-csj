@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { db } from "@/lib/db";
+import { padronesDeLaZona } from "@/lib/padron/padrones-prueba";
 import { getZonaActiva, requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
 const CARPETA_PADRONES = join("docs", "padrones-prueba");
@@ -50,9 +51,9 @@ export default async function LaboratorioPage() {
     db.titulo.count({ where: { zonaId, caidaConfiable: false } }),
   ]);
 
-  let padrones: string[] = [];
+  let todos: string[] = [];
   try {
-    padrones = readdirSync(CARPETA_PADRONES)
+    todos = readdirSync(CARPETA_PADRONES)
       .filter((n) => n.endsWith(".xlsx") || n.endsWith(".xls"))
       .sort();
   } catch {
@@ -60,6 +61,12 @@ export default async function LaboratorioPage() {
   }
 
   const nombreZona = zona?.nombre ?? "la zona activa";
+
+  // Solo los de la zona activa. Listarlos todos seguidos y numerados invitaba a
+  // importar el padron de Tucuman parado en Salta: los numeros de titulo no se
+  // repiten en todo el club, asi que ese archivo no es de esta zona.
+  const padrones = zona ? padronesDeLaZona(todos, zona.nombre) : [];
+  const deOtrasZonas = todos.length - padrones.length;
 
   return (
     <>
@@ -130,7 +137,7 @@ export default async function LaboratorioPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Padrones de prueba</CardTitle>
+            <CardTitle className="text-base">Padrones de prueba de {nombreZona}</CardTitle>
             <CardDescription>
               Se importan en orden desde <strong>Padrón → Importar padrón</strong>.
             </CardDescription>
@@ -161,6 +168,13 @@ export default async function LaboratorioPage() {
                   y se solapa con el anterior, igual que los del club: por eso hay que
                   importarlos en orden.
                 </p>
+                {deOtrasZonas > 0 && (
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Hay {deOtrasZonas} archivo(s) más en esa carpeta, de las otras zonas. Se
+                    importan con esa zona activa: el número de título no se repite en todo
+                    el club, así que un padrón de otra zona acá se rechaza.
+                  </p>
+                )}
               </>
             )}
           </CardContent>
@@ -182,9 +196,10 @@ export default async function LaboratorioPage() {
               sistema no importa un padrón con vendedores sin mapear.
             </li>
             <li>
-              Ir a <strong>Padrón → Importar padrón</strong> e importar los archivos{" "}
-              <strong>en orden</strong>, del 1 al {padrones.length || 7}. Cada uno se analiza
-              antes de guardar, así que se puede ver qué va a hacer antes de confirmar.
+              Ir a <strong>Padrón → Importar padrón</strong> e importar los archivos de{" "}
+              {nombreZona} <strong>en orden</strong>, del 1 al {padrones.length || 7}. Cada uno
+              se analiza antes de guardar, así que se puede ver qué va a hacer antes de
+              confirmar.
             </li>
             <li>
               Si las comisiones dan cero, falta la escala: usar{" "}
@@ -214,7 +229,8 @@ export default async function LaboratorioPage() {
 
       <p className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
         <FlaskConical className="size-3.5" />
-        Los datos de prueba están marcados: títulos PT-*, DNI 9999*, vendedores PRUEBA-*.
+        Los datos de prueba están marcados: títulos PT-* en Salta y TT-* en Tucumán, DNI
+        9999* y 9998*, vendedores PRUEBA-*.
       </p>
     </>
   );

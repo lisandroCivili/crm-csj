@@ -14,13 +14,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { db } from "@/lib/db";
+import { dia, momento } from "@/lib/formato";
 import { requirePermiso } from "@/lib/sesion";
-
-const FECHA = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
-const FECHA_HORA = new Intl.DateTimeFormat("es-AR", {
-  dateStyle: "short",
-  timeStyle: "short",
-});
 
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode }) {
   return (
@@ -68,7 +63,7 @@ export default async function DetalleVentaPage({ params }: PageProps<"/vendedor/
 
       <PageHeader
         titulo={venta.nombreCliente}
-        descripcion={`DNI ${venta.dni} · ${FECHA.format(venta.fechaVenta)}`}
+        descripcion={`DNI ${venta.dni} · ${dia(venta.fechaVenta)}`}
         acciones={
           // Una venta anulada no se edita: el boton no esta para que nadie
           // llegue a una pantalla que lo va a devolver.
@@ -90,7 +85,7 @@ export default async function DetalleVentaPage({ params }: PageProps<"/vendedor/
           <AlertDescription>
             <span>
               Se anuló
-              {venta.anuladaAt ? ` el ${FECHA_HORA.format(venta.anuladaAt)}` : ""}
+              {venta.anuladaAt ? ` el ${momento(venta.anuladaAt)}` : ""}
               {venta.motivoAnulacion ? `: ${venta.motivoAnulacion}` : "."}
             </span>
             <span className="text-muted-foreground">

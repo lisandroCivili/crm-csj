@@ -14,9 +14,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { db } from "@/lib/db";
+import { dia } from "@/lib/formato";
 import { requirePermiso } from "@/lib/sesion";
-
-const FECHA = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
 
 export default async function MisVentasPage() {
   const usuario = await requirePermiso("cargarVentas");
@@ -80,7 +79,7 @@ export default async function MisVentasPage() {
                     ) : null}
                   </div>
                 }
-                lateral={FECHA.format(venta.fechaVenta)}
+                lateral={dia(venta.fechaVenta)}
               >
                 <DatoFila etiqueta="DNI" valor={venta.dni} />
                 <DatoFila
@@ -128,7 +127,7 @@ export default async function MisVentasPage() {
                     ) : null}
                   </TableCell>
                   <TableCell className="tabular-nums text-muted-foreground">
-                    {FECHA.format(venta.fechaVenta)}
+                    {dia(venta.fechaVenta)}
                   </TableCell>
                   <TableCell>
                     {venta.titulo ? (

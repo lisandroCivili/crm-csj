@@ -15,11 +15,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { db } from "@/lib/db";
+import { dia } from "@/lib/formato";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
 const POR_PAGINA = 50;
-const FECHA = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
-
 export default async function VentasAdminPage({ searchParams }: PageProps<"/admin/ventas">) {
   await requireAdmin();
   const zonaId = await requireZonaActivaId();
@@ -120,7 +119,7 @@ export default async function VentasAdminPage({ searchParams }: PageProps<"/admi
                       ) : null}
                     </div>
                   }
-                  lateral={FECHA.format(venta.fechaVenta)}
+                  lateral={dia(venta.fechaVenta)}
                 >
                   <DatoFila etiqueta="DNI" valor={venta.dni} />
                   <DatoFila etiqueta="Vendedor" valor={venta.vendedor.nombreCompleto} />
@@ -189,7 +188,7 @@ export default async function VentasAdminPage({ searchParams }: PageProps<"/admi
                         ) : null}
                       </TableCell>
                       <TableCell className="tabular-nums text-muted-foreground">
-                        {FECHA.format(venta.fechaVenta)}
+                        {dia(venta.fechaVenta)}
                       </TableCell>
                       <TableCell>
                         {venta.titulo ? (

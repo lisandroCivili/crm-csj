@@ -1,5 +1,6 @@
 import { MapPin } from "lucide-react";
 import { seleccionarZona } from "./actions";
+import { etiquetaZona } from "@/lib/constantes";
 import { requireAdmin, getZonaActivaId, listarZonas } from "@/lib/sesion";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,11 +10,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-
-const ETIQUETAS: Record<string, string> = {
-  SALTA: "Salta",
-  TUCUMAN: "Tucumán",
-};
 
 export default async function SeleccionarZonaPage() {
   const usuario = await requireAdmin();
@@ -39,7 +35,7 @@ export default async function SeleccionarZonaPage() {
                 className="h-auto w-full justify-start gap-3 py-4"
               >
                 <MapPin className="size-5" />
-                <span className="text-base">{ETIQUETAS[zona.nombre] ?? zona.nombre}</span>
+                <span className="text-base">{etiquetaZona(zona.nombre)}</span>
                 {zona.id === zonaActivaId ? (
                   <span className="ml-auto text-xs opacity-70">activa</span>
                 ) : null}

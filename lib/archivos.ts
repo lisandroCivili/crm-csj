@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 const RAIZ = process.env.UPLOADS_DIR ?? "./uploads";
@@ -15,11 +15,49 @@ async function asegurarDirectorio(directorio: string) {
   await mkdir(directorio, { recursive: true });
 }
 
+/**
+ * Cuanto vive un temporal abandonado. Son minutos entre subir el archivo y
+ * confirmar la importacion; un dia es de sobra y deja margen para una pestania
+ * que quedo abierta.
+ */
+const VIDA_TEMPORAL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Borra los temporales que nadie confirmo. `borrarTemporal` limpia el camino
+ * feliz, pero el que cierra la pestania en la previsualizacion no pasa por ahi
+ * y su archivo queda para siempre. En dos dias de pruebas se juntaron 82; en
+ * produccion es el volumen persistente creciendo sin techo, y sobre todo son
+ * padrones reales —nombre, DNI, domicilio y telefono de miles de clientes—
+ * guardados sin dueno y sin vencimiento.
+ *
+ * Se hace al guardar el siguiente y no con una tarea aparte: es un readdir por
+ * subida, no hace falta un proceso que vigile, y el momento en que se acumulan
+ * temporales es justo cuando alguien esta importando.
+ */
+async function limpiarTemporalesViejos() {
+  const limite = Date.now() - VIDA_TEMPORAL_MS;
+  let nombres: string[];
+  try {
+    nombres = await readdir(TEMPORALES);
+  } catch {
+    return; // Todavia no existe el directorio: no hay nada que limpiar.
+  }
+
+  await Promise.allSettled(
+    nombres.map(async (nombre) => {
+      const ruta = path.join(TEMPORALES, nombre);
+      const info = await stat(ruta);
+      if (info.mtimeMs < limite) await unlink(ruta);
+    })
+  );
+}
+
 export async function guardarTemporal(
   contenido: Buffer,
   nombreOriginal: string
 ): Promise<string> {
   await asegurarDirectorio(TEMPORALES);
+  await limpiarTemporalesViejos();
   const token = randomUUID();
   await writeFile(path.join(TEMPORALES, `${token}.bin`), contenido);
   await writeFile(

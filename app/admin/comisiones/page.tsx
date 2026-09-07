@@ -34,10 +34,9 @@ import {
   periodoActual,
   periodoAnterior,
 } from "@/lib/comisiones/periodo";
-import { pesos } from "@/lib/formato";
+import { momento, pesos } from "@/lib/formato";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
-const FECHA = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" });
 
 export default async function ComisionesPage({ searchParams }: PageProps<"/admin/comisiones">) {
   await requireAdmin();
@@ -136,7 +135,7 @@ export default async function ComisionesPage({ searchParams }: PageProps<"/admin
             <Lock className="size-3" />
             Cerrado
             {conMovimiento[0]?.fechaCierre
-              ? ` · ${FECHA.format(conMovimiento[0].fechaCierre)}`
+              ? ` · ${momento(conMovimiento[0].fechaCierre)}`
               : ""}
           </Badge>
         ) : (

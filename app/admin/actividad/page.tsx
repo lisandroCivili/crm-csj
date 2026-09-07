@@ -18,10 +18,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { db } from "@/lib/db";
 import type { ActividadTipo, Prisma } from "@/lib/generated/prisma/client";
+import { momento } from "@/lib/formato";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
 
 const POR_PAGINA = 60;
-const FECHA = new Intl.DateTimeFormat("es-AR", { dateStyle: "short", timeStyle: "short" });
 
 /**
  * Los chips agrupan por familia y no un chip por tipo. Con siete tipos —dos de
@@ -257,7 +257,7 @@ export default async function ActividadPage({ searchParams }: PageProps<"/admin/
               <TarjetaFila
                 key={movimiento.id}
                 href={movimiento.href ?? undefined}
-                lateral={FECHA.format(movimiento.fecha)}
+                lateral={momento(movimiento.fecha)}
                 encabezado={
                   <>
                     <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -349,7 +349,7 @@ export default async function ActividadPage({ searchParams }: PageProps<"/admin/
                     {movimiento.vendedor !== movimiento.actor ? (
                       <p>por {movimiento.actor}</p>
                     ) : null}
-                    <p>{FECHA.format(movimiento.fecha)}</p>
+                    <p>{momento(movimiento.fecha)}</p>
                   </div>
                 </li>
               ))}

@@ -9,8 +9,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { AdjuntoTipo } from "@/lib/generated/prisma/client";
+import { dia } from "@/lib/formato";
 
-const FECHA = new Intl.DateTimeFormat("es-AR");
 
 const ETIQUETA: Record<AdjuntoTipo, string> = {
   DNI: "Foto del DNI",
@@ -93,7 +93,7 @@ export function DocumentacionCliente({ adjuntos }: { adjuntos: AdjuntoDeCliente[
                         {ETIQUETA[adjunto.tipo]}
                       </span>
                       <span className="block text-xs text-muted-foreground">
-                        {FECHA.format(adjunto.createdAt)} · {adjunto.subidoPor}
+                        {dia(adjunto.createdAt)} · {adjunto.subidoPor}
                       </span>
                     </span>
                   </a>

@@ -8,10 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { cerrarSesion } from "@/lib/acciones-sesion";
+import { etiquetaZona } from "@/lib/constantes";
 import { db } from "@/lib/db";
 import { getZonaActiva, requireUsuario } from "@/lib/sesion";
-
-const ETIQUETA_ZONA: Record<string, string> = { SALTA: "Salta", TUCUMAN: "Tucumán" };
 
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode }) {
   return (
@@ -109,7 +108,7 @@ export default async function PerfilPage() {
               />
               <Dato
                 etiqueta="Zona"
-                valor={zona ? (ETIQUETA_ZONA[zona.nombre] ?? zona.nombre) : null}
+                valor={zona ? etiquetaZona(zona.nombre) : null}
               />
               {/* El codigo de agente es de la persona, no de la zona: por eso
                   va en "Tu cuenta" y no en la ficha de vendedor, que si es por

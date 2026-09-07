@@ -79,7 +79,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 12 | Actividad: leads + ventas, filtrable por vendedor | 🔨 commit `3c24fc1` |
 | 13 | QA: los agujeros de zona (alias · títulos · `leadId` · links rotos) | ✅ commit `3dbfd89` |
 | 14 | QA: la red (escenario de dos zonas · tests de parsers · guion de permisos) | ✅ commit `ab8dccc` |
-| 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | ⬜ |
+| 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | 🔨 |
 
 Dependencias:
 
@@ -1487,25 +1487,100 @@ midieron: ninguna se sale.
 ### Fase 15 — El recorrido humano, en las dos zonas y con los dos roles
 
 Lo que no se puede automatizar sin volverlo frágil: que las pantallas se
-**entiendan**, que los números den y que el celular sirva.
+**entiendan**, que los números den y que el celular sirva. La última del plan de
+QA, y la que se hizo caminando el sistema en vez de leerlo.
 
-- **Las dos cuentas.** Todo el QA anterior se hizo con `balta@`. Se repite lo
-  esencial con `pedro@`: que vea lo mismo, que su ficha de agente sea la suya y que
-  la comisión no se mezcle. Es la primera vez que se prueba la segunda cuenta.
-- **Las dos zonas, cruzadas.** Con los padrones de las dos importados, es la
-  primera vez que el aislamiento se prueba con datos y no leyendo el código:
-  dashboard, clientes, comisión del agente (objetivo 100 en Salta, 50 en Tucumán) y
-  `getVendedorDelAdmin()` devolviendo la ficha correcta en cada una.
-- **El lado del vendedor, por primera vez de verdad**, con la cuenta que crea 14.1:
-  sus leads, sus ventas, su comisión, y los tres permisos apagados de a uno.
-- **Las pantallas en el celular**, que es donde el sistema más se usa.
-- **Números que no pueden cambiar**, tomados de las guías ya validadas: $105.000 y
-  $38.000 de comisión, $564.000 del agente, 3 contratos de 100, una caída parcial y
-  un título sin datos suficientes.
-- **Cierre**: lo que quede se anota (HEIC en iPhone, los 74 huérfanos de
-  `uploads/tmp`, el prototipo del formulario, el modo oscuro sin interruptor,
-  `verComision` sin pantalla propia) y se cierra el punto pendiente de
-  `PENDIENTE.md`.
+Se recorrieron las **catorce pantallas de administración** con las dos cuentas en
+las dos zonas —cincuenta y seis combinaciones—, las **fichas de detalle** de
+cliente, vendedor, venta y comisión, los formularios de alta y edición, y **el
+lado del vendedor** con sus tres permisos apagados de a uno. Los números de las
+guias ya validadas se comprobaron uno por uno.
+
+#### Lo que salió bien, para no volver a mirarlo
+
+- **Los números dan en las dos zonas.** Salta: $ 105.000 y $ 38.000 de equipo,
+  $ 564.000 del club sobre 54 cuotas, 3 contratos de 100, una caída parcial y un
+  título sin datos suficientes. Tucumán: $ 150.000 y $ 207.000, $ 954.000 sobre
+  30 cuotas, 2 contratos de 50.
+- **La ficha del agente es la de la zona activa.** Pedro ve $ 207.000 en Tucumán
+  y $ 0 en Salta con la misma cuenta y la misma pantalla: es
+  `getVendedorDelAdmin()` resolviendo por zona, probado con datos y no leyendo el
+  código.
+- **El circuito de la venta cierra.** El vendedor la carga desde su pantalla,
+  pasa por el resumen, queda en su ficha, aparece en su listado, en el del admin
+  y en el feed de Actividad —a nombre suyo, con Balta como actor cuando la carga
+  Balta—. Es la primera vez que se prueba entero.
+- **Los tres permisos hacen las dos cosas.** Apagar uno saca su ítem del menú
+  —y el botón de *Nueva venta*, y la tarjeta de comisión— y además cierra la
+  pantalla si la URL se escribe a mano, que es lo que ya fija `npm run qa`.
+- **Lo que ve el vendedor coincide con lo que ve Balta.** Los $ 105.000 de su
+  dashboard son los mismos $ 105.000 de `/admin/comisiones`, con el mismo desglose
+  por número de cuota.
+- **Las 23 pantallas entran en el celular**, en las dos variantes, sin que nada se
+  salga por el costado.
+
+#### Los tres defectos que encontró el recorrido
+
+**15.1 Las fechas se mostraban en UTC.** Una venta cargada a las nueve de la
+noche figuraba **con la fecha del día siguiente**, y una del último día del mes
+caía en el mes que viene. Se vio al cargar una venta de prueba a las 21:24: el
+listado la mostró al día siguiente. El sistema tiene dos clases de fecha y las
+estaba formateando con la misma regla: un **instante** (cuándo se cargó la venta,
+cuándo se importó el padrón) y un **día del padrón** (la emisión, la fecha de
+pago), que no tiene hora y se guarda a medianoche UTC. Para el segundo, UTC es lo
+correcto; para el primero, es falso.
+
+La misma pasada destapó algo peor en `/admin/padron`: la hora de cada importación
+salía de `toLocaleString("es-AR")`, que **no pone a. m. ni p. m.**, así que las
+tres de la tarde se leían como las tres de la mañana. Y al no llevar zona escrita
+dependía de la del servidor: en la máquina de desarrollo se veía bien y en
+Railway —que corre en UTC— se habría visto mal, que es la peor forma de tener
+este error.
+
+El arreglo son tres funciones en `lib/formato.ts` con la zona escrita:
+`dia()` y `momento()` para instantes, `diaDelPadron()` para lo que viene del
+archivo. Están testeadas con el caso que lo destapó —la venta de las nueve de la
+noche— y con el simétrico, que muestra que formatear un día del padrón en hora de
+acá lo correría un día para atrás.
+
+**15.2 El laboratorio invitaba a importar el padrón en la zona equivocada.**
+Listaba los catorce archivos de prueba seguidos y numerados —siete de Salta y
+siete de Tucumán, mezclados— bajo la instrucción *"importar los archivos en
+orden, del 1 al 14"*, en una pantalla que arriba dice *"Qué hay cargado en
+SALTA"*. Seguir esa instrucción al pie es exactamente el error que la Fase 13
+aprendió a frenar. Ahora muestra sólo los de la zona activa y dice cuántos hay de
+las otras y por qué no van acá. La convención de nombres quedó en
+`lib/padron/padrones-prueba.ts`, con tests, y la usan el laboratorio y el
+generador: antes vivía sólo dentro del script y la pantalla no tenía forma de
+leerla.
+
+**15.3 Los padrones abandonados se acumulaban sin vencimiento.** Subir un archivo
+a importar lo deja en `uploads/tmp` hasta que se confirma; quien cierra la
+pestaña en la previsualización no pasa por el borrado y su archivo queda. Había
+**82** —y ya estaban anotados como 74 dos días antes—. No es basura en disco: son
+**padrones reales**, con nombre, DNI, domicilio y teléfono de miles de clientes,
+guardados sin dueño en el volumen persistente. Ahora caducan a las 24 horas y se
+barren al guardar el siguiente, sin proceso aparte.
+
+#### La falsa alarma que vale documentar
+
+Cuatro pantallas que existen —editar cliente, editar venta, la escala del agente
+y el detalle de comisión— devolvieron **404** de forma consistente. No era un
+defecto: dos `next dev` se habían pisado sobre el mismo `.next` y el que sobrevivió
+quedó con el árbol de rutas a medias. Con un servidor limpio dan 200. Queda
+anotado en `CLAUDE.md` porque el síntoma no se parece en nada a la causa.
+
+#### Lo que queda anotado
+
+- **`Actividad` sin `vendedorId`**: los movimientos que registra un admin sobre un
+  lead sin vendedor asignado sólo se ven sin filtrar. Se ve en el feed de Salta.
+- **HEIC en iPhone**: el `accept` no lo nombra a propósito, así que iOS convierte
+  a JPEG. Si alguna vez manda un HEIC crudo, el arreglo es el mensaje de error.
+- **El modo oscuro no tiene interruptor**: sigue la preferencia del sistema.
+- **`app/admin/prototipo-formulario-venta/`**: sin versionar, de Lisandro.
+- **Un plan de prueba con código `007` y nombre "codigo invalido"** quedó en el
+  catálogo de una prueba vieja. No molesta y se da de baja desde `/admin/planes`.
+
 ---
 
 ## Cómo probar cada fase
@@ -2967,8 +3042,10 @@ una zona y 50 en la otra es lo que hay que ver: es por zona, no del sistema.
 
 En `/admin/comisiones` de Tucumán tiene que aparecer **Pedro Toledo** cobrando
 comisión como vendedor. Es el agente vendiendo con su propia ficha, que es por
-zona: entrá como `pedro@` y en su dashboard de Tucumán vas a ver la tarjeta *"Mi
-comisión del mes"*, y en Salta no, porque ahí no tiene títulos.
+zona: entrá como `pedro@` y mirá la tarjeta *"Mi comisión del mes"* de su
+dashboard en las dos zonas. En Tucumán dice **$ 207.000** y en Salta **$ 0**, y
+esa diferencia es toda la prueba: la tarjeta está en las dos porque tiene ficha
+en las dos, y el número sale de la ficha que corresponde a la zona activa.
 
 **4. La verificación de permisos, sola.**
 
@@ -3016,14 +3093,147 @@ zonas, los admins y la escala quedan.
 
 Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
 `npm run build`.
+
+### Fase 15 — El recorrido humano, en las dos zonas y con los dos roles
+
+Esta es la única guía que se hace **mirando**, no corriendo comandos. Lo
+automático ya lo cubren `npm run qa` y los tests; acá lo que se prueba es que las
+pantallas se entiendan y que los números sean los de siempre. Son unos veinte
+minutos.
+
+**Preparación**
+
+```bash
+npm run dev
+npm run demo     # en otra terminal, si la base no está sembrada
+```
+
+Las cuentas son `balta@crm-csj.local`, `pedro@crm-csj.local` y
+`vendedor@crm-csj.local`, todas con `CambiarEstePassword123`.
+
+---
+
+**1. Las dos zonas, con la cuenta de Balta.** Entrá y elegí **Salta**. Mirá el
+dashboard y después `Comisiones`. Cambí a Tucumán desde el menú de tu nombre
+(*Cambiar de zona*) y mirá las mismas dos pantallas. Tenés que ver esto:
+
+| | Salta | Tucumán |
+|---|---|---|
+| Comisiones del equipo | **$ 143.000** | **$ 357.000** |
+| Comisión del club | **$ 564.000** | **$ 954.000** |
+| Contratos del mes | 3 de 100 | 2 de 50 |
+| Clientes | 8 | 4 |
+
+Los de Salta son los de todas las guías anteriores. Que el objetivo diga 100 en
+una zona y 50 en la otra es lo que hay que ver: es por zona, no del sistema.
+
+**2. La segunda cuenta de administración.** Salí y entrá como `pedro@`. Tenés que
+ver **lo mismo** que ve Balta —son los dos agentes y ninguno tiene datos
+propios—, con una diferencia: en su dashboard de **Tucumán**, la tarjeta *"Mi
+comisión del mes"* dice **$ 207.000**, y en **Salta** dice **$ 0**.
+
+Esa diferencia es la prueba de que la ficha de vendedor es por zona: Pedro tiene
+una en cada una y el sistema usa la que corresponde a la zona activa. En
+`/admin/comisiones` de Tucumán aparece él mismo en la tabla del equipo, cobrando
+como un vendedor más.
+
+**3. El lado del vendedor.** Salí y entrá como `vendedor@`. Fijate que:
+
+- No hay selector de zona: la suya es fija y el chip del header no se puede tocar.
+- El dashboard dice **$ 105.000** de ganancia estimada, con el desglose por
+  número de cuota. Es **el mismo número** que le muestra a Balta
+  `/admin/comisiones` → *PRUEBA VENDEDOR UNO*.
+- Escribí a mano `localhost:3000/admin/dashboard`: te devuelve a tu dashboard.
+
+**4. Cargar una venta, de punta a punta.** Como vendedor, *Nueva venta*. Cargá
+plan **Plan Auto 330**, suscripción `99001`, DNI `99997001`, nombre
+`QA RECORRIDO PRUEBA`, domicilio y teléfono cualquiera, y una observación. Antes
+de guardar aparece un **resumen**: confirmálo.
+
+Tenés que terminar en la ficha de la venta. Después, sin cerrar sesión, mirá *Mis
+ventas*: ahí está, **con la fecha de hoy**. Esto último es lo que arregló esta
+fase: si la cargás de noche, antes figuraba con la fecha de mañana.
+
+Ahora entrá como Balta en Salta y buscá esa venta en `Ventas`. Tiene que estar, a
+nombre de *PRUEBA VENDEDOR UNO*. En `Actividad`, el chip **Ventas** pasa a 1 y el
+renglón dice quién la cargó.
+
+**5. Los permisos.** Como Balta, entrá a `Vendedores` → *PRUEBA VENDEDOR UNO* y
+apagá **Sus leads**. Volvé a la sesión del vendedor y recargá: el ítem *Mis leads*
+ya no está. Escribí a mano `localhost:3000/vendedor/leads`: vuelve al dashboard,
+sin cartel. Probá lo mismo con **Sus ventas** —desaparece también el botón
+*Nueva venta*— y con **Su comisión** —desaparece la tarjeta del mes—. Volvé a
+encender los tres.
+
+**6. El laboratorio, que ahora sabe en qué zona estás.** Entrá a `Laboratorio` en
+Salta: la lista de padrones de prueba muestra **7**, todos sin la palabra
+`tucuman`, y abajo avisa que hay otros 7 de las otras zonas. Cambí a Tucumán y
+mirá la misma card: ahora son los siete `padron-prueba-tucuman-*`.
+
+Antes listába los catorce juntos y decía *"importalos del 1 al 14"*, parado en
+Salta. Seguir eso al pie es el error que la Fase 13 aprendió a frenar.
+
+**7. El celular.** Abrí el CRM en el teléfono, o achicá la ventana por debajo de
+768px. Probá el menú hamburguesa —tenés que poder navegar y que se cierre al
+tocar un link—, y mirá que los listados se vean como tarjetas y no como tablas
+cortadas. Las pantallas del vendedor son las que más importan: es desde donde más
+se usa.
+
+Para revisarlas todas de una:
+
+```bash
+CAPTURA_MOVIL=1 npm run capturas
+```
+
+23 pantallas en `.capturas-movil/`, y al final tiene que decir **"Ninguna
+pantalla se sale por el costado."**
+
+**8. Los números que no pueden cambiar.** Si algo de esto no da, algo se rompió:
+
+- `/admin/clientes` en Salta: **8 clientes**, uno en *caída parcial* (GINA) y uno
+  *sin datos suficientes* (HUGO, que tiene un hueco en el historial).
+- La ficha de GINA: un título **caído con 9 impagas seguidas** y otro al día.
+- `/admin/padron` en Salta: **7 importaciones**, la primera marcada *línea base*
+  y la cuarta con **1 renovación**.
+- El detalle de comisión de *PRUEBA VENDEDOR UNO*: **$ 105.000**, con las cuotas
+  que pasan de c4 marcadas *"no, pasa c4"*.
+
+**Para borrar la venta de prueba** que cargaste en el paso 4: entrá a la venta
+como Balta y anulála, o corré `npx tsx scripts/sembrar-demo.ts --borrar` y después
+`npm run demo`, que deja el escenario como al principio.
+
+Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
+`npm run build`, más `npm run qa` contra el build.
 ---
 
 ## Contexto para la próxima sesión
 
 **Dónde retomar:** Lisandro validó la **Fase 14 el 05/09/2026** (la 13, el
 04/09; la 11, el 02/09; la 10, el 01/09; las 6 a 9, el 28/08). Las fases 0 a 11,
-la 13 y la 14 están cerradas; **la 12 sigue esperando validación**. La sesión
-del 05/09 sigue por la **Fase 15**, el recorrido humano y última del plan de QA.
+la 13 y la 14 están cerradas; **la 12 y la 15 esperan validación**. Con la 15
+**el plan de QA queda terminado**: lo que sigue es el módulo del vendedor, que
+era lo que Lisandro quería abrir antes de que esta tanda se interpusiera.
+
+De la Fase 15, lo que hay que llevarse:
+
+- **Un instante y un día del padrón no se formatean igual.** Se mostraban los dos
+  en UTC, así que una venta cargada de noche figuraba con la fecha del día
+  siguiente. Ahora hay tres funciones en `lib/formato.ts` —`dia`, `momento`,
+  `diaDelPadron`— con la zona escrita, porque Railway corre en UTC y un
+  formateador sin `timeZone` se ve bien en desarrollo y mal en producción.
+- **Una pantalla que enseña a hacer algo mal es un defecto.** El laboratorio
+  listaba los catorce padrones de prueba juntos diciendo *"importalos del 1 al
+  14"*, parado en una zona. El código estaba bien y la instrucción llevaba al
+  error que la Fase 13 aprendió a frenar.
+- **Los temporales de la importación caducan a las 24 horas.** Se habían juntado
+  82 padrones abandonados en `uploads/tmp`: no es basura en disco, son datos
+  personales de miles de clientes en el volumen persistente.
+- **Dos `next dev` sobre el mismo `.next` dejan al sobreviviente devolviendo 404
+  en rutas que existen.** Cuatro pantallas parecían rotas y no lo estaban. Está
+  en `CLAUDE.md`: el síntoma no se parece a la causa.
+- **El recorrido con las dos cuentas en las dos zonas dio bien**, incluido el
+  circuito completo de una venta del vendedor al feed de Actividad. Lo que no
+  había sido probado nunca eran las combinaciones, no las pantallas sueltas.
 
 De la Fase 14, lo que hay que llevarse:
 

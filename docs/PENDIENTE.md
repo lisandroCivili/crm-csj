@@ -122,11 +122,13 @@ Ninguno de estos está empezado y ninguno bloquea nada.
 - **Despliegue en Railway**: la app, el Postgres y un volumen persistente
   montado en `UPLOADS_DIR` para los adjuntos. El código ya está preparado; falta
   crear el proyecto y configurar las variables de entorno (ver `.env.example`).
-- **Repaso final de permisos**: en buena parte resuelto. El estado de la cuenta y
-  los permisos se leen de la base en cada request, cada sección del vendedor está
-  blindada por permiso además de por rol, y los adjuntos dejaron de servirse con
-  el token viejo. Falta una pasada completa sobre el resto de las URLs de admin
-  antes de producción.
+- ~~**Repaso final de permisos**~~. **Cerrado el 06/09/2026** por las fases 13 a
+  15. La pasada completa sobre las URLs de admin se hizo y encontró dos agujeros
+  de zona reales, ya arreglados; además quedó `npm run qa`, que corre 35
+  comprobaciones de permisos y aislamiento con exit code y hay que correr antes
+  de cada entrega. Lo que **sigue pendiente para producción** no es de permisos
+  sino de despliegue: contraseñas reales, variables de entorno y el volumen de
+  adjuntos (ver el punto de Railway, arriba).
 - **Exportar la liquidación** a Excel o PDF para pasársela al club o al
   vendedor. Hoy se ve en pantalla; nadie lo pidió todavía.
 

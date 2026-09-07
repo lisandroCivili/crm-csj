@@ -15,13 +15,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { db } from "@/lib/db";
+import { dia, momento } from "@/lib/formato";
 import { requireAdmin, requireZonaActivaId } from "@/lib/sesion";
-
-const FECHA = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
-const FECHA_HORA = new Intl.DateTimeFormat("es-AR", {
-  dateStyle: "short",
-  timeStyle: "short",
-});
 
 function Dato({ etiqueta, valor }: { etiqueta: string; valor: React.ReactNode }) {
   return (
@@ -79,7 +74,7 @@ export default async function DetalleVentaAdminPage({
 
       <PageHeader
         titulo={venta.nombreCliente}
-        descripcion={`DNI ${venta.dni} · ${FECHA.format(venta.fechaVenta)} · ${venta.vendedor.nombreCompleto}`}
+        descripcion={`DNI ${venta.dni} · ${dia(venta.fechaVenta)} · ${venta.vendedor.nombreCompleto}`}
         acciones={
           <div className="flex flex-wrap gap-2">
             {anulada ? (
@@ -106,7 +101,7 @@ export default async function DetalleVentaAdminPage({
           <AlertDescription>
             <span>
               {venta.anuladaPor?.nombre ?? "Alguien"} la anuló
-              {venta.anuladaAt ? ` el ${FECHA_HORA.format(venta.anuladaAt)}` : ""}
+              {venta.anuladaAt ? ` el ${momento(venta.anuladaAt)}` : ""}
               {venta.motivoAnulacion ? `: ${venta.motivoAnulacion}` : "."}
             </span>
             <span className="text-muted-foreground">

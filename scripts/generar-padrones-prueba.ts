@@ -50,6 +50,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as XLSX from "xlsx";
+import { sufijoZonaPadronPrueba } from "../lib/padron/padrones-prueba";
 
 const DESTINO = join("docs", "padrones-prueba");
 
@@ -274,14 +275,12 @@ const TITULOS_TUCUMAN: TituloPrueba[] = [
 ];
 
 type Escenario = {
-  /** Va en el nombre del archivo. Vacio para Salta, que ya estaba sin sufijo. */
-  sufijo: string;
   titulos: TituloPrueba[];
 };
 
 const ESCENARIOS: Record<string, Escenario> = {
-  SALTA: { sufijo: "", titulos: TITULOS_SALTA },
-  TUCUMAN: { sufijo: "tucuman-", titulos: TITULOS_TUCUMAN },
+  SALTA: { titulos: TITULOS_SALTA },
+  TUCUMAN: { titulos: TITULOS_TUCUMAN },
 };
 
 // ---------------------------------------------------------------------------
@@ -432,7 +431,7 @@ function generarZona(zona: string, escenario: Escenario) {
 
   for (const [i, mes] of MESES.entries()) {
     const { filas, resumen } = generarPadron(mes, escenario.titulos);
-    const nombre = `padron-prueba-${escenario.sufijo}${String(i + 1).padStart(2, "0")}-${mes}.xlsx`;
+    const nombre = `padron-prueba-${sufijoZonaPadronPrueba(zona)}${String(i + 1).padStart(2, "0")}-${mes}.xlsx`;
 
     const hoja = XLSX.utils.aoa_to_sheet([ENCABEZADOS, ...filas]);
     const libro = XLSX.utils.book_new();

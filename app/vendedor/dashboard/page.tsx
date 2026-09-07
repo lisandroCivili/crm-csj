@@ -9,10 +9,9 @@ import { Separator } from "@/components/ui/separator";
 import { obtenerLiquidacionVendedor } from "@/lib/comisiones/liquidacion";
 import { etiquetaPeriodo, periodoActual, periodoAnterior } from "@/lib/comisiones/periodo";
 import { db } from "@/lib/db";
-import { pesos, porcentaje } from "@/lib/formato";
+import { dia, pesos, porcentaje } from "@/lib/formato";
 import { requireVendedor } from "@/lib/sesion";
 
-const FECHA = new Intl.DateTimeFormat("es-AR", { timeZone: "UTC" });
 const DIA_LARGO = new Intl.DateTimeFormat("es-AR", {
   day: "numeric",
   month: "long",
@@ -280,7 +279,7 @@ export default async function VendedorDashboardPage() {
                     </Link>
                     <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
                       {venta.codigoProducto ? `${venta.codigoProducto} · ` : ""}
-                      {FECHA.format(venta.fechaVenta)}
+                      {dia(venta.fechaVenta)}
                     </span>
                   </li>
                 ))}
