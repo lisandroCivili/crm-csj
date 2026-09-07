@@ -72,6 +72,7 @@ const PANTALLAS_VENDEDOR = [
   ["vendedor-ventas", "/vendedor/ventas"],
   ["vendedor-venta-nueva", "/vendedor/ventas/nueva"],
   ["vendedor-cartera", "/vendedor/cartera"],
+  ["vendedor-comision", "/vendedor/comision"],
 ];
 
 await mkdir(DESTINO, { recursive: true });

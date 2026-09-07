@@ -11,7 +11,14 @@ import { PageHeader } from "@/components/layout/page-header";
 import { StatCard } from "@/components/layout/stat-card";
 import { BadgeEstado } from "@/components/leads/badge-estado";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { obtenerLiquidacionVendedor } from "@/lib/comisiones/liquidacion";
 import { etiquetaPeriodo, periodoActual, periodoAnterior } from "@/lib/comisiones/periodo";
@@ -163,6 +170,7 @@ export default async function VendedorDashboardPage() {
             }
             icono={BadgeDollarSign}
             tono="marca"
+            href="/vendedor/comision"
           />
         ) : null}
         {usuario.permisos.verCartera ? (
@@ -195,6 +203,11 @@ export default async function VendedorDashboardPage() {
             Se calcula sobre las cuotas que el padrón mostró cobradas este mes, agrupadas por
             número de cuota. Hasta que se cierre el mes, el número puede moverse.
           </CardDescription>
+          <CardAction>
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/vendedor/comision">Ver el detalle</Link>
+            </Button>
+          </CardAction>
         </CardHeader>
         <CardContent>
           {!comision || comision.renglones.length === 0 ? (
@@ -248,7 +261,14 @@ export default async function VendedorDashboardPage() {
           {comisionPrevia && comisionPrevia.totalComision > 0 ? (
             <p className="mt-3 text-xs text-muted-foreground">
               El mes pasado ({etiquetaPeriodo(periodoPrevio)}) cerraste con{" "}
-              {pesos(comisionPrevia.totalComision)}.
+              {pesos(comisionPrevia.totalComision)}.{" "}
+              <Link
+                href={`/vendedor/comision?periodo=${periodoPrevio}`}
+                className="underline underline-offset-2"
+              >
+                Verlo
+              </Link>
+              .
             </p>
           ) : null}
         </CardContent>

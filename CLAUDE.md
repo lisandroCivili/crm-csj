@@ -191,6 +191,15 @@ lugar donde un bug se traduce en plata mal pagada.
   **Nunca hardcodearlos.**
 - **Cerrar el período congela los porcentajes** en `ComisionDetalle`. Un período cerrado no se
   recalcula aunque después cambie la escala o entre otro padrón; se puede reabrir a mano.
+- **El vendedor ve su propia liquidación** en `/vendedor/comision`, con el mismo motor que
+  usa el admin: si el número pudiera diferir del que Balta le paga, la pantalla no serviría
+  para lo único que sirve, que es discutir un peso. El alcance sale de la sesión y no de la
+  URL —el admin recibe el vendedor por `[id]` porque mira a otros; acá el único id posible es
+  el propio—, y lo que viaja por query es sólo el período. Tres cosas cambian a propósito: los
+  gastos de representación se ven pero no se editan, **no se muestra el nombre de la escala**
+  (cuál le toca a quién es una decisión interna de la agencia; el tramo y el porcentaje sí,
+  porque explican el número) y cada título linkea a su ficha de la cartera, salvo que Balta le
+  haya apagado `puedeVerCartera`: no se ofrece lo que la otra pantalla va a rebotar.
 
 ## Comisión del agente
 
@@ -441,7 +450,7 @@ npm run db:migrate       # aplicar cambios de schema
 npm run db:studio        # inspeccionar la base
 npm run db:seed          # cargar zonas y usuarios admin
 npm run demo             # escenario completo de prueba en LAS DOS zonas
-npm run qa               # 35 comprobaciones de permisos y aislamiento de zonas
+npm run qa               # 45 comprobaciones de permisos y aislamiento de zonas
 npm run capturas         # capturas de pantalla de todas las vistas
 ```
 

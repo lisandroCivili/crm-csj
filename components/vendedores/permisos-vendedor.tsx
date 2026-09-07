@@ -25,7 +25,8 @@ const SECCIONES: { clave: Clave; etiqueta: string; detalle: string }[] = [
   {
     clave: "puedeVerComision",
     etiqueta: "Su comisión",
-    detalle: "Ver cuánto le corresponde este mes. No cambia lo que cobra.",
+    detalle:
+      "Ver cuánto le corresponde cada mes y de qué cuotas sale. No cambia lo que cobra.",
   },
   {
     clave: "puedeVerCartera",

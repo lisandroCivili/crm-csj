@@ -30,6 +30,7 @@ describe("itemsVisibles", () => {
       "/vendedor/leads",
       "/vendedor/ventas",
       "/vendedor/cartera",
+      "/vendedor/comision",
     ]);
   });
 
@@ -38,6 +39,7 @@ describe("itemsVisibles", () => {
       "/vendedor/dashboard",
       "/vendedor/ventas",
       "/vendedor/cartera",
+      "/vendedor/comision",
     ]);
   });
 
@@ -46,6 +48,7 @@ describe("itemsVisibles", () => {
       "/vendedor/dashboard",
       "/vendedor/leads",
       "/vendedor/cartera",
+      "/vendedor/comision",
     ]);
   });
 
@@ -54,11 +57,17 @@ describe("itemsVisibles", () => {
       "/vendedor/dashboard",
       "/vendedor/leads",
       "/vendedor/ventas",
+      "/vendedor/comision",
     ]);
   });
 
-  it("verComision no saca ninguna seccion: no hay pantalla propia de comisiones", () => {
-    expect(hrefs("VENDEDOR", { ...TODO, verComision: false })).toEqual(hrefs("VENDEDOR", TODO));
+  it("sin verComision desaparece la comision", () => {
+    expect(hrefs("VENDEDOR", { ...TODO, verComision: false })).toEqual([
+      "/vendedor/dashboard",
+      "/vendedor/leads",
+      "/vendedor/ventas",
+      "/vendedor/cartera",
+    ]);
   });
 
   it("sin ningun permiso le queda el dashboard, para no dejarlo sin donde caer", () => {

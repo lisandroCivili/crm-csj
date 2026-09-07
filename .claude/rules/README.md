@@ -99,7 +99,7 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
   juntos con un "importalos en orden"; ahora muestra los de la zona activa
   (`lib/padron/padrones-prueba.ts`).
 - **Verificación**: `npm run demo` arma el escenario de las dos zonas (idempotente) y
-  `npm run qa` corre las 35 comprobaciones de permisos y aislamiento con exit code. El
+  `npm run qa` corre las 45 comprobaciones de permisos y aislamiento con exit code. El
   escenario de **Salta no se toca**: sus números son la referencia de todas las guías de
   prueba ya validadas. Los fixtures de Excel se fabrican en memoria, nunca se versionan.
 - **Datos sensibles**: padrones reales y fotos de DNI no se versionan ni se sirven por URL pública.
@@ -109,6 +109,13 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
 - **Permisos del vendedor**: son cuatro (`verLeads`, `cargarVentas`, `verComision`,
   `verCartera`), todos en `true` por defecto: se **sacan**, no se dan. Filtran el menú y además
   blindan cada página y acción. Esconder el ítem del menú no es seguridad.
+- **La comisión del vendedor**: `/vendedor/comision` usa el mismo motor que la pantalla del
+  admin (`obtenerLiquidacionVendedor`, `cuotasDelPeriodo`). **Nunca escribir un cálculo
+  paralelo**: la pantalla existe para que el vendedor pueda discutir un peso, y no serviría si
+  su total saliera de otra cuenta que el que le pagan. El alcance sale de la sesión, jamás de
+  la URL; lo único que viaja por query es el período. No se le muestra el nombre de la escala
+  ni se le deja editar los gastos de representación, y los links a la cartera se dibujan sólo
+  con `verCartera`: ofrecer lo que la otra pantalla rebota es un defecto.
 - **La cartera del vendedor**: lista **títulos**, no clientes, filtrando por `vendedorId` y
   `zonaId`. Agrupar por cliente —como hace el listado del admin— mostraría producción ajena,
   porque un cliente puede tener títulos de dos vendedores. Balta pidió que "solo admin ve

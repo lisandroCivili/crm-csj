@@ -6,7 +6,7 @@ import {
   type GrupoComision,
   type TramoAplicado,
 } from "./calcularComisionPeriodo";
-import { rangoDelPeriodo } from "./periodo";
+import { periodoDeFecha, rangoDelPeriodo } from "./periodo";
 
 /**
  * Capa de datos de la liquidacion: arma la entrada del motor desde la base y
@@ -405,7 +405,9 @@ export async function cuotasDelPeriodo({
       fechaPago: true,
       detectadaPagaAt: true,
       titulo: {
-        select: { numTit: true, cliente: { select: { nombre: true } } },
+        // El id es para linkear a la ficha del titulo; el vendedor la tiene en
+        // su cartera y el admin en la del cliente.
+        select: { id: true, numTit: true, cliente: { select: { nombre: true } } },
       },
     },
   });
@@ -532,13 +534,47 @@ export async function reabrirPeriodo({ zonaId, periodo }: { zonaId: number; peri
   });
 }
 
-/** Los periodos que ya tienen algun registro, del mas nuevo al mas viejo. */
-export async function periodosConMovimiento(zonaId: number): Promise<string[]> {
-  const filas = await db.comisionPeriodo.findMany({
-    where: { zonaId },
-    distinct: ["periodo"],
-    orderBy: { periodo: "desc" },
-    select: { periodo: true },
-  });
-  return filas.map((fila) => fila.periodo);
+/**
+ * Los meses que este vendedor puede abrir: aquellos en los que el padron le
+ * detecto alguna cuota cobrada, mas los que ya tienen registro guardado
+ * (cerrados, o abiertos con gastos cargados).
+ *
+ * Son las dos fuentes y no una: un periodo en borrador todavia no tiene
+ * `ComisionPeriodo` —se recalcula en vivo— asi que mirar solo esa tabla
+ * esconderia justo el mes en curso, y mirar solo las cuotas se saltearia un mes
+ * que se cerro con gastos y sin cobranza.
+ *
+ * Es por vendedor a proposito. Listar los periodos de la zona le ofreceria
+ * meses en los que cobro otro y el no: un mes que se abre en cero no es un dato
+ * suyo, es la sombra de la produccion ajena.
+ */
+export async function periodosDelVendedor({
+  vendedorId,
+  zonaId,
+}: {
+  vendedorId: string;
+  zonaId: number;
+}): Promise<string[]> {
+  const [detectadas, guardados] = await Promise.all([
+    // `groupBy` y no `findMany` + `distinct`: el corte lo hace Postgres. Como
+    // `detectadaPagaAt` se sella con el instante de la importacion, hay un
+    // valor por padron importado y no uno por cuota.
+    db.tituloCuota.groupBy({
+      by: ["detectadaPagaAt"],
+      where: { detectadaPagaAt: { not: null }, titulo: { zonaId, vendedorId } },
+    }),
+    db.comisionPeriodo.findMany({
+      where: { vendedorId, zonaId },
+      distinct: ["periodo"],
+      select: { periodo: true },
+    }),
+  ]);
+
+  const periodos = new Set<string>();
+  for (const fila of detectadas) {
+    if (fila.detectadaPagaAt) periodos.add(periodoDeFecha(fila.detectadaPagaAt));
+  }
+  for (const fila of guardados) periodos.add(fila.periodo);
+
+  return [...periodos].sort().reverse();
 }

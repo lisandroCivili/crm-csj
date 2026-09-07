@@ -163,7 +163,7 @@ export default async function PerfilPage() {
               <ul className="space-y-2">
                 <Permiso activo={usuario.permisos.verLeads} etiqueta="Ver y trabajar tus leads" />
                 <Permiso activo={usuario.permisos.cargarVentas} etiqueta="Cargar y ver tus ventas" />
-                <Permiso activo={usuario.permisos.verComision} etiqueta="Ver tu comisión del mes" />
+                <Permiso activo={usuario.permisos.verComision} etiqueta="Ver tu comisión, mes por mes" />
                 <Permiso activo={usuario.permisos.verCartera} etiqueta="Ver tu cartera del padrón" />
               </ul>
             </CardContent>

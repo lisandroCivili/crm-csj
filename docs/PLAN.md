@@ -81,7 +81,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 14 | QA: la red (escenario de dos zonas · tests de parsers · guion de permisos) | ✅ commit `ab8dccc` |
 | 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | ✅ commit `f5f2faa` |
 | 16 | Vendedor: mi cartera (títulos, cuotas, caídas) | ✅ commit `00dd9b2` |
-| 17 | Vendedor: mi comisión (histórico y de dónde sale cada peso) | ⬜ |
+| 17 | Vendedor: mi comisión (histórico y de dónde sale cada peso) | 🔨 commit `PENDIENTE` |
 | 18 | Vendedor: listados a escala (buscar, filtrar, paginar) | ⬜ |
 
 Dependencias:
@@ -1662,15 +1662,20 @@ checklist de `/perfil`, los switches de `/admin/vendedores/[id]` y
 `scripts/qa-permisos.ts`, que gana la comprobación de que apagarlo cierra la ruta
 además de esconder el ítem.
 
-### Fase 17 — Mi comisión
+### 🔨 Fase 17 — Mi comisión
+
+Commit `PENDIENTE`.
 
 Cierra el único permiso sin pantalla y contesta lo que el vendedor pregunta todos
 los meses: cuánto cobro y por qué.
 
 `/vendedor/comision`, con `requirePermiso("verComision")` y su ítem de menú. **No
-se escribe cálculo nuevo**: se reutilizan `obtenerLiquidacionVendedor`,
-`cuotasDelPeriodo` y `periodosConMovimiento`, los mismos que ya usa la pantalla
-del admin. El alcance sale de la sesión, nunca de la URL.
+se escribe cálculo nuevo**: `obtenerLiquidacionVendedor` y `cuotasDelPeriodo` son
+los mismos que usan la pantalla del admin y el dashboard. Es la razón de ser de la
+pantalla: sirve para que el vendedor pueda discutir un peso, y no serviría si su
+total saliera de otra cuenta que el que le pagan. El alcance sale de la sesión,
+nunca de la URL —el admin recibe el vendedor por `[id]` porque mira a otros; acá
+el único id posible es el propio—, y lo único que viaja por query es el período.
 
 Muestra los renglones por número de cuota, la tabla de cuotas que entraron
 —título, cliente, importe, fecha de pago, si comisiona o no por el tope— y los
@@ -1679,6 +1684,27 @@ gastos de representación se ven pero no se editan; **no** se muestra el nombre 
 la escala, que es una decisión interna de Balta y no un dato del vendedor; y cada
 título linkea a su ficha de la cartera, que es lo que convierte el número en algo
 verificable.
+
+**`periodosConMovimiento` no servía y estaba muerta.** El plan decía reutilizarla
+para el selector de meses, pero al ir a usarla aparecieron dos cosas: no la
+llamaba nadie —se escribió en la Fase 8 y nunca se conectó— y mira toda la zona,
+así que le habría ofrecido al vendedor meses en los que cobró otro y él no. Un mes
+que se abre en cero no es un dato suyo. La reemplaza `periodosDelVendedor`, que
+además une **dos** fuentes: los meses con cuotas detectadas y los que ya tienen
+`ComisionPeriodo`. Con una sola se escondía justo el mes en curso, que está en
+borrador y todavía no tiene registro guardado.
+
+**El link a la cartera se dibuja sólo con `verCartera`.** Si Balta le apagó la
+cartera, el título deja de ser link en vez de mandarlo a un rebote silencioso. Es
+exactamente el defecto que la Fase 18 tiene anotado para el botón "Cargar venta"
+de la ficha del lead: la seguridad está bien, lo que está mal es ofrecer algo que
+no se puede dar. Acá no se repitió, y `npm run qa` lo fija.
+
+**En el celular los renglones no son una tabla.** Cinco columnas en 390px dejaban
+la columna *Comisión* cortada contra el borde — justo la que se vino a mirar. Se
+vio en la captura móvil, no leyendo el código. Va el mismo patrón que los
+listados: lista abajo de 768px, tabla arriba, con el renglón escrito igual que el
+del dashboard para no estrenar otro formato.
 
 ### Fase 18 — Los listados a escala
 
@@ -3181,7 +3207,7 @@ en las dos, y el número sale de la ficha que corresponde a la zona activa.
 npm run qa
 ```
 
-Recorre 35 comprobaciones y termina en `35 comprobaciones, todas bien.` Prueba lo
+Recorre 45 comprobaciones y termina en `45 comprobaciones, todas bien.` Prueba lo
 que no se puede mirar a ojo: que el vendedor rebote de las seis secciones de
 administración, que apagarle un permiso le cierre la pantalla y no sólo le
 esconda el ítem, que una cuenta desactivada salga del sistema en el clic
@@ -3405,15 +3431,116 @@ Volvé a encenderlo.
 Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
 `npm run build`, más `npm run qa` contra el build.
 
+### Fase 17 — Mi comisión
+
+**Preparación.** La misma de siempre: `npm run demo` (idempotente) y `npm run dev`.
+La prueba se hace casi toda con la cuenta del vendedor, y los pasos 8 y 9 con la
+de Balta.
+
+| Email | Contraseña |
+|---|---|
+| `vendedor@crm-csj.local` | `CambiarEstePassword123` |
+
+**1. El ítem nuevo.** Entrá como vendedor: el menú pasa a tener **cinco** ítems
+—Dashboard, Mis leads, Mis ventas, Mi cartera y **Mi comisión**—. Es el último
+permiso que no tenía pantalla propia.
+
+**2. Desde el dashboard.** La tarjeta **Ganancia estimada** ahora es tocable y
+lleva a la pantalla nueva, y el bloque *Tu comisión de septiembre* tiene arriba a
+la derecha un botón **Ver el detalle**. Los dos van al mismo lado: el dashboard
+es el resumen, no el detalle.
+
+**3. El total.** En `/vendedor/comision`, el **Total estimado** tiene que ser
+**$ 105.000**. Es la misma cifra que muestra la tarjeta del dashboard y la misma
+que le liquida Balta; el paso 8 lo comprueba del otro lado.
+
+**4. Cómo se llega ahí.** Cuatro renglones, uno por número de cuota:
+
+| Cuota | Cobradas | Base | % | Comisión |
+|---|---|---|---|---|
+| c1 | 2 | $ 200.000 | 20 % | $ 40.000 |
+| c2 | 2 | $ 200.000 | 15 % | $ 30.000 |
+| c3 | 2 | $ 200.000 | 10 % | $ 20.000 |
+| c4 | 3 | $ 300.000 | 5 % | $ 15.000 |
+
+Abajo: *Se cobró* **$ 900.000** y *Tu comisión por esas cuotas* **$ 105.000**.
+En el celular esto no es una tabla sino una lista, porque cinco columnas dejaban
+la comisión cortada contra el borde — justo la que se vino a mirar.
+
+**5. Datos del cálculo.** A la derecha: *Ventas nuevas del mes* **2**, *Tramo*
+**0 a 2**, *Cobrás hasta* **c4** y *Cuotas fuera de tope* **21 · $ 2.100.000**.
+Fijate en lo que **no** está: el nombre de la escala. Cuál escala le asignó Balta
+a quién es una decisión interna de la agencia; el tramo y el porcentaje sí se
+muestran, porque son lo que explica el número.
+
+**6. Las cuotas que entraron.** Abajo, **30 filas**. Las **21** que pasan c4 se
+ven atenuadas y dicen *no, pasa c4*: se cobraron, pero no le comisionan. Cada
+número de título es un link a su ficha de **Mi cartera** — tocá `PT-0001` y tiene
+que abrir la ficha de ANA PRUEBA. Eso es lo que vuelve verificable al total: de
+acá salió, ese es el cliente, esa la cuota.
+
+**7. Los meses.** Tocá la flecha **‹**: vas a agosto de 2026, que dice *No se
+cobró ninguna cuota tuya en agosto de 2026* y **$ 0**, y aparece el atajo *Ir al
+mes actual*. La flecha **›** está apagada en el mes en curso: adelante no hay nada
+que liquidar, porque el padrón de ese ciclo todavía no existe. (La fila *Meses con
+movimiento* no aparece con el escenario de prueba: hay un solo mes cargado. Con un
+padrón real es la forma de saltar a un mes de hace un año sin apretar doce veces
+la flecha.)
+
+**8. Que sea el mismo número que le liquidan.** Entrá como Balta a
+`/admin/comisiones`, buscá *PRUEBA VENDEDOR UNO*: **$ 105.000**. Si estos dos
+números difirieran, la pantalla del vendedor no serviría para lo único que sirve,
+que es poder discutir un peso. Están atadas al mismo motor, y `npm run qa` lo
+comprueba en cada corrida.
+
+**9. El permiso.** En `/admin/vendedores` → *PRUEBA VENDEDOR UNO*, apagá **Su
+comisión**. Sin cerrar la sesión del vendedor, recargá: desaparecen el ítem del
+menú, la tarjeta de ganancia y el bloque del dashboard, y escribir
+`/vendedor/comision` a mano lo devuelve a su dashboard. Volvé a encenderlo.
+
+Y una más, que es la que cuida el detalle: apagá **Su cartera** —dejando la
+comisión encendida— y volvé a `/vendedor/comision`. Los títulos siguen ahí pero
+**dejan de ser links**, en vez de mandarlo a un rebote silencioso. Volvé a
+encenderla.
+
+**Datos de prueba:** ninguno nuevo. Todo sale de `npm run demo`.
+
+Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
+`npm run build`, más `npm run qa` contra el build.
+
 ---
 
 ## Contexto para la próxima sesión
 
 **Dónde retomar:** Lisandro validó las **fases 12, 15 y 16 el 07/09/2026** (la 14,
 el 05/09; la 13, el 04/09; la 11, el 02/09; la 10, el 01/09; las 6 a 9, el 28/08).
-**Las dieciocho fases del QA están cerradas** y el **módulo del vendedor** arrancó
-con la Fase 16 (Mi cartera) ya validada; siguen la 17 (Mi comisión) y la 18 (los
-listados a escala).
+**Las dieciocho fases del QA están cerradas.** Del **módulo del vendedor**, la
+Fase 16 (Mi cartera) está validada y la **Fase 17 (Mi comisión) está construida y
+espera validación**; queda la 18 (los listados a escala), que es la última de la
+tanda.
+
+De la Fase 17, lo que hay que llevarse:
+
+- **La pantalla existe para que el vendedor pueda discutir un peso.** Por eso no
+  se escribió ni una línea de cálculo nuevo: llama al mismo motor que la pantalla
+  del admin. `npm run qa` compara el total del HTML contra lo que devuelve
+  `obtenerLiquidacionVendedor`, y es la única comprobación del guion que mira
+  texto de pantalla en vez de códigos de respuesta — está justificada ahí y en
+  ningún otro lado.
+- **El alcance sale de la sesión, no de la URL.** El admin recibe el vendedor por
+  `[id]` porque mira a otros; el vendedor sólo puede ser él, así que la ruta no lo
+  lleva. Lo único que viaja por query es el período.
+- **Lo que no se le muestra es tan deliberado como lo que sí.** El nombre de la
+  escala es una decisión interna de la agencia; el tramo y el porcentaje son la
+  explicación del número. Y los gastos de representación se ven pero no se editan.
+- **Una función exportada que no llama nadie es una trampa, no una reserva.**
+  `periodosConMovimiento` estaba escrita desde la Fase 8, sin usar, y además era
+  incorrecta para lo que el plan quería (mira toda la zona, no al vendedor). Se
+  reemplazó por `periodosDelVendedor` en vez de dejar las dos con nombres casi
+  iguales.
+- **Lo que se descubrió en la captura, no en el código:** cinco columnas en un
+  celular cortaban justo la columna *Comisión*. El chequeo de "nada se sale por el
+  costado" pasaba igual, porque el scroll estaba contenido en su div.
 
 De la Fase 16, lo que hay que llevarse:
 
@@ -3465,7 +3592,7 @@ De la Fase 14, lo que hay que llevarse:
   de vendedor (`vendedor@crm-csj.local`). Es idempotente. Antes esto eran siete
   pasos manuales por zona y sólo estaba documentado para Salta; el lado del
   vendedor directamente no se podía probar sin crear la cuenta a mano.
-- **`npm run qa` corre 35 comprobaciones de permisos y aislamiento** y devuelve
+- **`npm run qa` corre 45 comprobaciones de permisos y aislamiento** y devuelve
   exit code. Es lo que fija los arreglos de la Fase 13 y lo que conviene correr
   antes de cada entrega.
 - **El escenario de Salta no se toca nunca.** Sus números (8 clientes, 9 títulos,

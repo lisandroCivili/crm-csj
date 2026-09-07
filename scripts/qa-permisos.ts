@@ -14,7 +14,11 @@
  * esos arreglos para que no vuelvan.
  *
  * Mira códigos de respuesta y redirecciones, no textos de pantalla: es el tipo
- * de prueba que no se rompe cada vez que se cambia una etiqueta.
+ * de prueba que no se rompe cada vez que se cambia una etiqueta. La excepción es
+ * la comisión del vendedor, donde lo que hay que comprobar es justamente un
+ * número —que el total que ve sea el que le liquidan— y eso sólo se ve en el
+ * HTML. Se compara contra lo que devuelve el motor, nunca contra una cifra
+ * escrita a mano acá.
  *
  * ANTES DE CORRER: `npx tsx scripts/sembrar-demo.ts`, que deja las dos zonas
  * cargadas y la cuenta de vendedor que hace falta acá.
@@ -27,6 +31,9 @@
 import "dotenv/config";
 import { chromium, type BrowserContext } from "playwright";
 import { db } from "../lib/db";
+import { obtenerLiquidacionVendedor } from "../lib/comisiones/liquidacion";
+import { periodoActual } from "../lib/comisiones/periodo";
+import { pesos } from "../lib/formato";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:3000";
 const PASSWORD_ADMIN = process.env.SEED_ADMIN_PASSWORD ?? "CambiarEstePassword123";
@@ -178,6 +185,7 @@ async function main() {
       { campo: "puedeVerLeads", ruta: "/vendedor/leads" },
       { campo: "puedeCargarVentas", ruta: "/vendedor/ventas" },
       { campo: "puedeVerCartera", ruta: "/vendedor/cartera" },
+      { campo: "puedeVerComision", ruta: "/vendedor/comision" },
     ] as const;
 
     for (const { campo, ruta } of permisos) {
@@ -227,7 +235,57 @@ async function main() {
     }
 
     // -------------------------------------------------------------------
-    titulo("5. Una cuenta desactivada deja de entrar en el acto");
+    titulo("5. El vendedor ve de su comisión el mismo número que le liquidan");
+    // Es lo que sostiene la pantalla entera: sirve para que pueda discutir un
+    // peso, y no serviría si su total saliera de una cuenta distinta que el que
+    // Balta le paga. Las dos pantallas llaman al mismo motor; esto comprueba
+    // que el que llega al HTML es ese.
+    const suLiquidacion = await obtenerLiquidacionVendedor({
+      vendedorId: fichaVendedor.id,
+      zonaId: salta.id,
+      periodo: periodoActual(),
+    });
+    const sinEspacios = (texto: string) => texto.replace(/\s+/g, " ");
+    const htmlComision = sinEspacios(
+      await (await vend.request.get(`${BASE}/vendedor/comision`)).text()
+    );
+    check(
+      suLiquidacion !== null &&
+        htmlComision.includes(sinEspacios(pesos(suLiquidacion.totalComision))),
+      "el total de /vendedor/comision es el que calcula el motor",
+      `esperaba ${suLiquidacion ? pesos(suLiquidacion.totalComision) : "(sin ficha)"}`
+    );
+    // El nombre de la escala es una decisión interna de la agencia: el vendedor
+    // ve el tramo y el porcentaje, que explican el número, pero no cuál escala
+    // le asignaron.
+    check(
+      !htmlComision.includes("Escala aplicada"),
+      "y no le muestra el nombre de la escala, que es asunto del admin"
+    );
+
+    // No se ofrece lo que la otra pantalla no puede dar: sin `puedeVerCartera`
+    // los títulos de "las cuotas que entraron" dejan de ser links, en vez de
+    // llevar a un rebote silencioso.
+    check(
+      htmlComision.includes("/vendedor/cartera/"),
+      "con la cartera abierta, cada título linkea a su ficha"
+    );
+    await db.vendedor.update({
+      where: { id: fichaVendedor.id },
+      data: { puedeVerCartera: false },
+    });
+    const sinCartera = await (await vend.request.get(`${BASE}/vendedor/comision`)).text();
+    check(
+      !sinCartera.includes("/vendedor/cartera/"),
+      "y sin la cartera no los ofrece, en vez de mandarlo a un rebote"
+    );
+    await db.vendedor.update({
+      where: { id: fichaVendedor.id },
+      data: { puedeVerCartera: true },
+    });
+
+    // -------------------------------------------------------------------
+    titulo("6. Una cuenta desactivada deja de entrar en el acto");
     await db.user.update({ where: { id: fichaVendedor.userId }, data: { activo: false } });
     const desactivado = await ir(vend, "/vendedor/dashboard");
     check(
@@ -237,7 +295,7 @@ async function main() {
     );
     await db.user.update({ where: { id: fichaVendedor.userId }, data: { activo: true } });
 
-    titulo("6. Un vendedor dado de baja del equipo tampoco entra");
+    titulo("7. Un vendedor dado de baja del equipo tampoco entra");
     await db.vendedor.update({ where: { id: fichaVendedor.id }, data: { activo: false } });
     const deBaja = await ir(vend, "/vendedor/dashboard");
     check(
@@ -249,7 +307,7 @@ async function main() {
     await vend.close();
 
     // -------------------------------------------------------------------
-    titulo("7. El admin no ve la otra zona escribiendo la URL");
+    titulo("8. El admin no ve la otra zona escribiendo la URL");
     const admin = await navegador.newContext();
     await entrar(admin, "balta@crm-csj.local", PASSWORD_ADMIN);
     await ponerZona(admin, salta.id);
@@ -281,7 +339,7 @@ async function main() {
     check(saltaDesdeTuc.status === 404, "y el de Salta pasa a dar 404", `dio ${saltaDesdeTuc.status}`);
 
     // -------------------------------------------------------------------
-    titulo("8. Una zona que no existe manda a elegir de nuevo");
+    titulo("9. Una zona que no existe manda a elegir de nuevo");
     await ponerZona(admin, 99999);
     const zonaFantasma = await ir(admin, "/admin/clientes");
     check(
@@ -292,7 +350,7 @@ async function main() {
     await ponerZona(admin, salta.id);
 
     // -------------------------------------------------------------------
-    titulo("9. Los adjuntos son de quien los subió");
+    titulo("10. Los adjuntos son de quien los subió");
     const adjunto = await db.ventaAdjunto.findFirst({
       select: { id: true, venta: { select: { zonaId: true, vendedorId: true } } },
     });
@@ -317,7 +375,7 @@ async function main() {
     await sinSesion.close();
 
     // -------------------------------------------------------------------
-    titulo("10. El login no lleva a otro sitio");
+    titulo("11. El login no lleva a otro sitio");
     const conVolver = await navegador.newContext();
     const paginaLogin = await conVolver.newPage();
     await paginaLogin.goto(`${BASE}/login?volverA=//ejemplo.com/x`, { waitUntil: "domcontentloaded" });
@@ -326,7 +384,7 @@ async function main() {
     await conVolver.close();
 
     // -------------------------------------------------------------------
-    titulo("11. Cada zona liquida lo suyo");
+    titulo("12. Cada zona liquida lo suyo");
     // No es una prueba de permisos, pero es el defecto que la Fase 13 encontró:
     // un título imputado a la zona equivocada no se ve en ninguna pantalla de
     // permisos, se ve en la plata.
