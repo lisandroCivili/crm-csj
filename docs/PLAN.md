@@ -76,10 +76,13 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 9 | Padrón: varios archivos y selector nuevo | ✅ commit `96f7c45` |
 | 10 | Clientes: corregir datos y ver la documentación | ✅ commit `351e633` |
 | 11 | Ventas: confirmar, editar desde admin, foto con la cámara | ✅ commit `aa06212` |
-| 12 | Actividad: leads + ventas, filtrable por vendedor | 🔨 commit `3c24fc1` |
+| 12 | Actividad: leads + ventas, filtrable por vendedor | ✅ commit `3c24fc1` |
 | 13 | QA: los agujeros de zona (alias · títulos · `leadId` · links rotos) | ✅ commit `3dbfd89` |
 | 14 | QA: la red (escenario de dos zonas · tests de parsers · guion de permisos) | ✅ commit `ab8dccc` |
-| 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | 🔨 commit `f5f2faa` |
+| 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | ✅ commit `f5f2faa` |
+| 16 | Vendedor: mi cartera (títulos, cuotas, caídas) | ⬜ |
+| 17 | Vendedor: mi comisión (histórico y de dónde sale cada peso) | ⬜ |
+| 18 | Vendedor: listados a escala (buscar, filtrar, paginar) | ⬜ |
 
 Dependencias:
 
@@ -101,6 +104,9 @@ Fase 13 Arreglos ──> 13.1 desbloquea importar el padrón de Tucumán
 Fase 14 La red   ───────┴──> 14.1 siembra las dos zonas ──> 14.3 la verifica
                         │
 Fase 15 Recorrido ──────┘
+
+Fase 16 Mi cartera ──> Fase 17 Mi comision (cada titulo linkea a su ficha)
+Fase 18 Listados a escala   (independiente)
 ```
 
 **El orden de las fases 7 a 12 no es el del pedido, y es a propósito.** La 7 va
@@ -1168,7 +1174,7 @@ sesión con una cuenta de vendedor y sus contraseñas no están en el repositori
 El código es el mismo motor ya verificado desde admin, pero conviene que
 Lisandro lo mire con su cuenta: está anotado como paso 7 de la guía.
 
-### 🔨 Fase 12 — Actividad: leads + ventas, filtrable por vendedor
+### ✅ Fase 12 — Actividad: leads + ventas, filtrable por vendedor
 
 Migración `20260902141500_actividad_unificada`, **escrita a mano**.
 
@@ -1290,7 +1296,7 @@ Fuera de alcance por decisión de Lisandro: el repaso previo al despliegue en
 Railway (variables, volumen de adjuntos, contraseñas reales, laboratorio
 inexistente en producción). Queda como fase aparte para cuando se decida publicar.
 
-### Fase 13 — Los tres agujeros
+### ✅ Fase 13 — Los tres agujeros
 
 Va primera porque **13.1 desbloquea la segunda zona**: sin eso no se puede
 importar el padrón de Tucumán, y sin padrón de Tucumán no se puede probar nada de
@@ -1398,7 +1404,7 @@ queda como está, y el aviso pasa a significar lo que tiene que significar: si u
 archivo trae números que ya están en la otra zona, ese archivo no es de la zona
 activa.
 
-### Fase 14 — La red que impide que vuelvan
+### ✅ Fase 14 — La red que impide que vuelvan
 
 Hoy hay 149 tests de lógica pura y **cero** verificación de pantalla: Playwright
 está instalado pero sólo saca capturas.
@@ -1484,7 +1490,7 @@ sale del primer link del listado, porque depende de lo que haya cargado). Es don
 el chequeo de desborde tenía más para encontrar, porque son las que nunca se
 midieron: ninguna se sale.
 
-### Fase 15 — El recorrido humano, en las dos zonas y con los dos roles
+### ✅ Fase 15 — El recorrido humano, en las dos zonas y con los dos roles
 
 Lo que no se puede automatizar sin volverlo frágil: que las pantallas se
 **entiendan**, que los números den y que el celular sirva. La última del plan de
@@ -1580,6 +1586,126 @@ anotado en `CLAUDE.md` porque el síntoma no se parece en nada a la causa.
 - **`app/admin/prototipo-formulario-venta/`**: sin versionar, de Lisandro.
 - **Un plan de prueba con código `007` y nombre "codigo invalido"** quedó en el
   catálogo de una prueba vieja. No molesta y se da de baja desde `/admin/planes`.
+
+---
+
+## Cuarta tanda (07/09/2026) — El módulo del vendedor
+
+Con el QA terminado se abre lo que Lisandro quería abrir desde el principio. Hoy
+el lado del vendedor son **9 archivos y 1.726 líneas** contra los **36 y 7.834**
+del admin, y tres ítems de menú.
+
+Lo primero que hay que decir es que **el pedido original de Balta ya está
+construido casi entero**. `docs/info.txt` dedica siete renglones al vendedor
+—leads con sus datos y su estado, carga de ventas, edición con historial,
+dashboard con leads, ventas, cuotas cobradas, ganancia y cierre de mes— y todo
+eso existe. Así que esta tanda no sale de esa lista: sale de mirar el sistema con
+un padrón real en la cabeza y encontrar tres huecos que sólo aparecen con uso.
+
+**1. El vendedor no ve un solo dato del padrón.** `Titulo.vendedorId` existe y
+está indexado, pero ninguna consulta de `app/vendedor/` lee `Titulo`. El vendedor
+no sabe cuáles de sus títulos están al día, cuáles se cayeron ni a quién tiene que
+llamar — y las caídas se construyeron justamente para eso: *"la caída no genera
+contracargo y no toca ninguna comisión: es información, para saber a quién
+llamar"*. Hoy esa información la tiene sólo Balta. Tampoco ve de dónde sale su
+comisión: ve el total, no los títulos que lo produjeron.
+
+**2. `puedeVerComision` es el único permiso sin pantalla propia.** No gatea
+ninguna ruta: sólo esconde bloques del dashboard. El vendedor ve el mes actual y
+una línea del anterior, sin histórico ni selector de período — lo que el admin sí
+tiene en `/admin/comisiones/vendedor/[id]?periodo=`.
+
+**3. Los listados no paginan ni buscan.** `/vendedor/leads` y `/vendedor/ventas`
+traen **todo sin `take`**. Con el escenario de prueba no se nota; con el padrón
+real —Pedro solo aparece con 254 filas— sí. Los cuatro listados del admin ya
+paginan de a 50.
+
+### La decisión sobre "solo admin ve clientes"
+
+`docs/info.txt` dice, en el renglón 3.1 del lado admin: *"solo admin ve
+clientes"*. Abrirle la cartera al vendedor toca ese pedido, así que se le
+preguntó a Lisandro antes de planificarlo. **Lo aprobó el 07/09/2026**, con el
+alcance recortado: el vendedor ve **sólo sus títulos**, nunca la cartera ajena ni
+el padrón completo. La frase de Balta se respeta en su espíritu —nadie se asoma a
+lo que no es suyo— y además se agrega el permiso `puedeVerCartera`, para que Balta
+pueda apagarlo por vendedor si prefiere la lectura literal.
+
+### Fase 16 — Mi cartera
+
+Sus títulos del padrón: quién le está pagando y quién no.
+
+**La unidad es el título, no el cliente.** El listado del admin es por `Cliente` y
+sus filtros de caída miran los títulos de cada uno. Copiarlo sería un defecto: un
+cliente puede tener un título de este vendedor y otro de otro, y "caída total" del
+cliente incluiría títulos ajenos. Se lista `Titulo` filtrando por `vendedorId` **y**
+`zonaId` —los dos, aunque la ficha del vendedor ya sea por zona, porque toda
+consulta de títulos lleva `zonaId`—, y el estado que se muestra es el del título:
+al día · en riesgo · caído · sin datos suficientes.
+
+- **`/vendedor/cartera`** — buscador por nombre, DNI y número de título, filtros
+  por estado de caída y paginación de a 50, con el patrón de
+  `app/admin/clientes/page.tsx`. Tabla en escritorio, tarjetas en el celular, y el
+  teléfono como `tel:`, porque el uso real de esta pantalla es llamar.
+- **`/vendedor/cartera/[id]`** — la ficha del título: contacto del cliente, plan,
+  en qué cuota va, el histórico de cuotas con importe y fecha de pago, y el estado
+  de caída explicado. Alcance por `findFirst({ id, vendedorId, zonaId })`.
+
+No se ofrece editar al cliente: eso es del admin y queda así. La pantalla dice a
+quién avisar si un dato está mal.
+
+**El permiso.** Ninguno de los tres actuales cubre esto, así que se agrega
+`puedeVerCartera`, en `true` por defecto como los otros: los permisos se sacan, no
+se dan. Toca el schema y su migración, `lib/sesion.ts`, `lib/navegacion.ts`, el
+checklist de `/perfil`, los switches de `/admin/vendedores/[id]` y
+`scripts/qa-permisos.ts`, que gana la comprobación de que apagarlo cierra la ruta
+además de esconder el ítem.
+
+### Fase 17 — Mi comisión
+
+Cierra el único permiso sin pantalla y contesta lo que el vendedor pregunta todos
+los meses: cuánto cobro y por qué.
+
+`/vendedor/comision`, con `requirePermiso("verComision")` y su ítem de menú. **No
+se escribe cálculo nuevo**: se reutilizan `obtenerLiquidacionVendedor`,
+`cuotasDelPeriodo` y `periodosConMovimiento`, los mismos que ya usa la pantalla
+del admin. El alcance sale de la sesión, nunca de la URL.
+
+Muestra los renglones por número de cuota, la tabla de cuotas que entraron
+—título, cliente, importe, fecha de pago, si comisiona o no por el tope— y los
+datos del cálculo. Tres diferencias deliberadas con la pantalla del admin: los
+gastos de representación se ven pero no se editan; **no** se muestra el nombre de
+la escala, que es una decisión interna de Balta y no un dato del vendedor; y cada
+título linkea a su ficha de la cartera, que es lo que convierte el número en algo
+verificable.
+
+### Fase 18 — Los listados a escala
+
+Lo que hoy funciona sólo porque la base de prueba es chica.
+
+- **Paginación y buscador** en Mis leads y Mis ventas, con el mismo `POR_PAGINA` y
+  el mismo patrón de `searchParams` del admin.
+- **Filtro por estado en Mis ventas** (activa / anulada), que hoy no existe.
+- **El botón "Cargar venta" de la ficha del lead se dibuja sin chequear
+  `cargarVentas`**: el vendedor sin ese permiso lo ve y la pantalla destino lo
+  rebota en silencio. La seguridad está bien; lo que está mal es ofrecer algo que
+  no se puede dar.
+- **Los dos `db.venta.count` del dashboard se ejecutan sin `cargarVentas`**, aunque
+  las tarjetas que los usan no se rendericen. Es el criterio que ya se aplicó a los
+  leads y a la comisión.
+- Las pantallas nuevas se suman a `scripts/capturas.mjs`, en las dos medidas.
+
+### Lo que queda afuera, y por qué
+
+- **`Venta.tituloId` no lo escribe nadie**, así que la ficha de una venta siempre
+  dice *"todavía no apareció en el padrón"*. Atarla al título por `numeroTitulo` /
+  `nroSuscripcion` cerraría el circuito —el vendedor vería su propia venta ya
+  cobrando—, pero eso se hace **dentro de la importación**, que es la regla más
+  delicada del sistema. Es una fase propia con su propia tanda de tests.
+- **Copa challenger** y **exportar la liquidación**: Balta dijo que la primera no
+  era prioritaria y la segunda no la pidió nadie todavía.
+- **Los porcentajes reales de la escala** siguen sin cargar. Hasta que Balta los
+  cargue, todo lo que muestren estas tres pantallas es el escenario de
+  `npm run demo`.
 
 ---
 
@@ -3208,11 +3334,11 @@ Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
 
 ## Contexto para la próxima sesión
 
-**Dónde retomar:** Lisandro validó la **Fase 14 el 05/09/2026** (la 13, el
-04/09; la 11, el 02/09; la 10, el 01/09; las 6 a 9, el 28/08). Las fases 0 a 11,
-la 13 y la 14 están cerradas; **la 12 y la 15 esperan validación**. Con la 15
-**el plan de QA queda terminado**: lo que sigue es el módulo del vendedor, que
-era lo que Lisandro quería abrir antes de que esta tanda se interpusiera.
+**Dónde retomar:** Lisandro validó las **fases 12 y 15 el 07/09/2026** (la 14, el
+05/09; la 13, el 04/09; la 11, el 02/09; la 10, el 01/09; las 6 a 9, el 28/08).
+**Las dieciocho fases están cerradas y el plan de QA quedó terminado.** Lo que
+sigue es el **módulo del vendedor** —fases 16 a 18—, que era lo que Lisandro
+quería abrir antes de que la tanda de QA se interpusiera.
 
 De la Fase 15, lo que hay que llevarse:
 

@@ -144,12 +144,17 @@ npm test        # tests del motor de comisiones
 Si se corre solo `next dev`, la web arranca pero todas las páginas fallan con
 `ECONNREFUSED`: falta la base. Ver el [README](../README.md).
 
-Usuarios de prueba (los crea `npm run db:seed`):
+Usuarios de prueba:
 
-| Rol | Email | Contraseña |
-|---|---|---|
-| Admin | `balta@crm-csj.local` | `CambiarEstePassword123` |
-| Admin | `pedro@crm-csj.local` | `CambiarEstePassword123` |
+| Rol | Email | Contraseña | Lo crea |
+|---|---|---|---|
+| Admin | `balta@crm-csj.local` | `CambiarEstePassword123` | `npm run db:seed` |
+| Admin | `pedro@crm-csj.local` | `CambiarEstePassword123` | `npm run db:seed` |
+| Vendedor | `vendedor@crm-csj.local` | `CambiarEstePassword123` | `npm run demo` |
+
+La cuenta de vendedor la agrega `npm run demo` y no el seed, porque va junto con
+la ficha y los títulos que le dan algo para mostrar. Sin ella esa mitad del
+sistema no se puede probar: es lo que destrabó la Fase 14.
 
 Antes de tocar la importación de padrones, correr la verificación:
 
