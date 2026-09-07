@@ -71,6 +71,7 @@ const PANTALLAS_VENDEDOR = [
   ["vendedor-leads", "/vendedor/leads"],
   ["vendedor-ventas", "/vendedor/ventas"],
   ["vendedor-venta-nueva", "/vendedor/ventas/nueva"],
+  ["vendedor-cartera", "/vendedor/cartera"],
 ];
 
 await mkdir(DESTINO, { recursive: true });
@@ -258,6 +259,21 @@ if (!sesionVendedor?.user) {
   siguiente = 50;
   for (const [nombre, ruta] of PANTALLAS_VENDEDOR) {
     await capturar(paginaVendedor, nombre, ruta);
+  }
+
+  // La ficha de un titulo de su cartera: el id depende de lo que haya cargado,
+  // asi que sale del primer link del listado, igual que las fichas del admin.
+  await paginaVendedor.goto(`${BASE}/vendedor/cartera`, { waitUntil: "networkidle" });
+  const hrefTitulo = await paginaVendedor
+    .locator('a[href^="/vendedor/cartera/"]')
+    .first()
+    .getAttribute("href")
+    .catch(() => null);
+
+  if (hrefTitulo) {
+    await capturar(paginaVendedor, "vendedor-cartera-titulo", hrefTitulo);
+  } else {
+    console.log("   (sin títulos en la cartera: se saltea su ficha)");
   }
 }
 

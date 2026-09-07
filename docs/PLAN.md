@@ -80,7 +80,7 @@ Estados: ⬜ pendiente · 🔨 construida, esperando que Lisandro la valide · �
 | 13 | QA: los agujeros de zona (alias · títulos · `leadId` · links rotos) | ✅ commit `3dbfd89` |
 | 14 | QA: la red (escenario de dos zonas · tests de parsers · guion de permisos) | ✅ commit `ab8dccc` |
 | 15 | QA: el recorrido humano (dos zonas, dos cuentas, los dos roles) | ✅ commit `f5f2faa` |
-| 16 | Vendedor: mi cartera (títulos, cuotas, caídas) | ⬜ |
+| 16 | Vendedor: mi cartera (títulos, cuotas, caídas) | 🔨 |
 | 17 | Vendedor: mi comisión (histórico y de dónde sale cada peso) | ⬜ |
 | 18 | Vendedor: listados a escala (buscar, filtrar, paginar) | ⬜ |
 
@@ -1630,7 +1630,7 @@ el padrón completo. La frase de Balta se respeta en su espíritu —nadie se as
 lo que no es suyo— y además se agrega el permiso `puedeVerCartera`, para que Balta
 pueda apagarlo por vendedor si prefiere la lectura literal.
 
-### Fase 16 — Mi cartera
+### 🔨 Fase 16 — Mi cartera
 
 Sus títulos del padrón: quién le está pagando y quién no.
 
@@ -3330,15 +3330,111 @@ como Balta y anulála, o corré `npx tsx scripts/sembrar-demo.ts --borrar` y des
 
 Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
 `npm run build`, más `npm run qa` contra el build.
+
+### Fase 16 — Mi cartera
+
+**Preparación.** `npm run demo` (idempotente: si ya lo corriste, no hace falta).
+Después `npm run dev` y entrá a `localhost:3000`.
+
+Toda la prueba se hace con la cuenta del vendedor:
+
+| Email | Contraseña |
+|---|---|
+| `vendedor@crm-csj.local` | `CambiarEstePassword123` |
+
+**1. El ítem nuevo.** Entrá como vendedor. En el menú de la izquierda tienen que
+aparecer **cuatro** ítems: Dashboard, Mis leads, Mis ventas y **Mi cartera**. En
+el celular está detrás del botón de menú, igual que los otros.
+
+**2. La tarjeta del dashboard.** En `/vendedor/dashboard`, entre las tarjetas de
+arriba hay una que dice **Para llamar · 2 · títulos atrasados**, en ámbar. Tocala:
+lleva a la cartera.
+
+**3. El listado.** En `/vendedor/cartera` tienen que verse **6 títulos**, en este
+orden y no en otro —primero los que hay que llamar—:
+
+| Cliente | Título | Última paga | Estado |
+|---|---|---|---|
+| GINA PRUEBA | PT-0007 | — | caído · 9 impagas seguidas |
+| HUGO PRUEBA | PT-0009 | — | sin datos suficientes |
+| ANA PRUEBA | PT-0001 | c6 | al día |
+| BETO PRUEBA | PT-0002 | c6 | al día |
+| ELSA PRUEBA | PT-0005 | c108 | al día |
+| GINA PRUEBA | PT-0008 | c12 | al día |
+
+Son **6 y no 9**: los otros tres títulos de Salta son de otros vendedores y no
+tienen por qué aparecer acá.
+
+**4. Los tres chips.** `Caídos 1` · `En riesgo 0` · `Sin datos suficientes 1`.
+Fijate que **HUGO cae en "sin datos" y no en "en riesgo"** aunque tenga 3 impagas:
+su historial tiene un hueco, así que el sistema no afirma que sean tres y no más.
+Los tres chips no se pisan entre sí, y suman los 2 de la tarjeta "Para llamar".
+
+**5. El buscador.** Escribí `GINA` → 2 filas (sus dos títulos). Escribí `PT-0005`
+→ 1 fila. Escribí el DNI `99990007` → el título de GINA.
+
+**6. La ficha.** Tocá *Ver* en GINA PT-0007. Tiene que decir:
+- arriba, el botón **Llamar** (en el celular abre el teléfono),
+- **caído · 9 impagas seguidas**, *ya venía del padrón · entró en la cuota 4*,
+- última cuota paga: *ninguna que hayamos visto*; el club informa **3** cuotas
+  pagas; histórico conocido: **cuotas 4 a 12**,
+- las 9 cuotas, todas **impagas**, de $ 100.000 cada una.
+
+En la ficha de HUGO, en cambio, tiene que aparecer el recuadro que explica que
+**no alcanza para decir si está caído**. Ese es el punto de toda la pantalla: el
+sistema dice "no sé" en vez de mentir con un "al día".
+
+**7. Que sea sólo suya.** Copiá el id de un título de la ficha de un cliente
+cualquiera desde la cuenta de Balta (`/admin/clientes` → un cliente que no sea de
+PRUEBA VENDEDOR UNO) y pegalo en `localhost:3000/vendedor/cartera/<ese-id>` con la
+sesión del vendedor: tiene que dar **404**, no un error de permisos. La existencia
+de un título ajeno tampoco es asunto suyo.
+
+**8. El permiso.** Entrá como Balta a `/admin/vendedores`, abrí *PRUEBA VENDEDOR
+UNO* y apagá el interruptor **Su cartera**. Sin cerrar la sesión del vendedor,
+recargá su pantalla: el ítem del menú desaparece, la tarjeta del dashboard
+también, y escribir `/vendedor/cartera` a mano lo devuelve a su dashboard.
+Volvé a encenderlo.
+
+**Datos de prueba:** ninguno nuevo. Todo sale del escenario de `npm run demo`
+(DNI `9999*`, títulos `PT-*`), que se borra con
+`npx tsx scripts/sembrar-demo.ts --borrar`.
+
+Control antes de cada commit, como siempre: `npm run lint` · `npm test` ·
+`npm run build`, más `npm run qa` contra el build.
+
 ---
 
 ## Contexto para la próxima sesión
 
 **Dónde retomar:** Lisandro validó las **fases 12 y 15 el 07/09/2026** (la 14, el
 05/09; la 13, el 04/09; la 11, el 02/09; la 10, el 01/09; las 6 a 9, el 28/08).
-**Las dieciocho fases están cerradas y el plan de QA quedó terminado.** Lo que
-sigue es el **módulo del vendedor** —fases 16 a 18—, que era lo que Lisandro
-quería abrir antes de que la tanda de QA se interpusiera.
+**Las dieciocho fases del QA están cerradas.** Arrancó el **módulo del vendedor**:
+la **Fase 16 (Mi cartera) está construida y espera validación**; siguen la 17 (Mi
+comisión) y la 18 (los listados a escala).
+
+De la Fase 16, lo que hay que llevarse:
+
+- **La cartera del vendedor lista títulos, no clientes.** Copiar el listado del
+  admin —que agrupa por cliente— habría mostrado datos ajenos: un cliente puede
+  tener un título de este vendedor y otro de otro, y la "caída total" del cliente
+  incluiría el que no le corresponde. El filtro va por `vendedorId` **y**
+  `zonaId`, y el estado que se muestra es el del título.
+- **Un chip que cuenta distinto de lo que dice el badge es un defecto.** El filtro
+  "En riesgo" arrancó contando también los títulos con historial incompleto, así
+  que HUGO aparecía bajo "En riesgo" con el badge diciendo *"sin datos
+  suficientes"*. Ahora lleva `caidaConfiable: true` y los tres chips son
+  disjuntos. Es la misma regla de siempre: el sistema tiene que poder decir "no
+  sé", y no puede decirlo en un lugar y afirmar otra cosa en el de al lado.
+- **`puedeVerCartera` es el cuarto permiso**, en `true` por defecto como los
+  otros. Existe porque Balta había pedido *"solo admin ve clientes"*
+  (`docs/info.txt`): el vendedor ve únicamente sus títulos, y si Balta prefiere
+  la lectura estricta lo apaga por vendedor. Lo aprobó Lisandro el 07/09/2026.
+- **La pantalla se ordena por impagas descendente, no por nombre.** Es una lista
+  de trabajo —a quién llamar—, no un directorio; para encontrar a alguien está el
+  buscador.
+- `npm run qa` pasó de 35 a **39 comprobaciones**: las dos del permiso nuevo y las
+  dos de que un título ajeno da 404.
 
 De la Fase 15, lo que hay que llevarse:
 

@@ -17,9 +17,15 @@ export type Permisos = {
   verLeads: boolean;
   cargarVentas: boolean;
   verComision: boolean;
+  verCartera: boolean;
 };
 
-const PERMISOS_ADMIN: Permisos = { verLeads: true, cargarVentas: true, verComision: true };
+const PERMISOS_ADMIN: Permisos = {
+  verLeads: true,
+  cargarVentas: true,
+  verComision: true,
+  verCartera: true,
+};
 
 export type Usuario = {
   id: string;
@@ -75,6 +81,7 @@ export const getUsuarioActual = cache(async (): Promise<Usuario | null> => {
           puedeVerLeads: true,
           puedeCargarVentas: true,
           puedeVerComision: true,
+          puedeVerCartera: true,
         },
         orderBy: { createdAt: "asc" },
       },
@@ -107,6 +114,7 @@ export const getUsuarioActual = cache(async (): Promise<Usuario | null> => {
             verLeads: ficha?.puedeVerLeads ?? false,
             cargarVentas: ficha?.puedeCargarVentas ?? false,
             verComision: ficha?.puedeVerComision ?? false,
+            verCartera: ficha?.puedeVerCartera ?? false,
           },
   };
 });

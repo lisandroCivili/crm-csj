@@ -2,8 +2,18 @@ import { describe, expect, it } from "vitest";
 import { itemsVisibles, NAVEGACION, rutaInterna } from "./navegacion";
 import type { Permisos } from "./sesion";
 
-const TODO: Permisos = { verLeads: true, cargarVentas: true, verComision: true };
-const NADA: Permisos = { verLeads: false, cargarVentas: false, verComision: false };
+const TODO: Permisos = {
+  verLeads: true,
+  cargarVentas: true,
+  verComision: true,
+  verCartera: true,
+};
+const NADA: Permisos = {
+  verLeads: false,
+  cargarVentas: false,
+  verComision: false,
+  verCartera: false,
+};
 
 const hrefs = (role: "ADMIN" | "VENDEDOR", permisos: Permisos) =>
   itemsVisibles(role, permisos).map((item) => item.href);
@@ -19,6 +29,7 @@ describe("itemsVisibles", () => {
       "/vendedor/dashboard",
       "/vendedor/leads",
       "/vendedor/ventas",
+      "/vendedor/cartera",
     ]);
   });
 
@@ -26,6 +37,7 @@ describe("itemsVisibles", () => {
     expect(hrefs("VENDEDOR", { ...TODO, verLeads: false })).toEqual([
       "/vendedor/dashboard",
       "/vendedor/ventas",
+      "/vendedor/cartera",
     ]);
   });
 
@@ -33,6 +45,15 @@ describe("itemsVisibles", () => {
     expect(hrefs("VENDEDOR", { ...TODO, cargarVentas: false })).toEqual([
       "/vendedor/dashboard",
       "/vendedor/leads",
+      "/vendedor/cartera",
+    ]);
+  });
+
+  it("sin verCartera desaparece la cartera", () => {
+    expect(hrefs("VENDEDOR", { ...TODO, verCartera: false })).toEqual([
+      "/vendedor/dashboard",
+      "/vendedor/leads",
+      "/vendedor/ventas",
     ]);
   });
 

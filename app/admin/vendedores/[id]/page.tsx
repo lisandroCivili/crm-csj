@@ -220,6 +220,7 @@ export default async function PerfilVendedorPage({
                   puedeVerLeads: vendedor.puedeVerLeads,
                   puedeCargarVentas: vendedor.puedeCargarVentas,
                   puedeVerComision: vendedor.puedeVerComision,
+                  puedeVerCartera: vendedor.puedeVerCartera,
                 }}
               />
             </CardContent>

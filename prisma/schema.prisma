@@ -195,6 +195,11 @@ model Vendedor {
   /// Solo visibilidad: no afecta el calculo ni la liquidacion. El vendedor
   /// cobra igual, simplemente no ve el numero.
   puedeVerComision  Boolean @default(true)
+  /// Ver su cartera: los titulos del padron que le pertenecen, con el estado de
+  /// pago de cada uno. Balta pidio que "solo admin ve clientes" (docs/info.txt);
+  /// el vendedor ve unicamente los suyos, y este permiso deja apagarlo por
+  /// vendedor si prefiere la lectura estricta.
+  puedeVerCartera   Boolean @default(true)
 
   activo    Boolean  @default(true)
   createdAt DateTime @default(now())

@@ -5,7 +5,11 @@ import { toast } from "sonner";
 import { cambiarPermisoVendedor } from "@/app/admin/vendedores/actions";
 import { Switch } from "@/components/ui/switch";
 
-type Clave = "puedeVerLeads" | "puedeCargarVentas" | "puedeVerComision";
+type Clave =
+  | "puedeVerLeads"
+  | "puedeCargarVentas"
+  | "puedeVerComision"
+  | "puedeVerCartera";
 
 const SECCIONES: { clave: Clave; etiqueta: string; detalle: string }[] = [
   {
@@ -22,6 +26,11 @@ const SECCIONES: { clave: Clave; etiqueta: string; detalle: string }[] = [
     clave: "puedeVerComision",
     etiqueta: "Su comisión",
     detalle: "Ver cuánto le corresponde este mes. No cambia lo que cobra.",
+  },
+  {
+    clave: "puedeVerCartera",
+    etiqueta: "Su cartera",
+    detalle: "Ver sus títulos del padrón y quién le está pagando. Sólo los suyos.",
   },
 ];
 

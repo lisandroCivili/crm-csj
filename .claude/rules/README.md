@@ -106,5 +106,12 @@ Reglas vigentes (por ahora documentadas en `CLAUDE.md`, se migran acá cuando cr
 - **Sesión**: el rol, el estado de la cuenta y los permisos se leen de la base en cada request
   (`getUsuarioActual`), nunca de los claims del JWT. Sacar a alguien del sistema se hace por
   `/api/salir`, no con `redirect("/login")`.
-- **Permisos del vendedor**: filtran el menú y además blindan cada página y acción. Esconder el
-  ítem del menú no es seguridad.
+- **Permisos del vendedor**: son cuatro (`verLeads`, `cargarVentas`, `verComision`,
+  `verCartera`), todos en `true` por defecto: se **sacan**, no se dan. Filtran el menú y además
+  blindan cada página y acción. Esconder el ítem del menú no es seguridad.
+- **La cartera del vendedor**: lista **títulos**, no clientes, filtrando por `vendedorId` y
+  `zonaId`. Agrupar por cliente —como hace el listado del admin— mostraría producción ajena,
+  porque un cliente puede tener títulos de dos vendedores. Balta pidió que "solo admin ve
+  clientes": el vendedor ve únicamente los suyos, y `puedeVerCartera` deja apagarlo. Los
+  filtros de estado son disjuntos: "en riesgo" exige `caidaConfiable`, o el chip contaría lo
+  que el badge de la fila llama "sin datos suficientes".

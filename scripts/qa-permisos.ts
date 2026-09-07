@@ -177,6 +177,7 @@ async function main() {
     const permisos = [
       { campo: "puedeVerLeads", ruta: "/vendedor/leads" },
       { campo: "puedeCargarVentas", ruta: "/vendedor/ventas" },
+      { campo: "puedeVerCartera", ruta: "/vendedor/cartera" },
     ] as const;
 
     for (const { campo, ruta } of permisos) {
@@ -197,7 +198,36 @@ async function main() {
     check(true, "y el cambio le llega sin volver a iniciar sesión (se leyó de la base)");
 
     // -------------------------------------------------------------------
-    titulo("4. Una cuenta desactivada deja de entrar en el acto");
+    titulo("4. La cartera del vendedor tiene sólo sus títulos");
+    // La ficha de un título ajeno da 404 y no 403: su existencia tampoco es
+    // asunto de quien pregunta. Es el mismo criterio de las otras once rutas
+    // `[id]`, y lo que sostiene que abrirle la cartera al vendedor no
+    // contradiga el "solo admin ve clientes" de Balta.
+    const tituloPropio = await db.titulo.findFirst({
+      where: { vendedorId: fichaVendedor.id },
+      select: { id: true },
+    });
+    const tituloAjeno = await db.titulo.findFirst({
+      where: { NOT: { vendedorId: fichaVendedor.id } },
+      select: { id: true },
+    });
+
+    if (!tituloPropio || !tituloAjeno) {
+      console.log("  (faltan títulos para comparar: se salta)");
+    } else {
+      const propioR = await ir(vend, `/vendedor/cartera/${tituloPropio.id}`);
+      check(propioR.status === 200, "la ficha de un título suyo abre", `dio ${propioR.status}`);
+
+      const ajenoR = await ir(vend, `/vendedor/cartera/${tituloAjeno.id}`);
+      check(
+        ajenoR.status === 404,
+        "la de un título que no es suyo da 404",
+        `dio ${ajenoR.status}`
+      );
+    }
+
+    // -------------------------------------------------------------------
+    titulo("5. Una cuenta desactivada deja de entrar en el acto");
     await db.user.update({ where: { id: fichaVendedor.userId }, data: { activo: false } });
     const desactivado = await ir(vend, "/vendedor/dashboard");
     check(
@@ -207,7 +237,7 @@ async function main() {
     );
     await db.user.update({ where: { id: fichaVendedor.userId }, data: { activo: true } });
 
-    titulo("5. Un vendedor dado de baja del equipo tampoco entra");
+    titulo("6. Un vendedor dado de baja del equipo tampoco entra");
     await db.vendedor.update({ where: { id: fichaVendedor.id }, data: { activo: false } });
     const deBaja = await ir(vend, "/vendedor/dashboard");
     check(
@@ -219,7 +249,7 @@ async function main() {
     await vend.close();
 
     // -------------------------------------------------------------------
-    titulo("6. El admin no ve la otra zona escribiendo la URL");
+    titulo("7. El admin no ve la otra zona escribiendo la URL");
     const admin = await navegador.newContext();
     await entrar(admin, "balta@crm-csj.local", PASSWORD_ADMIN);
     await ponerZona(admin, salta.id);
@@ -251,7 +281,7 @@ async function main() {
     check(saltaDesdeTuc.status === 404, "y el de Salta pasa a dar 404", `dio ${saltaDesdeTuc.status}`);
 
     // -------------------------------------------------------------------
-    titulo("7. Una zona que no existe manda a elegir de nuevo");
+    titulo("8. Una zona que no existe manda a elegir de nuevo");
     await ponerZona(admin, 99999);
     const zonaFantasma = await ir(admin, "/admin/clientes");
     check(
@@ -262,7 +292,7 @@ async function main() {
     await ponerZona(admin, salta.id);
 
     // -------------------------------------------------------------------
-    titulo("8. Los adjuntos son de quien los subió");
+    titulo("9. Los adjuntos son de quien los subió");
     const adjunto = await db.ventaAdjunto.findFirst({
       select: { id: true, venta: { select: { zonaId: true, vendedorId: true } } },
     });
@@ -287,7 +317,7 @@ async function main() {
     await sinSesion.close();
 
     // -------------------------------------------------------------------
-    titulo("9. El login no lleva a otro sitio");
+    titulo("10. El login no lleva a otro sitio");
     const conVolver = await navegador.newContext();
     const paginaLogin = await conVolver.newPage();
     await paginaLogin.goto(`${BASE}/login?volverA=//ejemplo.com/x`, { waitUntil: "domcontentloaded" });
@@ -296,7 +326,7 @@ async function main() {
     await conVolver.close();
 
     // -------------------------------------------------------------------
-    titulo("10. Cada zona liquida lo suyo");
+    titulo("11. Cada zona liquida lo suyo");
     // No es una prueba de permisos, pero es el defecto que la Fase 13 encontró:
     // un título imputado a la zona equivocada no se ve en ninguna pantalla de
     // permisos, se ve en la plata.

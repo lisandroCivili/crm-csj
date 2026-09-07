@@ -60,6 +60,7 @@ const VENDEDOR: ItemNav[] = [
   { href: "/vendedor/dashboard", etiqueta: "Dashboard", icono: LayoutDashboard },
   { href: "/vendedor/leads", etiqueta: "Mis leads", icono: ClipboardList, permiso: "verLeads" },
   { href: "/vendedor/ventas", etiqueta: "Mis ventas", icono: ScrollText, permiso: "cargarVentas" },
+  { href: "/vendedor/cartera", etiqueta: "Mi cartera", icono: Users, permiso: "verCartera" },
 ];
 
 export const NAVEGACION: Record<Role, ItemNav[]> = { ADMIN, VENDEDOR };

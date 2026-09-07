@@ -1,5 +1,12 @@
 import Link from "next/link";
-import { BadgeDollarSign, CalendarClock, ClipboardList, Plus, ScrollText } from "lucide-react";
+import {
+  BadgeDollarSign,
+  CalendarClock,
+  ClipboardList,
+  PhoneCall,
+  Plus,
+  ScrollText,
+} from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { StatCard } from "@/components/layout/stat-card";
 import { BadgeEstado } from "@/components/leads/badge-estado";
@@ -10,6 +17,7 @@ import { obtenerLiquidacionVendedor } from "@/lib/comisiones/liquidacion";
 import { etiquetaPeriodo, periodoActual, periodoAnterior } from "@/lib/comisiones/periodo";
 import { db } from "@/lib/db";
 import { dia, pesos, porcentaje } from "@/lib/formato";
+import { IMPAGAS_PARA_RIESGO } from "@/lib/padron/caidas";
 import { requireVendedor } from "@/lib/sesion";
 
 const DIA_LARGO = new Intl.DateTimeFormat("es-AR", {
@@ -32,8 +40,15 @@ export default async function VendedorDashboardPage() {
   const periodo = periodoActual();
   const periodoPrevio = periodoAnterior(periodo);
 
-  const [vendedor, leadsPendientes, ventasDelMes, ventasTotales, ultimosLeads, ultimasVentas] =
-    await Promise.all([
+  const [
+    vendedor,
+    leadsPendientes,
+    ventasDelMes,
+    ventasTotales,
+    ultimosLeads,
+    ultimasVentas,
+    paraLlamar,
+  ] = await Promise.all([
       db.vendedor.findUniqueOrThrow({
         where: { id: usuario.vendedorId },
         select: { topeCuotasComision: true },
@@ -63,6 +78,18 @@ export default async function VendedorDashboardPage() {
         take: 5,
         select: { id: true, nombreCliente: true, fechaVenta: true, codigoProducto: true },
       }),
+      // Los titulos suyos que vienen atrasados: caidos y en riesgo juntos, que
+      // es la lista de a quien llamar. El caido ya pasa el umbral de riesgo, asi
+      // que con esa condicion alcanza para los dos.
+      usuario.permisos.verCartera
+        ? db.titulo.count({
+            where: {
+              vendedorId: usuario.vendedorId,
+              ...(usuario.zonaIdFija === null ? {} : { zonaId: usuario.zonaIdFija }),
+              impagasConsecutivas: { gte: IMPAGAS_PARA_RIESGO },
+            },
+          })
+        : 0,
     ]);
 
   // La comision del vendedor sale del padron, no de las ventas que carga acá:
@@ -104,7 +131,7 @@ export default async function VendedorDashboardPage() {
         }
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {usuario.permisos.verLeads ? (
           <StatCard
             etiqueta="Leads por trabajar"
@@ -136,6 +163,16 @@ export default async function VendedorDashboardPage() {
             }
             icono={BadgeDollarSign}
             tono="marca"
+          />
+        ) : null}
+        {usuario.permisos.verCartera ? (
+          <StatCard
+            etiqueta="Para llamar"
+            valor={paraLlamar}
+            detalle="títulos atrasados"
+            icono={PhoneCall}
+            tono={paraLlamar > 0 ? "atencion" : "neutro"}
+            href="/vendedor/cartera"
           />
         ) : null}
         <StatCard

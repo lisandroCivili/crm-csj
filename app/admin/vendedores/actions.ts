@@ -240,7 +240,12 @@ export async function desvincularFichaDeAdmin(formData: FormData): Promise<void>
 
 export type ResultadoAccion = { ok?: boolean; error?: string };
 
-const PERMISOS = ["puedeVerLeads", "puedeCargarVentas", "puedeVerComision"] as const;
+const PERMISOS = [
+  "puedeVerLeads",
+  "puedeCargarVentas",
+  "puedeVerComision",
+  "puedeVerCartera",
+] as const;
 const permisoSchema = z.enum(PERMISOS);
 
 type CuentaDelVendedor = { userId: string } | { error: string };

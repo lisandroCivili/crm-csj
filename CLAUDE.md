@@ -132,8 +132,8 @@ Vocabulario del dominio (aparece tal cual en el padrón y en el código):
 - **Sacar a alguien nunca se hace con `redirect("/login")`**: el middleware ve la cookie todavía
   válida y lo devuelve, en un ida y vuelta infinito. Para eso está `/api/salir`, que cierra la
   sesión de verdad y avisa el motivo en el login.
-- Un vendedor tiene tres permisos (`puedeVerLeads`, `puedeCargarVentas`, `puedeVerComision`),
-  todos en `true` por defecto. Se **sacan**, no se dan. Filtran el menú (`itemsVisibles`) y
+- Un vendedor tiene cuatro permisos (`puedeVerLeads`, `puedeCargarVentas`, `puedeVerComision`,
+  `puedeVerCartera`), todos en `true` por defecto. Se **sacan**, no se dan. Filtran el menú (`itemsVisibles`) y
   además blindan cada página y acción con `requirePermiso`: esconder el ítem no es seguridad.
   Sin permiso se vuelve al dashboard en silencio, igual que cuando un vendedor entra a `/admin`.
 - `User.activo` (puede entrar al sistema) es distinto de `Vendedor.activo` (sigue en el equipo).
@@ -246,6 +246,12 @@ listado de clientes filtra y cuenta por él.
   títulos de ese archivo y escribiendo únicamente los que cambiaron. Para la
   primera pasada sobre títulos ya cargados está `scripts/recalcular-caidas.ts`
   (y el mismo botón en el laboratorio).
+- **El vendedor ve las caídas de su propia cartera** (`/vendedor/cartera`), y ahí la unidad
+  es el **título**, no el cliente: un cliente puede tener un título de un vendedor y otro de
+  otro, así que la "caída total" del cliente incluiría producción ajena. El listado del admin
+  agrupa por cliente y el del vendedor no, a propósito. Sus filtros son disjuntos —"en riesgo"
+  exige `caidaConfiable`—, porque un chip que cuenta un título que el badge de la fila muestra
+  como *"sin datos suficientes"* dice dos cosas distintas sobre lo mismo.
 - `Titulo.cuotasPagas` viene del club y **no** decide la caída —dice cuántas pagó
   en total, no si dejó de pagar seguidas—, pero se contrasta: si cubre hasta la
   última cuota que conocemos, se avisa que el club lo da al día.
